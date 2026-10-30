@@ -35,7 +35,7 @@ export default function StatusScreen() {
           <AppText weight="bold">{error.message}</AppText>
           <AppText tone="muted" size={12}>
             {error instanceof NetworkError
-              ? 'Check that the API is running and that this phone is on the same Wi-Fi as the laptop.'
+              ? 'Check your internet connection and try again. If it keeps failing, the server may be down.'
               : 'The server answered, but not with what this app expects.'}
           </AppText>
           <Button title="Retry" onPress={refetch} />
