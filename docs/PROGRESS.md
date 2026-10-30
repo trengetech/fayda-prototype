@@ -38,7 +38,7 @@ Supabase's transaction pooler hangs on concurrent queries with postgres.js's def
 
 - Negotiation and order flows are verified at the domain level, not yet over HTTP or in Postgres (M3.1 to M3.4).
 - No sweep task is registered; no mutating endpoint uses idempotency yet.
-- Nothing is deployed to the Oracle VM.
+- The API runs on the Oracle VM against `fayda-dev` (see below). Its `/v1/meta` reports `environment: production` because `NODE_ENV=production`; the data is dev data.
 - The database password was pasted in chat several times. Founder decision (31 Oct 2026): not resetting it for now. Dev and test hold no real data.
 - No remote git, no CI. A local repository exists with nothing committed.
 - Free-tier risks (Supabase pause, Oracle idle reclaim) are unverified (I-8).
@@ -46,3 +46,7 @@ Supabase's transaction pooler hangs on concurrent queries with postgres.js's def
 ### Decisions
 
 B-7 approved: buyers get no information that any reply was automatic.
+
+## Deployment (31 Oct 2026)
+
+API live at `https://fayda.140-245-219-163.sslip.io` (Caddy HTTPS, systemd, Node 24.22.2). `/v1/health` returns 200 with the database up; database round trip is about 27 ms from the VM. `infra/deploy-api.sh` deploys with automatic rollback (both paths tested). Memory use about 490 MB of 954 MB with 2 GB swap.

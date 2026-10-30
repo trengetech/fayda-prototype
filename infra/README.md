@@ -2,10 +2,15 @@
 
 - `oracle-vm-setup.sh`: one-time setup of the API host (swap, firewall rules, Node 24, Caddy HTTPS, systemd unit). Already run on `140.245.219.163`. Safe to re-run.
 
-## Deploy (not yet done; needs approval each time)
+## Deploy
 
-1. On the laptop: `pnpm build`.
-2. Copy `apps/api/dist`, `apps/api/drizzle`, `apps/api/package.json` and the built `packages/*/dist` to `/opt/fayda-api/current` on the VM, and install production dependencies there.
-3. Put the production env values in `/etc/fayda/api.env` (root:ubuntu, 0750 directory). Never commit them.
-4. Run migrations with the session-pooler URL, then `sudo systemctl start fayda-api`.
-5. Check `https://fayda.140-245-219-163.sslip.io/v1/health`.
+`infra/deploy-api.sh` builds, uploads a timestamped release to `/opt/fayda-api/releases/`, switches the `current` symlink, restarts the service and checks `/v1/health`. If the new release is not healthy it switches back to the previous one and exits non-zero. It keeps the last 3 releases. Tested, including the rollback path.
+
+One-time setup done by hand (not in the script, so secrets never travel through it):
+- `/etc/fayda/api.env` on the VM (owner root, group ubuntu, mode 640) holds **only** `DATABASE_URL` (the dev transaction-pooler URL). Edit it over SSH with `sudo`; never commit it.
+
+Database migrations run from the laptop (`pnpm db:migrate`, which reads `apps/api/.env`) before deploying a schema change. The VM has no migration URL.
+
+Useful commands (from the laptop):
+- logs: `ssh -i ~/.ssh/fayda_oracle ubuntu@140.245.219.163 'sudo journalctl -u fayda-api -n 50 --no-pager'`
+- restart: `... 'sudo systemctl restart fayda-api'`
