@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.key
+dist/
+.turbo/
+*.tsbuildinfo
+.DS_Store
+apps/*/android/
+apps/*/ios/
+apps/*/.expo/
+apps/*/expo-env.d.ts
