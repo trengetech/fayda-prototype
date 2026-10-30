@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  /** The label reported by /v1/meta. Defaults to NODE_ENV. Set it to `development` on a server that runs production code against dev data. */
+  APP_ENV: z.enum(['development', 'test', 'production']).optional(),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   HOST: z.string().default('127.0.0.1'),
   DATABASE_URL: z.string().startsWith('postgres', 'DATABASE_URL must be a postgres connection string'),
@@ -30,7 +32,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
   const e = parsed.data;
   return {
-    environment: e.NODE_ENV,
+    environment: e.APP_ENV ?? e.NODE_ENV,
     port: e.PORT,
     host: e.HOST,
     databaseUrl: e.DATABASE_URL,
