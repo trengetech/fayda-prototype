@@ -1,5 +1,7 @@
 # Progress
 
+**Where we are:** M3.0a done. M3.0b built and tested on an Android emulator; waiting for the founder to try the APKs on a real phone. M3.1 (identity) not started.
+
 ## M3.0a — Backend foundation (31 Oct 2026): built, awaiting your review
 
 M3.0 is split (DECISIONS I-4). This is the first half. **M3.0 as a whole is not done:** 3.0b (UI tokens, fonts, api-client, both Expo apps, emulator run) has not started.
@@ -50,3 +52,29 @@ B-7 approved: buyers get no information that any reply was automatic.
 ## Deployment (31 Oct 2026)
 
 API live at `https://fayda.140-245-219-163.sslip.io` (Caddy HTTPS, systemd, Node 24.22.2). `/v1/health` returns 200 with the database up; database round trip is about 27 ms from the VM. `infra/deploy-api.sh` deploys with automatic rollback (both paths tested). Memory use about 490 MB of 954 MB with 2 GB swap.
+
+## M3.0b: mobile foundation (31 Oct 2026): built, emulator-tested, awaiting phone test
+
+APKs (not committed, rebuilt with `infra/build-apk.sh buyer|seller`): `apks/fayda-buyer-dev-0.0.1.apk` and `apks/fayda-seller-dev-0.0.1.apk`, about 53 MB each, package ids `com.fayda.buyer.dev` and `com.fayda.seller.dev`, arm64 and x86_64. Both talk to the API on the VM over HTTPS.
+
+| # | Criterion | Result |
+|---|---|---|
+| 3 | Both apps run side by side with distinct names and ids | **Pass on the Android emulator.** Not yet on a physical phone. |
+| 3 | Status screen: loading, error with retry, success, via the typed client and TanStack Query | Success **pass**. Error with retry **pass** (airplane mode, then network back and Retry). **Loading state not visually confirmed**: the API answers in about 100 ms and the emulator slowdown did not apply. |
+| 3 | Dev-only design-system gallery | **Pass** (both themes) |
+| 4 | Tokens match `styles.css`, light and dark; fonts bundled | **Pass.** 6 automated tests compare the app's tokens with the CSS (colours, radii, control heights) and check text contrast. All 5 font files are inside the APK. |
+| 6 | Persistent Prototype banner | **Pass** (visible on every screen, light and dark) |
+
+Also built: `packages/ui` (tokens, fonts, components, gallery), `packages/api-client` (typed client with typed errors, query hooks; 6 tests), both Expo apps (SDK 58, Expo Router).
+
+### Found by testing on the emulator and fixed
+- The error hint told users to check "the same Wi-Fi as the laptop", wrong once the API moved to the VM.
+- The gallery header had a doubled top inset; it now draws its own header.
+- The first Gradle build hung for 31 minutes: its automatic NDK installer never unpacked a finished download. Fixed by installing the NDK with `sdkmanager`. If a build seems stuck at "Install NDK", check CPU use and do the same.
+
+### Known limits
+- **No automated tests of the app screens** (jest-expo needs `@testing-library/react-native`, which is outside the agreed stack and awaits approval). Screens were verified by hand on the emulator.
+- Release APKs are signed with the debug key: fine for your own phone, not for the Play Store.
+- `dev` builds allow plain-HTTP API addresses; `prod` builds will not.
+- Android only; iOS not attempted.
+- Builds need this Mac (Android SDK, JDK 17). EAS cloud builds are not set up.
