@@ -1,0 +1,5 @@
+{
+  "extends": "@fayda/config/tsconfig.base.json",
+  "compilerOptions": { "outDir": "dist", "rootDir": "src", "types": ["node"], "experimentalDecorators": true, "emitDecoratorMetadata": false },
+  "include": ["src"]
+}

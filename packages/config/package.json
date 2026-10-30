@@ -1,0 +1,7 @@
+{
+  "name": "@fayda/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { "./eslint": "./eslint.config.base.js", "./tsconfig.base.json": "./tsconfig.base.json" }
+}
