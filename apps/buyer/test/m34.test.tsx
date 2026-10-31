@@ -13,6 +13,7 @@ import RequestScreen from '../app/request/[id]';
 import RequestsScreen from '../app/requests';
 import { buyerListing, buyerNegotiation, buyerOrder, buyerRequest, confirmedOrder, fakeApi, json, managerWith, problem, renderWith, thread, type Route } from './utils';
 
+const clipboard = () => jest.requireMock('expo-clipboard').setStringAsync as jest.Mock;
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() };
 let mockParams: Record<string, string> = {};
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => mockParams }));
@@ -93,6 +94,28 @@ describe('order screen (view only)', () => {
     expect(await screen.findByText(/No UPI app could open. Pay to the UPI ID kiran@okbank .* write FD-100001 as the note/)).toBeOnTheScreen();
   });
 
+  it('copies the order number and the UPI ID with one tap, and says Copied', async () => {
+    fakeApi(order(buyerOrder()), fetchMock);
+    await renderWith(signedIn(), <OrderScreen />);
+    await screen.findByText('Pay Kiran Studio directly');
+    clipboard().mockClear();
+    const [noteCopy, upiCopy] = screen.getAllByText('Copy');
+    await act(async () => void fireEvent.press(noteCopy as never));
+    expect(clipboard()).toHaveBeenLastCalledWith('FD-100001');
+    expect(screen.getByText('Copied')).toBeOnTheScreen();
+    await act(async () => void fireEvent.press(upiCopy as never));
+    expect(clipboard()).toHaveBeenLastCalledWith('kiran@okbank');
+  });
+
+  it('says Couldn’t copy if the phone refuses the clipboard', async () => {
+    fakeApi(order(buyerOrder()), fetchMock);
+    await renderWith(signedIn(), <OrderScreen />);
+    await screen.findByText('Pay Kiran Studio directly');
+    clipboard().mockRejectedValueOnce(new Error('denied'));
+    await act(async () => void fireEvent.press(screen.getAllByText('Copy')[0] as never));
+    expect(screen.getByText('Couldn’t copy')).toBeOnTheScreen();
+  });
+
   it('shows bank details for a bank order, and no UPI button', async () => {
     fakeApi(order(buyerOrder({ paymentMethod: 'BANK', payment: { method: 'BANK', note: 'FD-100001', amount: 150000, payeeName: 'Kiran Studio', upiId: null, upiUri: null, upiQrUrl: null, bank: { holder: 'Kiran R', account: '123456789012', ifsc: 'HDFC0001234', bankName: 'HDFC' }, paymentLink: null } })), fetchMock);
     await renderWith(signedIn(), <OrderScreen />);
@@ -148,6 +171,10 @@ describe('order screen (view only)', () => {
     await screen.findByText('Cotton kurta');
     await press('WhatsApp');
     expect(await screen.findByText(/The number is 9000000002/)).toBeOnTheScreen();
+    clipboard().mockClear();
+    await press('Copy number');
+    expect(clipboard()).toHaveBeenCalledWith('9000000002');
+    expect(screen.getByText('Copied')).toBeOnTheScreen();
   });
 
   it('shows the website deal code, with Buy again going to checkout for the same size', async () => {

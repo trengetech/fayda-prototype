@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { offerLine, statusBadge } from '../../src/offers';
+import { CopyButton } from '../../src/copy';
 import { newKey, openExternal } from '../../src/orders';
 
 export default function NegotiationScreen() {
@@ -59,7 +60,10 @@ export default function NegotiationScreen() {
           <AppText weight="bold">Agreed at {formatRupees(n.agreement.price)}</AppText>
           {n.status === 'AGREED' ? <AppText tone="muted" size={13}>One unit is held for you for {timeLeft(n.agreement.deadline, Date.now())}.</AppText> : null}
           {n.agreement.dealAccess ? (
-            <AppText size={13}>{n.agreement.dealAccess.type === 'CODE' ? 'Your coupon code' : 'Your discount link'}: {n.agreement.dealAccess.value}</AppText>
+            <>
+              <AppText size={13} selectable>{n.agreement.dealAccess.type === 'CODE' ? 'Your coupon code' : 'Your discount link'}: {n.agreement.dealAccess.value}</AppText>
+              <CopyButton value={n.agreement.dealAccess.value} title={n.agreement.dealAccess.type === 'CODE' ? 'Copy code' : 'Copy link'} />
+            </>
           ) : null}
           {n.status === 'AGREED' && n.channel === 'DIRECT' ? (
             <Button title={`Place order at ${formatRupees(n.agreement.price)}`} onPress={() => router.push(`/checkout?negotiationId=${n.id}&listingId=${n.listing.id}&variantId=${n.variantId}` as never)} />

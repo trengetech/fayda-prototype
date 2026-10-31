@@ -3,13 +3,12 @@ import type { PlaceOrder } from '@fayda/contracts/schemas';
 import { formatRupees } from '@fayda/domain';
 import { AppText, Button, Card, ChipGroup, FieldError, Screen, describeError } from '@fayda/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { newKey, PAY_LABELS } from '../src/orders';
 import { useBuyerProfile } from '../src/profile';
 
 type Method = keyof typeof PAY_LABELS;
-const ALL_METHODS: Method[] = ['UPI', 'BANK', 'LINK'];
 
 /**
  * Checkout for a direct listing: size, delivery address, and how you will pay the seller. The price is never sent; the server
@@ -28,11 +27,24 @@ export default function CheckoutScreen() {
   const [method, setMethod] = useState<Method | null>(null);
   const [error, setError] = useState<{ message: string; fields: Record<string, string> } | null>(null);
   const key = useRef(newKey());
+  // The address ids we have seen. One that appears later was just added on the addresses screen, so it becomes the choice.
+  const seen = useRef<Set<string> | null>(null);
   // A different checkout is a different attempt; a retry of the same one keeps its key so a lost reply cannot make two orders.
   const changed = <T,>(set: (v: T) => void) => (v: T) => {
     key.current = newKey();
     set(v);
   };
+
+  const known = profile.data?.addresses;
+  useEffect(() => {
+    if (!known) return;
+    const added = seen.current ? known.find((a) => !seen.current!.has(a.id)) : undefined;
+    seen.current = new Set(known.map((a) => a.id));
+    if (added) {
+      key.current = newKey();
+      setAddressId(added.id);
+    }
+  }, [known]);
 
   const failure = listing.error ?? profile.error ?? negotiation.error;
   const loading = !failure && (listing.isPending || profile.isPending || (!!params.negotiationId && negotiation.isPending));
@@ -52,8 +64,8 @@ export default function CheckoutScreen() {
   const fixedSize = !!params.negotiationId;
   const sizeId = fixedSize ? (negotiation.data?.variantId ?? variantId) : variantId;
   const available = l.variants.filter((v) => v.available);
-  // `payMethods` is not in the listing contract yet; until it is, all three are offered and the server refuses one the seller lacks.
-  const offered = ((l.checkout as { payMethods?: Method[] }).payMethods ?? ALL_METHODS) as Method[];
+  // Only the ways this seller can actually be paid (names only; the details come with the order).
+  const offered = l.checkout.payMethods as Method[];
   const addresses = profile.data.addresses;
   const addrId = addressId ?? profile.data.defaultAddressId ?? addresses[0]?.id ?? null;
   const ready = !!sizeId && !!addrId && !!method;
@@ -94,11 +106,19 @@ export default function CheckoutScreen() {
       )}
 
       {addresses.length ? (
-        <ChipGroup label="Deliver to" options={addresses.map((a) => a.id)} value={addrId ? [addrId] : []} onChange={(v) => changed(setAddressId)(v[0] ?? null)} format={(id) => { const a = addresses.find((x) => x.id === id); return a ? `${a.name}, ${a.line1}, ${a.pin}` : ''; }} />
+        <>
+          <ChipGroup label="Deliver to" options={addresses.map((a) => a.id)} value={addrId ? [addrId] : []} onChange={(v) => changed(setAddressId)(v[0] ?? null)} format={(id) => { const a = addresses.find((x) => x.id === id); return a ? `${a.name}, ${a.line1}, ${a.pin}` : ''; }} />
+          <Button title="Add or change address" variant="ghost" size="sm" onPress={() => router.push('/addresses?pick=1' as never)} />
+        </>
       ) : (
-        <Card><AppText weight="bold">No delivery address</AppText><AppText tone="muted" size={13}>Your profile has no address, so an order can’t be placed yet.</AppText></Card>
+        <Card>
+          <AppText weight="bold">No delivery address</AppText>
+          <AppText tone="muted" size={13}>Add the address you want this order delivered to.</AppText>
+          <Button title="Add address" onPress={() => router.push('/addresses?pick=1&add=1' as never)} />
+        </Card>
       )}
 
+      {offered.length ? null : <Card><AppText weight="bold">No way to pay yet</AppText><AppText tone="muted" size={13}>This seller hasn’t added a way to be paid directly. Try again later or message them.</AppText></Card>}
       <ChipGroup label="How will you pay the seller?" options={offered} value={method ? [method] : []} onChange={(v) => changed(setMethod)(v[0] ?? null)} format={(m) => PAY_LABELS[m]} />
       <AppText tone="muted" size={12}>You pay the seller directly after placing the order. Fayda does not handle payments or delivery. There is no cash on delivery.</AppText>
 

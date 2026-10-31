@@ -5,6 +5,7 @@ import { AppText, Badge, Button, Card, ChipGroup, FieldError, Screen, TextField,
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { CopyButton } from '../../src/copy';
 import { openLink } from '../../src/links';
 import { PAY_LABEL, cancelOptions, confirmLabel, emptyShip, shipmentBody, statusBadge, telUrl, whatsappUrl, type ShipForm } from '../../src/orders';
 import { newNonce } from '../../src/listing-form';
@@ -40,6 +41,13 @@ export default function OrderScreen() {
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [linkNote, setLinkNote] = useState<string | null>(null);
+  /** The number to copy when WhatsApp or the dialler could not open. */
+  const [copyNumber, setCopyNumber] = useState<string | null>(null);
+  const tryOpen = (url: string, fallback: string, number: string) =>
+    void openLink(url, fallback).then((note) => {
+      setLinkNote(note);
+      setCopyNumber(note ? number : null);
+    });
 
   if (query.isPending) return <Screen><View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><ActivityIndicator /><AppText>Loading order…</AppText></View></Screen>;
   if (query.isError)
@@ -132,10 +140,11 @@ export default function OrderScreen() {
         <Card>
           <AppText weight="bold">Contact buyer</AppText>
           {o.threadId ? <Button title={o.unread ? `Chat in app (${o.unread} new)` : 'Chat in app'} variant="outline" onPress={() => router.push(`/chat/${o.threadId}` as never)} /> : null}
-          {o.buyerContact?.whatsapp ? <Button title="WhatsApp" variant="outline" onPress={() => void openLink(whatsappUrl(o.buyerContact!.whatsapp!, o.number), `WhatsApp isn’t available. The number is ${o.buyerContact!.whatsapp}.`).then(setLinkNote)} /> : null}
-          {o.buyerContact?.phone ? <Button title="Call" variant="outline" onPress={() => void openLink(telUrl(o.buyerContact!.phone!), `Can’t place a call here. The number is ${o.buyerContact!.phone}.`).then(setLinkNote)} /> : null}
+          {o.buyerContact?.whatsapp ? <Button title="WhatsApp" variant="outline" onPress={() => tryOpen(whatsappUrl(o.buyerContact!.whatsapp!, o.number), `WhatsApp isn’t available. The number is ${o.buyerContact!.whatsapp}.`, o.buyerContact!.whatsapp!)} /> : null}
+          {o.buyerContact?.phone ? <Button title="Call" variant="outline" onPress={() => tryOpen(telUrl(o.buyerContact!.phone!), `Can’t place a call here. The number is ${o.buyerContact!.phone}.`, o.buyerContact!.phone!)} /> : null}
           {o.buyerContact ? <AppText tone="faint" size={12}>The buyer’s numbers are shown only while the order is open.</AppText> : <AppText tone="faint" size={12}>The order is closed, so only the chat remains.</AppText>}
           <FieldError>{linkNote ?? undefined}</FieldError>
+          {linkNote && copyNumber ? <CopyButton value={copyNumber} title="Copy number" /> : null}
         </Card>
       ) : null}
 

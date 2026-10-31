@@ -157,6 +157,11 @@ describe('order screen', () => {
     await renderWith(signedIn(), <OrderScreen />);
     await press((await screen.findByText('WhatsApp')).props.children);
     expect(await screen.findByText('WhatsApp isn’t available. The number is 9000000001.')).toBeOnTheScreen();
+    const setString = jest.requireMock('expo-clipboard').setStringAsync as jest.Mock;
+    setString.mockClear();
+    await press('Copy number');
+    expect(setString).toHaveBeenCalledWith('9000000001');
+    expect(screen.getByText('Copied')).toBeOnTheScreen();
   });
 
   it('shows the buyer’s review', async () => {

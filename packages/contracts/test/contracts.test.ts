@@ -38,7 +38,7 @@ describe('OpenAPI', () => {
     expect(doc.openapi).toBe('3.1.0');
     expect(Object.keys(doc.paths ?? {}).sort()).toEqual(
       [
-        '/v1/auth/logout', '/v1/auth/otp/request', '/v1/auth/otp/verify', '/v1/auth/refresh', '/v1/buyer/feed', '/v1/buyer/listings/{id}',
+        '/v1/auth/logout', '/v1/auth/otp/request', '/v1/auth/otp/verify', '/v1/auth/refresh', '/v1/buyer/addresses', '/v1/buyer/addresses/{id}', '/v1/buyer/addresses/{id}/default', '/v1/buyer/feed', '/v1/buyer/listings/{id}',
         '/v1/buyer/listings/{id}/offers', '/v1/buyer/negotiations', '/v1/buyer/negotiations/{id}', '/v1/buyer/negotiations/{id}/accept',
         '/v1/buyer/negotiations/{id}/counter', '/v1/buyer/negotiations/{id}/decline', '/v1/buyer/negotiations/{id}/withdraw',
         '/v1/buyer/orders', '/v1/buyer/orders/{id}', '/v1/buyer/orders/{id}/payment-qr', '/v1/buyer/orders/{id}/review',

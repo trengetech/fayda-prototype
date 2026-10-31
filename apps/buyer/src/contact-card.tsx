@@ -3,6 +3,7 @@ import { AppText, Badge, Button, Card } from '@fayda/ui';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
+import { CopyButton } from './copy';
 import { daysText, hoursText, medianText, openExternal, telUrl, waUrl } from './orders';
 import { ratingLine } from './stars';
 
@@ -10,12 +11,12 @@ import { ratingLine } from './stars';
 export function ContactCard({ order }: { order: BuyerOrder }) {
   const router = useRouter();
   const s = order.seller;
-  const [failed, setFailed] = useState<string | null>(null);
+  const [failed, setFailed] = useState<{ message: string; number: string } | null>(null);
   const typical = medianText(s.record.medianConfirmMs);
 
   const open = async (url: string, number: string) => {
     setFailed(null);
-    if (!(await openExternal(url))) setFailed(`Couldn’t open an app for this. The number is ${number}.`);
+    if (!(await openExternal(url))) setFailed({ message: `Couldn’t open an app for this. The number is ${number}.`, number });
   };
 
   return (
@@ -32,7 +33,12 @@ export function ContactCard({ order }: { order: BuyerOrder }) {
       {s.contact?.whatsapp ? <Button title="WhatsApp" variant="outline" onPress={() => void open(waUrl(s.contact?.whatsapp as string, order.number), s.contact?.whatsapp as string)} /> : null}
       {s.contact?.phone ? <Button title="Call" variant="outline" onPress={() => void open(telUrl(s.contact?.phone as string), s.contact?.phone as string)} /> : null}
       {s.contact ? null : <AppText tone="muted" size={12}>Phone and WhatsApp are shown only while an order is open. You can still chat here.</AppText>}
-      {failed ? <AppText tone="danger" size={13} accessibilityRole="alert" selectable>{failed}</AppText> : null}
+      {failed ? (
+        <>
+          <AppText tone="danger" size={13} accessibilityRole="alert" selectable>{failed.message}</AppText>
+          <CopyButton value={failed.number} title="Copy number" />
+        </>
+      ) : null}
     </Card>
   );
 }

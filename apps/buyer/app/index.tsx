@@ -32,6 +32,7 @@ export default function StatusScreen() {
       <Button title={orderUnread ? `My orders (${orderUnread} new ${orderUnread === 1 ? 'message' : 'messages'})` : 'My orders'} variant="outline" onPress={() => router.push('/orders' as never)} />
       <Button title={messageUnread ? `Messages (${messageUnread} new)` : 'Messages'} variant="outline" onPress={() => router.push('/messages' as never)} />
       <Button title="Your requests" variant="outline" onPress={() => router.push('/requests' as never)} />
+      <Button title="Delivery addresses" variant="ghost" onPress={() => router.push('/addresses' as never)} />
       <Button title="Contact for orders" variant="ghost" onPress={() => router.push('/contact' as never)} />
       <Button title="User agreement" variant="ghost" onPress={() => router.push('/agreement' as never)} />
 

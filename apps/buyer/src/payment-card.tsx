@@ -4,16 +4,17 @@ import { formatRupees } from '@fayda/domain';
 import { AppText, Button, Card, useTheme } from '@fayda/ui';
 import { useState } from 'react';
 import { Image, View } from 'react-native';
-import { openExternal, shareText } from './orders';
+import { CopyButton } from './copy';
+import { openExternal } from './orders';
 
-/** A value the buyer may need to copy: shown selectable, with a button that opens the share sheet (it has Copy). */
+/** A value the buyer may need to copy: shown selectable, with a one-tap Copy button. */
 function CopyRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={{ gap: 2 }}>
       <AppText tone="muted" size={12}>{label}</AppText>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <AppText weight="bold" selectable style={{ flex: 1 }}>{value}</AppText>
-        <Button title="Copy" size="sm" variant="outline" onPress={() => void shareText(value)} />
+        <CopyButton value={value} />
       </View>
     </View>
   );
@@ -27,6 +28,8 @@ export function PaymentCard({ orderId, payment }: { orderId: string; payment: No
   const client = useApiClient();
   const { colors } = useTheme();
   const [notice, setNotice] = useState<string | null>(null);
+  /** Set when the seller's payment link could not be opened: the link itself, ready to copy. */
+  const [copyLink, setCopyLink] = useState<string | null>(null);
 
   const payInApp = async () => {
     setNotice(null);
@@ -34,7 +37,11 @@ export function PaymentCard({ orderId, payment }: { orderId: string; payment: No
   };
   const openLink = async () => {
     setNotice(null);
-    if (payment.paymentLink && !(await openExternal(payment.paymentLink))) setNotice('The link could not be opened. Copy it and open it in your browser.');
+    setCopyLink(null);
+    if (payment.paymentLink && !(await openExternal(payment.paymentLink))) {
+      setNotice('The link could not be opened. Copy it and open it in your browser.');
+      setCopyLink(payment.paymentLink);
+    }
   };
 
   return (
@@ -64,6 +71,7 @@ export function PaymentCard({ orderId, payment }: { orderId: string; payment: No
       ) : null}
       {payment.method === 'LINK' && payment.paymentLink ? <Button title="Open the seller’s payment link" onPress={() => void openLink()} /> : null}
       {notice ? <AppText tone="danger" size={13} accessibilityRole="alert" selectable>{notice}</AppText> : null}
+      {copyLink ? <CopyButton value={copyLink} title="Copy payment link" /> : null}
       <AppText tone="muted" size={12}>After you pay, the seller confirms the payment here. Only the seller can move the order forward.</AppText>
     </Card>
   );

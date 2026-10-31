@@ -23,6 +23,7 @@ const STATUS: Partial<Record<string, number>> = {
   NOT_FOUND: 404,
   NO_SELLER: 403,
   NO_PROFILE: 403,
+  LAST_ADDRESS: 409,
   ALREADY_OPEN: 409,
   OUT_OF_STOCK: 409,
   NOT_OPEN: 409,

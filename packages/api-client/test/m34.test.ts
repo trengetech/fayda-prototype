@@ -155,3 +155,26 @@ describe('realtime invalidation', () => {
     expect(queryKeys.thread('seller', 'u', id)[0]).toBe('threads');
   });
 });
+
+describe('delivery addresses', () => {
+  const profile = { name: 'Kiran', addresses: [{ id, name: 'K', line1: '7', line2: 'Miyapur', pin: '500049', city: 'Hyderabad', state: 'Telangana' }], defaultAddressId: id, contact: { phone: '9700012345', whatsapp: null }, agreementVersion: 'v', agreementAcceptedAt: 1, missing: [] };
+  const input = { name: 'K', line1: '7', line2: 'Miyapur', pin: '500049', city: 'Hyderabad', state: 'Telangana' };
+  it('adds, edits, deletes and sets the default with the right method and address', async () => {
+    const { c, calls } = spy(profile);
+    await c.addAddress({ ...input, makeDefault: true });
+    await c.updateAddress(id, input);
+    await c.deleteAddress(id);
+    expect((await c.setDefaultAddress(id)).defaultAddressId).toBe(id);
+    expect(calls.map((x) => `${x.init.method} ${x.url.replace('http://api.test', '')}`)).toEqual([
+      'POST /v1/buyer/addresses',
+      `PUT /v1/buyer/addresses/${id}`,
+      `DELETE /v1/buyer/addresses/${id}`,
+      `POST /v1/buyer/addresses/${id}/default`,
+    ]);
+    expect(JSON.parse(calls[0]?.init.body as string)).toEqual({ ...input, makeDefault: true });
+    expect(calls.every((x) => (x.init.headers as Record<string, string>).authorization === 'Bearer tok')).toBe(true);
+  });
+  it('the profile key is shared, so the profile refreshes after an address change', () => {
+    expect(queryKeys.buyerProfile('http://api.test')).toEqual(['buyer-profile', 'http://api.test']);
+  });
+});

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
 import { useState } from 'react';
 import { ActivityIndicator, Image, RefreshControl, ScrollView, View } from 'react-native';
+import { CopyButton } from '../src/copy';
 import { openLink } from '../src/links';
 import { formatDuration } from '../src/orders';
 
@@ -17,10 +18,15 @@ export default function ShopScreen() {
   const record = useSellerRecord();
   const reviews = useSellerReviews();
   const [note, setNote] = useState<string | null>(null);
+  const [copyUrl, setCopyUrl] = useState<string | null>(null);
   const p = profile.data;
   const r = record.data;
   const refresh = () => void Promise.all([profile.refetch(), record.refetch(), reviews.refetch()]);
-  const open = (url: string, what: string) => void openLink(url, `Can’t open ${what} here. The link is ${url}.`).then(setNote);
+  const open = (url: string, what: string) =>
+    void openLink(url, `Can’t open ${what} here. The link is ${url}.`).then((n) => {
+      setNote(n);
+      setCopyUrl(n ? url : null);
+    });
 
   if (profile.isPending) return <View style={{ flex: 1, padding: 16 }}><ActivityIndicator color={colors.accent} /></View>;
   if (profile.isError || !p)
@@ -48,6 +54,7 @@ export default function ShopScreen() {
           {p.socialUrl ? <Button title="Instagram / Facebook" variant="outline" onPress={() => open(p.socialUrl!, 'your social page')} /> : null}
         </View>
         {note ? <AppText tone="danger" size={12}>{note}</AppText> : null}
+        {note && copyUrl ? <CopyButton value={copyUrl} title="Copy link" /> : null}
       </Card>
 
       <Card>

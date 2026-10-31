@@ -51,6 +51,7 @@ function Routes() {
         <Stack.Screen name="requests" />
         <Stack.Screen name="request/new" />
         <Stack.Screen name="request/[id]" />
+        <Stack.Screen name="addresses" />
         <Stack.Screen name="contact" />
         <Stack.Screen name="agreement" />
         <Stack.Screen name="gallery" />

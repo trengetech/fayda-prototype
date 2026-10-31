@@ -60,7 +60,9 @@ import {
   type BuyerNegotiationList,
   type SellerNegotiation,
   type SellerNegotiationList,
+  type AddressInput,
   type ListingInput,
+  type NewAddress,
   type Media,
   type MediaIntent,
   type MediaIntentInput,
@@ -117,6 +119,11 @@ export interface ApiClient {
   getBuyerProfile(): Promise<BuyerProfile>;
   saveBuyerProfile(input: BuyerProfileInput): Promise<BuyerProfile>;
   updateBuyerContact(contact: { phone?: string | null; whatsapp?: string | null }): Promise<BuyerProfile>;
+  /** Delivery addresses. Each call returns the whole profile, so the screen can replace what it shows. */
+  addAddress(input: NewAddress): Promise<BuyerProfile>;
+  updateAddress(id: string, input: AddressInput): Promise<BuyerProfile>;
+  deleteAddress(id: string): Promise<BuyerProfile>;
+  setDefaultAddress(id: string): Promise<BuyerProfile>;
   getSellerProfile(): Promise<SellerProfile>;
   saveSellerShop(input: SellerShopInput): Promise<SellerProfile>;
   saveSellerPayment(input: PaymentInput): Promise<SellerProfile>;
@@ -273,6 +280,10 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     getBuyerProfile: () => call('/v1/buyer/profile', BuyerProfileSchema, { auth: true }),
     saveBuyerProfile: (input) => call('/v1/buyer/profile', BuyerProfileSchema, { method: 'PUT', body: input, auth: true }),
     updateBuyerContact: (contact) => call('/v1/buyer/profile/contact', BuyerProfileSchema, { method: 'PATCH', body: { contact }, auth: true }),
+    addAddress: (input) => call('/v1/buyer/addresses', BuyerProfileSchema, { method: 'POST', body: input, auth: true }),
+    updateAddress: (id, input) => call(`/v1/buyer/addresses/${id}`, BuyerProfileSchema, { method: 'PUT', body: input, auth: true }),
+    deleteAddress: (id) => call(`/v1/buyer/addresses/${id}`, BuyerProfileSchema, { method: 'DELETE', auth: true }),
+    setDefaultAddress: (id) => call(`/v1/buyer/addresses/${id}/default`, BuyerProfileSchema, { method: 'POST', auth: true }),
     getSellerProfile: () => call('/v1/seller/profile', SellerProfileSchema, { auth: true }),
     saveSellerShop: (input) => call('/v1/seller/profile', SellerProfileSchema, { method: 'PUT', body: input, auth: true }),
     saveSellerPayment: (input) => call('/v1/seller/payment', SellerProfileSchema, { method: 'PUT', body: input, auth: true }),

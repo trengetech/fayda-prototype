@@ -1,5 +1,5 @@
 import type { BuyerOrder } from '@fayda/contracts/schemas';
-import { Linking, Share } from 'react-native';
+import { Linking } from 'react-native';
 
 /** The order's status as a line of steps. A closed order (cancelled or expired) ends the line early. */
 export const STEPS = ['PLACED', 'CONFIRMED', 'SHIPPED', 'DELIVERED'] as const;
@@ -57,18 +57,6 @@ export async function openExternal(url: string): Promise<boolean> {
     return true;
   } catch {
     return false;
-  }
-}
-
-/**
- * The phone has no clipboard module yet (a new library needs approval), so "Copy" opens the system share sheet, which has
- * a Copy action on Android. The text on screen is also selectable with a long press.
- */
-export async function shareText(text: string): Promise<void> {
-  try {
-    await Share.share({ message: text });
-  } catch {
-    // the person closed the sheet, or sharing is unavailable: nothing to do
   }
 }
 

@@ -1,9 +1,9 @@
-import type { CancelOrder, CreateRequest, ListingInput, PlaceOrder, PutReview, Respond, SendMessage, ShipmentBody } from '@fayda/contracts/schemas';
+import type { AddressInput, CancelOrder, CreateRequest, ListingInput, NewAddress, PlaceOrder, PutReview, Respond, SendMessage, ShipmentBody } from '@fayda/contracts/schemas';
 import { QueryClient, QueryClientProvider, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import { createApiClient, type ApiClient, type DealAccessInput } from './client';
-import { ALL_LIVE_KEYS, NEGOTIATIONS_KEY, ORDERS_KEY, RECORD_KEY, REQUESTS_KEY, REVIEWS_KEY, THREADS_KEY, invalidationFor, queryKeys } from './keys';
+import { ALL_LIVE_KEYS, NEGOTIATIONS_KEY, ORDERS_KEY, PROFILE_KEY, RECORD_KEY, REQUESTS_KEY, REVIEWS_KEY, THREADS_KEY, invalidationFor, queryKeys } from './keys';
 import { startRealtime } from './realtime';
 import type { SessionManager, SessionState } from './session';
 
@@ -328,4 +328,28 @@ export function useRealtime(): void {
     });
     return () => rt.close();
   }, [status, manager, qc]);
+}
+
+// ---------- buyer profile and delivery addresses ----------
+export function useBuyerProfile() {
+  const client = useApiClient();
+  return useQuery({ queryKey: queryKeys.buyerProfile(client.baseUrl), queryFn: () => client.getBuyerProfile() });
+}
+export type AddressAction =
+  | { action: 'add'; input: NewAddress }
+  | { action: 'update'; id: string; input: AddressInput }
+  | { action: 'delete'; id: string }
+  | { action: 'default'; id: string };
+/** Add, edit, delete or choose the default address. The profile the server returns replaces the cached one. */
+export function useAddressAction() {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (a: AddressAction) =>
+      a.action === 'add' ? client.addAddress(a.input) : a.action === 'update' ? client.updateAddress(a.id, a.input) : a.action === 'delete' ? client.deleteAddress(a.id) : client.setDefaultAddress(a.id),
+    onSuccess: (profile) => {
+      qc.setQueryData(queryKeys.buyerProfile(client.baseUrl), profile);
+      void invalidate(qc, PROFILE_KEY);
+    },
+  });
 }

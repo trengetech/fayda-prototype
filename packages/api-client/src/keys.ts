@@ -7,11 +7,14 @@ export const THREADS_KEY = 'threads';
 export const REQUESTS_KEY = 'requests';
 export const REVIEWS_KEY = 'reviews';
 export const RECORD_KEY = 'record';
+/** The buyer's own profile (addresses, contact). */
+export const PROFILE_KEY = 'buyer-profile';
 
 type Side = 'buyer' | 'seller';
 
 /** Typed query keys. Each list key is a prefix of its detail key, so invalidating the list refreshes the details too. */
 export const queryKeys = {
+  buyerProfile: (baseUrl: string) => [PROFILE_KEY, baseUrl] as const,
   orders: (side: Side, baseUrl: string) => [ORDERS_KEY, side, baseUrl] as const,
   order: (side: Side, baseUrl: string, id: string | null) => [ORDERS_KEY, side, baseUrl, id] as const,
   threads: (side: Side, baseUrl: string) => [THREADS_KEY, side, baseUrl] as const,
