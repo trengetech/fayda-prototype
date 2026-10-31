@@ -41,7 +41,6 @@ function Routes() {
         <Stack.Screen name="listings" />
         <Stack.Screen name="listing/[id]" />
         <Stack.Screen name="gallery" />
-        <Stack.Screen name="qr-spike" />
       </Stack.Protected>
     </Stack>
   );

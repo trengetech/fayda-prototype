@@ -13,7 +13,6 @@ export default function GalleryScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, minHeight: 58, borderBottomColor: colors.divider, borderBottomWidth: 1, backgroundColor: colors.surface }}>
         <Button title="‹ Back" variant="ghost" size="sm" onPress={() => router.back()} />
-        <Button title="QR spike" variant="ghost" size="sm" onPress={() => router.push('/qr-spike' as never)} />
         <AppText weight="extrabold" size={17}>Gallery (dev only)</AppText>
       </View>
       <Gallery />
