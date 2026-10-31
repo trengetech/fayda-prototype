@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BuyerFeedSchema, BuyerNegotiationSchema, CounterSchema, ERROR_CODES, HealthSchema, ListingInputSchema, MediaIntentSchema, MetaSchema, PaiseSchema, ProblemSchema, StartOfferSchema, buildOpenApiDocument } from '../src/index.js';
+import { BuyerFeedSchema, BuyerNegotiationSchema, CounterSchema, ERROR_CODES, FeedQuerySchema, ShopViewSchema, HealthSchema, ListingInputSchema, MediaIntentSchema, MetaSchema, PaiseSchema, ProblemSchema, StartOfferSchema, buildOpenApiDocument } from '../src/index.js';
 
 describe('system contracts', () => {
   it('accepts a healthy response and a database-down response', () => {
@@ -38,20 +38,20 @@ describe('OpenAPI', () => {
     expect(doc.openapi).toBe('3.1.0');
     expect(Object.keys(doc.paths ?? {}).sort()).toEqual(
       [
-        '/v1/auth/logout', '/v1/auth/otp/request', '/v1/auth/otp/verify', '/v1/auth/refresh', '/v1/buyer/addresses', '/v1/buyer/addresses/{id}', '/v1/buyer/addresses/{id}/default', '/v1/buyer/feed', '/v1/buyer/listings/{id}',
+        '/v1/auth/logout', '/v1/auth/otp/request', '/v1/auth/otp/verify', '/v1/auth/refresh', '/v1/buyer/addresses', '/v1/buyer/addresses/{id}', '/v1/buyer/addresses/{id}/default', '/v1/buyer/feed', '/v1/buyer/feed/facets', '/v1/buyer/follows', '/v1/buyer/follows/sellers/{sellerId}', '/v1/buyer/listings/{id}',
         '/v1/buyer/listings/{id}/offers', '/v1/buyer/negotiations', '/v1/buyer/negotiations/{id}', '/v1/buyer/negotiations/{id}/accept',
         '/v1/buyer/negotiations/{id}/counter', '/v1/buyer/negotiations/{id}/decline', '/v1/buyer/negotiations/{id}/withdraw',
         '/v1/buyer/orders', '/v1/buyer/orders/{id}', '/v1/buyer/orders/{id}/payment-qr', '/v1/buyer/orders/{id}/review',
         '/v1/buyer/profile', '/v1/buyer/profile/contact', '/v1/buyer/requests', '/v1/buyer/requests/reach', '/v1/buyer/requests/{id}',
-        '/v1/buyer/requests/{id}/close', '/v1/buyer/responses/{id}/decline', '/v1/buyer/responses/{id}/want', '/v1/buyer/threads',
-        '/v1/buyer/threads/{id}', '/v1/buyer/threads/{id}/messages', '/v1/buyer/threads/{id}/read', '/v1/health', '/v1/me',
+        '/v1/buyer/requests/{id}/close', '/v1/buyer/shops/{handle}', '/v1/buyer/shops/{handle}/listings', '/v1/buyer/responses/{id}/decline', '/v1/buyer/responses/{id}/want', '/v1/buyer/threads',
+        '/v1/buyer/threads/photos/{mediaId}', '/v1/buyer/threads/{id}', '/v1/buyer/threads/{id}/messages', '/v1/buyer/threads/{id}/read', '/v1/health', '/v1/me',
         '/v1/media/upload/{id}', '/v1/media/{id}', '/v1/meta', '/v1/seller/listings', '/v1/seller/listings/{id}',
         '/v1/seller/listings/{id}/status', '/v1/seller/media/intents', '/v1/seller/media/{id}/complete', '/v1/seller/negotiations',
         '/v1/seller/negotiations/{id}', '/v1/seller/negotiations/{id}/accept', '/v1/seller/negotiations/{id}/counter',
         '/v1/seller/negotiations/{id}/decline', '/v1/seller/orders', '/v1/seller/orders/{id}', '/v1/seller/orders/{id}/cancel',
         '/v1/seller/orders/{id}/confirm', '/v1/seller/orders/{id}/deliver', '/v1/seller/orders/{id}/ship', '/v1/seller/payment',
         '/v1/seller/profile', '/v1/seller/record', '/v1/seller/requests', '/v1/seller/requests/{id}/responses', '/v1/seller/reviews',
-        '/v1/seller/threads', '/v1/seller/threads/{id}', '/v1/seller/threads/{id}/messages', '/v1/seller/threads/{id}/read',
+        '/v1/seller/threads', '/v1/seller/threads/photos/{mediaId}', '/v1/seller/threads/{id}', '/v1/seller/threads/{id}/messages', '/v1/seller/threads/{id}/read',
         '/v1/shops/{id}/record', '/v1/shops/{id}/reviews',
       ].sort(),
     );
@@ -83,8 +83,26 @@ describe('listing and media contracts', () => {
   });
   it('strips anything a buyer schema does not name, so private fields cannot slip through', () => {
     const seller = { id: 's', name: 'n', handle: 'h', area: 'a', city: 'c', rating: null, reviewCount: 0 };
-    const parsed = BuyerFeedSchema.parse({ items: [{ id: 'l', title: 't', price: 1, category: 'c', soldOut: false, acceptsOffers: true, coverUrl: null, hasVideo: false, seller, rules: { autoAcceptAt: 1 }, dealCodes: { accept: 'X' } }], nextCursor: null });
+    const parsed = BuyerFeedSchema.parse({ items: [{ id: 'l', title: 't', price: 1, category: 'c', soldOut: false, acceptsOffers: true, coverUrl: null, hasVideo: false, video: null, following: false, ownShop: false, seller, rules: { autoAcceptAt: 1 }, dealCodes: { accept: 'X' } }], nextCursor: null });
     expect(JSON.stringify(parsed)).not.toMatch(/rules|dealCodes|autoAccept/);
+  });
+});
+
+describe('discovery contracts', () => {
+  it('reads the feed query from strings, and refuses an unknown scope, sort or page size', () => {
+    expect(FeedQuerySchema.parse({ scope: 'FOLLOWING', minPrice: '50000', acceptsOffers: 'true', limit: '20', sort: 'PRICE_LOW' })).toEqual({ scope: 'FOLLOWING', minPrice: 50000, acceptsOffers: true, limit: 20, sort: 'PRICE_LOW' });
+    expect(FeedQuerySchema.parse({ acceptsOffers: 'false' }).acceptsOffers).toBe(false);
+    expect(FeedQuerySchema.safeParse({ scope: 'EVERYONE' }).success).toBe(false);
+    expect(FeedQuerySchema.safeParse({ sort: 'RANDOM' }).success).toBe(false);
+    expect(FeedQuerySchema.safeParse({ limit: '500' }).success).toBe(false);
+    expect(FeedQuerySchema.safeParse({ minPrice: '-1' }).success).toBe(false);
+  });
+
+  it('a shop page carries no contact numbers or payment details even if the server sent them', () => {
+    const record = { orders: 0, completed: 0, confirmed: 0, cancelled: 0, expired: 0, medianConfirmMs: null, rating: null, reviewCount: 0 };
+    const shop = { id: 's', name: 'n', handle: 'h', bio: '', area: 'a', city: 'c', categories: [], mapsUrl: 'https://m', googleProfileUrl: null, socialUrl: null, slaConfirmHours: 4, slaShipDays: 2, record, followerCount: 0, listingCount: 0, following: false, isOwn: false };
+    const parsed = ShopViewSchema.parse({ ...shop, contactPhone: '9000000000', contactWhatsapp: '9000000001', upiId: 'x@upi' });
+    expect(JSON.stringify(parsed)).not.toMatch(/9000000|upi|contact/i);
   });
 });
 

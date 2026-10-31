@@ -9,6 +9,10 @@ import {
   OtpRequestedSchema,
   ProblemSchema,
   BuyerFeedSchema,
+  FeedFacetsSchema,
+  FollowStateSchema,
+  FollowedShopListSchema,
+  ShopViewSchema,
   BuyerListingSchema,
   BuyerNegotiationListSchema,
   BuyerNegotiationSchema,
@@ -55,6 +59,11 @@ import {
   type Health,
   type Me,
   type BuyerFeed,
+  type FeedFacets,
+  type FeedQuery,
+  type FollowState,
+  type FollowedShopList,
+  type ShopView,
   type BuyerListing,
   type BuyerNegotiation,
   type BuyerNegotiationList,
@@ -140,7 +149,17 @@ export interface ApiClient {
   setListingStatus(id: string, status: 'ACTIVE' | 'PAUSED', idempotencyKey?: string): Promise<SellerListing>;
   deleteListingDraft(id: string): Promise<void>;
   /** One page of the buyer feed. Pass the previous page's `nextCursor` to get the next one. */
-  getBuyerFeed(cursor?: string | null, limit?: number): Promise<BuyerFeed>;
+  /** The feed: For You or Following, with search, filters and sort. Empty values are left out of the address. */
+  getBuyerFeed(params?: FeedParams): Promise<BuyerFeed>;
+  /** The filter choices: categories, sizes in stock and the price span. */
+  getFeedFacets(): Promise<FeedFacets>;
+  /** A shop page by handle, and its live listings (same search, filters and sort as the feed). */
+  getShop(handle: string): Promise<ShopView>;
+  getShopListings(handle: string, params?: FeedParams): Promise<BuyerFeed>;
+  /** Follow and unfollow are safe to repeat. */
+  followSeller(sellerId: string): Promise<FollowState>;
+  unfollowSeller(sellerId: string): Promise<FollowState>;
+  listFollows(cursor?: string | null, limit?: number): Promise<FollowedShopList>;
   getBuyerListing(id: string): Promise<BuyerListing>;
   /** Make a first offer on a size. Amounts are paise (whole rupees). Pass `idempotencyKey` to make a retry safe. */
   startOffer(listingId: string, variantId: string, amount: number, idempotencyKey?: string): Promise<BuyerNegotiation>;
@@ -165,6 +184,8 @@ export interface ApiClient {
   putReview(orderId: string, input: PutReview, idempotencyKey?: string): Promise<BuyerOrder>;
   /** The seller's UPI QR for a PLACED order. It needs the bearer token, so this returns what an `<Image source>` takes. */
   getPaymentQrSource(orderId: string): { uri: string; headers: Record<string, string> };
+  /** A chat photo is private to its thread (I-19), so it needs the bearer token. Returns what an `<Image source>` takes. */
+  getChatPhotoSource(url: string): { uri: string; headers: Record<string, string> };
 
   // ---------- orders (seller) ----------
   listSellerOrders(): Promise<SellerOrderList>;
@@ -219,6 +240,30 @@ interface CallOptions {
   auth?: boolean;
   acceptStatuses?: number[];
   headers?: Record<string, string>;
+}
+
+/** What the feed accepts. A value that is empty, null or false is left out, so the address stays short and cacheable. */
+export type FeedParams = Partial<FeedQuery>;
+
+/** `?a=b&c=d` for the feed, in a fixed key order (a stable address makes a stable query key and cache entry). */
+export function feedQueryString(p: FeedParams = {}): string {
+  const q = new URLSearchParams();
+  const put = (k: string, v: unknown) => {
+    if (v === undefined || v === null || v === '' || v === false) return;
+    q.set(k, String(v));
+  };
+  put('scope', p.scope);
+  put('q', typeof p.q === 'string' ? p.q.trim().replace(/\s+/g, ' ') : p.q);
+  put('category', p.category);
+  put('minPrice', p.minPrice);
+  put('maxPrice', p.maxPrice);
+  put('size', p.size);
+  put('acceptsOffers', p.acceptsOffers);
+  put('sort', p.sort);
+  put('limit', p.limit);
+  put('cursor', p.cursor);
+  const qs = q.toString();
+  return qs ? `?${qs}` : '';
 }
 
 export function createApiClient(opts: ApiClientOptions): ApiClient {
@@ -296,12 +341,17 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     updateListing: (id, input, key) => call(`/v1/seller/listings/${id}`, SellerListingSchema, { method: 'PUT', body: input, auth: true, ...idem(key) }),
     setListingStatus: (id, status, key) => call(`/v1/seller/listings/${id}/status`, SellerListingSchema, { method: 'POST', body: { status }, auth: true, ...idem(key) }),
     deleteListingDraft: (id) => call(`/v1/seller/listings/${id}`, NoBody, { method: 'DELETE', auth: true }),
-    getBuyerFeed: (cursor, limit) => {
+    getBuyerFeed: (params) => call(`/v1/buyer/feed${feedQueryString(params)}`, BuyerFeedSchema, { auth: true }),
+    getFeedFacets: () => call('/v1/buyer/feed/facets', FeedFacetsSchema, { auth: true }),
+    getShop: (handle) => call(`/v1/buyer/shops/${encodeURIComponent(handle)}`, ShopViewSchema, { auth: true }),
+    getShopListings: (handle, params) => call(`/v1/buyer/shops/${encodeURIComponent(handle)}/listings${feedQueryString(params)}`, BuyerFeedSchema, { auth: true }),
+    followSeller: (id) => call(`/v1/buyer/follows/sellers/${id}`, FollowStateSchema, { method: 'PUT', auth: true }),
+    unfollowSeller: (id) => call(`/v1/buyer/follows/sellers/${id}`, FollowStateSchema, { method: 'DELETE', auth: true }),
+    listFollows: (cursor, limit) => {
       const q = new URLSearchParams();
       if (cursor) q.set('cursor', cursor);
       if (limit) q.set('limit', String(limit));
-      const qs = q.toString();
-      return call(`/v1/buyer/feed${qs ? `?${qs}` : ''}`, BuyerFeedSchema, { auth: true });
+      return call(`/v1/buyer/follows${q.size ? `?${q}` : ''}`, FollowedShopListSchema, { auth: true });
     },
     getBuyerListing: (id) => call(`/v1/buyer/listings/${id}`, BuyerListingSchema, { auth: true }),
     startOffer: (listingId, variantId, amount, key) => call(`/v1/buyer/listings/${listingId}/offers`, BuyerNegotiationSchema, { method: 'POST', body: { variantId, amount }, auth: true, ...idem(key) }),
@@ -325,6 +375,12 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
       const t = opts.getAccessToken?.() ?? null;
       const headers: Record<string, string> = t ? { authorization: `Bearer ${t}` } : {};
       return { uri: `${baseUrl}/v1/buyer/orders/${orderId}/payment-qr`, headers };
+    },
+
+    getChatPhotoSource: (url) => {
+      const t = opts.getAccessToken?.() ?? null;
+      const headers: Record<string, string> = t ? { authorization: `Bearer ${t}` } : {};
+      return { uri: url.startsWith('/') ? baseUrl + url : url, headers };
     },
 
     listSellerOrders: () => call('/v1/seller/orders', SellerOrderListSchema, { auth: true }),

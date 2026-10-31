@@ -35,11 +35,13 @@ describe('status screen', () => {
     expect(screen.queryByText("Can't connect")).not.toBeOnTheScreen();
   });
 
-  it('opens the feed from the Browse listings button', async () => {
+  it('opens the reels, search and the shops you follow from the home buttons', async () => {
     fetchMock.mockImplementation(() => new Promise(() => {}));
     await renderScreen();
-    await act(async () => void fireEvent.press(screen.getByText('Browse listings')));
-    expect(mockRouter.push).toHaveBeenCalledWith('/feed');
+    for (const [label, path] of [['Browse reels', '/feed'], ['Search', '/search'], ['Shops you follow', '/follows']] as const) {
+      await act(async () => void fireEvent.press(screen.getByText(label)));
+      expect(mockRouter.push).toHaveBeenLastCalledWith(path);
+    }
   });
 
   it('shows the API, database, environment and simulated providers on success', async () => {

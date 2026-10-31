@@ -1,3 +1,4 @@
+import { validateTags } from './discovery.js';
 import { isWholeRupees, type Paise } from './money.js';
 import { BARGAIN_MODES, CATEGORIES, IMAGE_MIMES, MEDIA_PURPOSES, OFFER_EXPIRY_MINUTES, RULES, VIDEO_MIMES } from './rules.js';
 import type { BargainMode, DealAccess, DealCodes, PayMethod, PrivateRules } from './types.js';
@@ -192,6 +193,8 @@ export interface ListingDraft {
   /** Paise, whole rupees. */
   price?: Paise;
   media?: unknown[];
+  /** Search keywords such as "cotton" or "summer wear". Cleaned by `validateTags`. */
+  tags?: string[];
   variants?: { id?: string; label?: string; stock?: number }[];
   bargaining?: { mode?: string; expiryMinutes?: number };
   /** Paise, whole rupees; null/undefined means "not set". */
@@ -204,6 +207,8 @@ export function validateListingDraft(d: ListingDraft): { errors: Record<string, 
   if (title.length < 3 || title.length > 80) e.title = 'Use 3–80 characters.';
   if (String(d.description ?? '').length > 600) e.description = 'Keep it under 600 characters.';
   if (!(CATEGORIES as readonly string[]).includes(d.category ?? '')) e.category = 'Choose a category.';
+  const tagCheck = validateTags(d.tags);
+  if (tagCheck.error) e.tags = tagCheck.error;
   if (!d.media || !d.media.length) e.media = 'Add at least one video or photo.';
   if (d.media && d.media.length > RULES.MAX_MEDIA_PER_LISTING) e.media = 'Up to 6 media items.';
   const price = d.price;

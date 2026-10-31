@@ -55,6 +55,13 @@ describe('orders', () => {
     expect(c.getPaymentQrSource(id).headers).toEqual({});
   });
 
+  it('gives a chat photo as an image source with the token, and none when signed out', () => {
+    const { c } = spy(order);
+    expect(c.getChatPhotoSource('/v1/buyer/threads/photos/abc')).toEqual({ uri: 'http://api.test/v1/buyer/threads/photos/abc', headers: { authorization: 'Bearer tok' } });
+    const out = createApiClient({ baseUrl: 'http://api.test', fetch: async () => json(200, {}) });
+    expect(out.getChatPhotoSource('/v1/seller/threads/photos/abc').headers).toEqual({});
+  });
+
   it('the seller moves an order with the right routes and bodies', async () => {
     const seller = { ...order, buyerName: 'Asha', buyerContact: null, canConfirm: true, canShip: false, canDeliver: false, canCancel: true };
     delete (seller as Record<string, unknown>).seller;

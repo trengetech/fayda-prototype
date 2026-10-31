@@ -42,7 +42,7 @@ describe('toInput', () => {
 
 describe('fromListing', () => {
   const saved: SellerListing = {
-    id: 'l1', status: 'ACTIVE', title: 'Kurta', description: 'D', category: 'Ethnic wear', price: 150000,
+    id: 'l1', status: 'ACTIVE', title: 'Kurta', description: 'D', category: 'Ethnic wear', tags: ['cotton', 'summer wear'], price: 150000,
     media: [{ mediaId: 'm1', kind: 'image', url: '/v1/media/m1', posterMediaId: null, posterUrl: null }, { mediaId: 'm2', kind: 'video', url: '/v1/media/m2', posterMediaId: 'p2', posterUrl: '/v1/media/p2' }],
     variants: [{ id: 'v1', label: 'M', stock: 3 }], bargaining: { mode: 'BOTH', expiryMinutes: 360 },
     rules: { autoAcceptAt: 110000, autoDeclineBelow: null, autoCounterAt: 130000 }, checkout: { channel: 'WEBSITE', productUrl: 'https://s.example/p' },
@@ -55,6 +55,12 @@ describe('fromListing', () => {
     const back = toInput(values, media, false);
     expect(back).toMatchObject({ price: 150000, rules: { autoAcceptAt: 110000, autoCounterAt: 130000, autoDeclineBelow: null } });
     expect(back.variants).toEqual([{ id: 'v1', label: 'M', stock: 3 }]);
+    expect(values.tags).toBe('cotton, summer wear');
+    expect(back.tags).toEqual(['cotton', 'summer wear']);
+  });
+  it('sends cleaned tags, and an empty box sends an empty list so old tags are cleared', () => {
+    expect(toInput(filled({ tags: ' Cotton, #Summer wear ,, cotton ' }), [photo], false).tags).toEqual(['cotton', 'summer wear']);
+    expect(toInput(filled({ tags: '' }), [photo], false).tags).toEqual([]);
   });
   it('shows one blank size row for a listing with none', () => {
     expect(fromListing({ ...saved, variants: [] }).values.variants).toEqual([{ label: '', stock: '' }]);

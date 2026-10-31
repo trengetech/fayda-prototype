@@ -105,7 +105,7 @@ export default function ChatScreen() {
       {t.messages.map((m) => (
         <View key={m.id} style={{ alignItems: m.from === 'ME' ? 'flex-end' : m.from === 'SYSTEM' ? 'center' : 'flex-start' }}>
           <View style={{ maxWidth: '85%', padding: 10, borderRadius: 14, gap: 6, backgroundColor: m.from === 'ME' ? colors.accent : m.from === 'SYSTEM' ? colors.border : colors.surface, borderWidth: m.from === 'OTHER' ? 1 : 0, borderColor: colors.border }}>
-            {m.media ? <Image source={{ uri: client.resolveUrl(m.media.url) }} style={{ width: 200, height: 200, borderRadius: 10 }} accessibilityLabel="Photo in chat" accessibilityIgnoresInvertColors /> : null}
+            {m.media ? <Image source={client.getChatPhotoSource(m.media.url)} style={{ width: 200, height: 200, borderRadius: 10 }} accessibilityLabel="Photo in chat" accessibilityIgnoresInvertColors /> : null}
             {m.listing ? (
               <View style={{ gap: 2 }}>
                 <AppText weight="bold" tone={m.from === 'ME' ? 'ink' : 'ink'}>{m.listing.title}</AppText>

@@ -3,7 +3,7 @@ import type { Readable } from 'node:stream';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Media, MediaIntent, MediaIntentInput } from '@fayda/contracts';
 import { validateMediaIntent, type Clock } from '@fayda/domain';
-import { and, count, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { AppError } from '../common/app-error.js';
 import { CLOCK } from '../common/clock.js';
 import { DbService } from '../db/db.service.js';
@@ -28,7 +28,10 @@ const APP_PURPOSES: Record<'buyer' | 'seller', readonly MediaRow['purpose'][]> =
 const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 const sameHash = (a: string, b: string): boolean => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
-/** The public address of a ready listing file. A UPI QR is private, so it has none. */
+/** Files that are never served by the public route: a UPI QR (order-scoped) and chat photos (thread-scoped, I-19). */
+const PRIVATE_PURPOSES: MediaRow['purpose'][] = ['UPI_QR', 'CHAT'];
+
+/** The public address of a ready file. Private purposes have none. */
 export const publicMediaUrl = (id: string): string => `/v1/media/${id}`;
 
 @Injectable()
@@ -57,7 +60,7 @@ export class MediaService implements SweepTask {
       purpose: row.purpose,
       status: row.status,
       size: row.size,
-      url: row.status === 'READY' && row.purpose !== 'UPI_QR' ? publicMediaUrl(row.id) : null,
+      url: row.status === 'READY' && !PRIVATE_PURPOSES.includes(row.purpose) ? publicMediaUrl(row.id) : null,
     };
   }
 
@@ -145,7 +148,7 @@ export class MediaService implements SweepTask {
 
   /** What the public download route needs, or null when the file is not public. */
   async publicFile(id: string): Promise<{ mime: string; size: number; storageKey: string } | null> {
-    const [row] = await this.db.select().from(media).where(and(eq(media.id, id), eq(media.status, 'READY'), ne(media.purpose, 'UPI_QR'))).limit(1);
+    const [row] = await this.db.select().from(media).where(and(eq(media.id, id), eq(media.status, 'READY'), notInArray(media.purpose, PRIVATE_PURPOSES))).limit(1);
     return row?.size ? { mime: row.mime, size: row.size, storageKey: row.storageKey } : null;
   }
 

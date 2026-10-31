@@ -1,6 +1,6 @@
 import type { ListingInput, SellerListing } from '@fayda/contracts/schemas';
 import { z } from '@fayda/contracts/schemas';
-import { OFFER_EXPIRY_MINUTES, RULES } from '@fayda/domain';
+import { OFFER_EXPIRY_MINUTES, RULES, parseTagInput } from '@fayda/domain';
 
 export const MODES = ['BUY_NOW', 'BOTH'] as const;
 export type Mode = (typeof MODES)[number];
@@ -26,6 +26,8 @@ export interface EditorValues {
   title: string;
   description: string;
   category: string;
+  /** What the seller typed: words separated by commas. Cleaned and checked on the server (`validateTags`). */
+  tags: string;
   price: string;
   variants: { id?: string; label: string; stock: string }[];
   mode: Mode;
@@ -47,6 +49,7 @@ export const EditorSchema = z.object({
   title: z.string().max(200),
   description: z.string().max(2000),
   category: z.string(),
+  tags: z.string().max(300),
   price: digits.max(8, 'That is too large.'),
   variants: z.array(z.object({ id: z.string().optional(), label: z.string().max(60), stock: digits.max(5, 'Use up to 9,999.') })).max(30),
   mode: z.enum(MODES),
@@ -66,6 +69,7 @@ export const emptyValues = (): EditorValues => ({
   title: '',
   description: '',
   category: '',
+  tags: '',
   price: '',
   variants: [{ label: '', stock: '' }],
   mode: 'BUY_NOW',
@@ -91,6 +95,7 @@ export function fromListing(l: SellerListing): { values: EditorValues; media: Ed
       title: l.title,
       description: l.description,
       category: l.category,
+      tags: l.tags.join(', '),
       price: rupeesText(l.price),
       variants: l.variants.length ? l.variants.map((v) => ({ id: v.id, label: v.label, stock: String(v.stock) })) : [{ label: '', stock: '' }],
       mode: l.bargaining.mode as Mode,
@@ -118,6 +123,8 @@ export function toInput(v: EditorValues, media: EditorMedia[], publish: boolean,
     title: v.title.trim(),
     description: v.description.trim(),
     category: v.category,
+    // Always sent, so clearing the box clears the tags (leaving the field out would keep the old ones).
+    tags: parseTagInput(v.tags),
     price: Number(v.price || 0) * 100,
     media: media.map((m) => ({ mediaId: m.mediaId, ...(m.kind === 'video' && m.posterMediaId ? { posterMediaId: m.posterMediaId } : {}) })),
     variants: v.variants.filter((x) => x.label.trim() !== '' || x.stock !== '').map((x) => ({ ...(x.id ? { id: x.id } : {}), label: x.label.trim(), stock: Number(x.stock || 0) })),
@@ -146,4 +153,4 @@ export function saveKey(sessionNonce: string, input: ListingInput): string {
 export const newNonce = (): string => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 
 /** Server field names to the form's field names, so an error appears next to the right input. */
-export const FIELD_MAP: Record<string, string> = { mode: 'mode', expiryMinutes: 'expiryMinutes', autoAcceptAt: 'autoAcceptAt', autoCounterAt: 'autoCounterAt', autoDeclineBelow: 'autoDeclineBelow', acceptCode: 'acceptValue', counterCode: 'counterValue' };
+export const FIELD_MAP: Record<string, string> = { tags: 'tags', mode: 'mode', expiryMinutes: 'expiryMinutes', autoAcceptAt: 'autoAcceptAt', autoCounterAt: 'autoCounterAt', autoDeclineBelow: 'autoDeclineBelow', acceptCode: 'acceptValue', counterCode: 'counterValue' };
