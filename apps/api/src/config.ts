@@ -18,6 +18,8 @@ const EnvSchema = z.object({
   REFRESH_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(90),
   /** Per client address, for /v1/auth/*. Other routes allow 20 times as many. */
   AUTH_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).max(10000).default(20),
+  /** Where the local-disk media adapter keeps uploads. Must be outside any folder a deploy replaces (I-11). */
+  UPLOADS_DIR: z.string().min(1).default('./uploads'),
 });
 
 export interface AppConfig {
@@ -32,6 +34,7 @@ export interface AppConfig {
   accessTtlSeconds: number;
   refreshTtlDays: number;
   authRateLimitPerMin: number;
+  uploadsDir: string;
 }
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -56,5 +59,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     accessTtlSeconds: e.ACCESS_TTL_SECONDS,
     refreshTtlDays: e.REFRESH_TTL_DAYS,
     authRateLimitPerMin: e.AUTH_RATE_LIMIT_PER_MIN,
+    uploadsDir: e.UPLOADS_DIR,
   };
 }

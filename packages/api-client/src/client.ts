@@ -2,10 +2,14 @@ import {
   AuthResultSchema,
   BuyerProfileSchema,
   HealthSchema,
+  MediaIntentSchema,
+  MediaSchema,
   MeSchema,
   MetaSchema,
   OtpRequestedSchema,
   ProblemSchema,
+  SellerListingListSchema,
+  SellerListingSchema,
   SellerProfileSchema,
   type AppAudience,
   type AuthResult,
@@ -13,10 +17,15 @@ import {
   type BuyerProfileInput,
   type Health,
   type Me,
+  type ListingInput,
+  type Media,
+  type MediaIntent,
+  type MediaIntentInput,
   type Meta,
   type OtpRequested,
   type PaymentInput,
   type Problem,
+  type SellerListing,
   type SellerProfile,
   type SellerShopInput,
   type z,
@@ -68,15 +77,27 @@ export interface ApiClient {
   getSellerProfile(): Promise<SellerProfile>;
   saveSellerShop(input: SellerShopInput): Promise<SellerProfile>;
   saveSellerPayment(input: PaymentInput): Promise<SellerProfile>;
+  /** Turns an address from the API (`/v1/media/…` or a full URL) into one a player or uploader can use. */
+  resolveUrl(path: string): string;
+  createMediaIntent(input: MediaIntentInput): Promise<MediaIntent>;
+  completeMedia(mediaId: string): Promise<Media>;
+  listSellerListings(): Promise<SellerListing[]>;
+  getSellerListing(id: string): Promise<SellerListing>;
+  /** `idempotencyKey` makes a retry after a lost reply safe: reuse the same key for the same save. */
+  createListing(input: ListingInput, idempotencyKey?: string): Promise<SellerListing>;
+  updateListing(id: string, input: ListingInput, idempotencyKey?: string): Promise<SellerListing>;
+  setListingStatus(id: string, status: 'ACTIVE' | 'PAUSED', idempotencyKey?: string): Promise<SellerListing>;
+  deleteListingDraft(id: string): Promise<void>;
 }
 
-type Method = 'GET' | 'POST' | 'PUT' | 'PATCH';
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 interface CallOptions {
   method?: Method;
   body?: unknown;
   /** Send the bearer token, and on 401 refresh once and retry. */
   auth?: boolean;
   acceptStatuses?: number[];
+  headers?: Record<string, string>;
 }
 
 export function createApiClient(opts: ApiClientOptions): ApiClient {
@@ -90,6 +111,7 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     const headers: Record<string, string> = { accept: 'application/json' };
     if (o.body !== undefined) headers['content-type'] = 'application/json';
     if (token) headers.authorization = `Bearer ${token}`;
+    Object.assign(headers, o.headers);
     try {
       return await doFetch(baseUrl + path, { method: o.method ?? 'GET', headers, signal: ctrl.signal, ...(o.body !== undefined ? { body: JSON.stringify(o.body) } : {}) });
     } catch (e) {
@@ -121,6 +143,7 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     const problem = ProblemSchema.safeParse(body);
     throw new ApiError(res.status, problem.success ? (problem.data.detail ?? problem.data.title) : `Request failed (${res.status})`, problem.success ? problem.data : undefined);
   }
+  const idem = (key?: string): { headers?: Record<string, string> } => (key ? { headers: { 'idempotency-key': key } } : {});
   const NoBody = { parse: () => undefined, safeParse: () => ({ success: true as const, data: undefined }) } as unknown as z.ZodType<void>;
 
   return {
@@ -139,5 +162,14 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     getSellerProfile: () => call('/v1/seller/profile', SellerProfileSchema, { auth: true }),
     saveSellerShop: (input) => call('/v1/seller/profile', SellerProfileSchema, { method: 'PUT', body: input, auth: true }),
     saveSellerPayment: (input) => call('/v1/seller/payment', SellerProfileSchema, { method: 'PUT', body: input, auth: true }),
+    resolveUrl: (path) => (path.startsWith('/') ? baseUrl + path : path),
+    createMediaIntent: (input) => call('/v1/seller/media/intents', MediaIntentSchema, { method: 'POST', body: input, auth: true }),
+    completeMedia: (mediaId) => call(`/v1/seller/media/${mediaId}/complete`, MediaSchema, { method: 'POST', auth: true }),
+    listSellerListings: async () => (await call('/v1/seller/listings', SellerListingListSchema, { auth: true })).items,
+    getSellerListing: (id) => call(`/v1/seller/listings/${id}`, SellerListingSchema, { auth: true }),
+    createListing: (input, key) => call('/v1/seller/listings', SellerListingSchema, { method: 'POST', body: input, auth: true, ...idem(key) }),
+    updateListing: (id, input, key) => call(`/v1/seller/listings/${id}`, SellerListingSchema, { method: 'PUT', body: input, auth: true, ...idem(key) }),
+    setListingStatus: (id, status, key) => call(`/v1/seller/listings/${id}/status`, SellerListingSchema, { method: 'POST', body: { status }, auth: true, ...idem(key) }),
+    deleteListingDraft: (id) => call(`/v1/seller/listings/${id}`, NoBody, { method: 'DELETE', auth: true }),
   };
 }

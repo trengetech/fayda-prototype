@@ -12,3 +12,4 @@ apps/*/ios/
 apps/*/.expo/
 apps/*/expo-env.d.ts
 apks/
+apps/api/uploads/

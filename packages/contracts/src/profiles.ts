@@ -71,6 +71,9 @@ export type SellerShopInput = z.infer<typeof SellerShopInputSchema>;
 export const PaymentInputSchema = z
   .object({
     upiId: z.string().max(100).nullish(),
+    /** A READY `UPI_QR` upload of this seller. Needs `upiQrPayload`, the text the phone decoded from it. */
+    upiQrMediaId: z.string().uuid().nullish(),
+    upiQrPayload: z.string().max(500).nullish(),
     bankHolder: z.string().max(100).nullish(),
     bankAccount: z.string().max(30).nullish(),
     bankIfsc: z.string().max(15).nullish(),
@@ -86,6 +89,7 @@ export type PaymentInput = z.infer<typeof PaymentInputSchema>;
 export const PaymentProfileSchema = z
   .object({
     upiId: z.string().nullable(),
+    upiQrMediaId: z.string().nullable(),
     bankHolder: z.string().nullable(),
     bankAccount: z.string().nullable(),
     bankIfsc: z.string().nullable(),

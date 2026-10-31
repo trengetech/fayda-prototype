@@ -1,4 +1,5 @@
 import { index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type { DealAccess } from '@fayda/domain';
 
 /**
  * Replays the stored response when a client retries a mutating request with the same Idempotency-Key.
@@ -104,6 +105,8 @@ export const sellers = pgTable('sellers', {
 export const sellerPaymentProfiles = pgTable('seller_payment_profiles', {
   sellerId: uuid('seller_id').primaryKey().references(() => sellers.id, { onDelete: 'cascade' }),
   upiId: text('upi_id'),
+  /** A READY `UPI_QR` media row, checked against `upiId` when saved. Private: served to a buyer only through their own PLACED order. */
+  upiQrMediaId: uuid('upi_qr_media_id'),
   bankHolder: text('bank_holder'),
   bankAccount: text('bank_account'),
   bankIfsc: text('bank_ifsc'),
@@ -112,3 +115,83 @@ export const sellerPaymentProfiles = pgTable('seller_payment_profiles', {
   website: text('website'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ---------- media ----------
+/**
+ * One uploaded file. The row is created by an upload intent (`PENDING`) and becomes `READY` when the upload is
+ * verified. `storageKey` is opaque to callers, so the disk adapter can later be swapped for R2 or Stream.
+ */
+export const media = pgTable(
+  'media',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerUserId: uuid('owner_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: ['image', 'video'] }).notNull(),
+    purpose: text('purpose', { enum: ['LISTING', 'UPI_QR'] }).notNull(),
+    mime: text('mime').notNull(),
+    declaredSize: integer('declared_size').notNull(),
+    size: integer('size'),
+    durationSec: integer('duration_sec'),
+    status: text('status', { enum: ['PENDING', 'READY'] }).notNull().default('PENDING'),
+    adapter: text('adapter').notNull(),
+    storageKey: text('storage_key').notNull(),
+    /** SHA-256 of the one-time token in the upload address. Null once the file has arrived. */
+    uploadTokenHash: text('upload_token_hash'),
+    uploadExpiresAt: timestamp('upload_expires_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    readyAt: timestamp('ready_at', { withTimezone: true }),
+  },
+  (t) => [index('media_owner_idx').on(t.ownerUserId), index('media_status_created_idx').on(t.status, t.createdAt)],
+);
+
+// ---------- listings ----------
+export const listings = pgTable(
+  'listings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sellerId: uuid('seller_id').notNull().references(() => sellers.id, { onDelete: 'cascade' }),
+    status: text('status', { enum: ['DRAFT', 'ACTIVE', 'PAUSED'] }).notNull(),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    category: text('category').notNull(),
+    pricePaise: integer('price_paise').notNull(),
+    bargainMode: text('bargain_mode', { enum: ['FIXED', 'PRIVATE', 'PUBLIC', 'BOTH'] }).notNull(),
+    expiryHours: integer('expiry_hours').notNull(),
+    channel: text('channel', { enum: ['DIRECT', 'WEBSITE'] }).notNull(),
+    productUrl: text('product_url'),
+    // Seller-only. These columns are never selected by a buyer query; buyer responses are built from buyer schemas.
+    autoAcceptAt: integer('auto_accept_at'),
+    autoDeclineBelow: integer('auto_decline_below'),
+    autoCounterAt: integer('auto_counter_at'),
+    dealAccept: jsonb('deal_accept').$type<DealAccess | null>(),
+    dealCounter: jsonb('deal_counter').$type<DealAccess | null>(),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('listings_seller_idx').on(t.sellerId, t.status), index('listings_feed_idx').on(t.status, t.publishedAt, t.id)],
+);
+
+export const listingMedia = pgTable(
+  'listing_media',
+  {
+    listingId: uuid('listing_id').notNull().references(() => listings.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    mediaId: uuid('media_id').notNull().references(() => media.id),
+    /** Poster photo for a video (made on the seller's phone, I-14). */
+    posterMediaId: uuid('poster_media_id').references(() => media.id),
+  },
+  (t) => [primaryKey({ columns: [t.listingId, t.position] }), index('listing_media_media_idx').on(t.mediaId)],
+);
+
+export const listingVariants = pgTable(
+  'listing_variants',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    listingId: uuid('listing_id').notNull().references(() => listings.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    label: text('label').notNull(),
+    stock: integer('stock').notNull(),
+  },
+  (t) => [index('listing_variants_listing_idx').on(t.listingId)],
+);

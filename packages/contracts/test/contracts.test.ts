@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ERROR_CODES, HealthSchema, MetaSchema, PaiseSchema, ProblemSchema, buildOpenApiDocument } from '../src/index.js';
+import { BuyerFeedSchema, ERROR_CODES, HealthSchema, ListingInputSchema, MediaIntentSchema, MetaSchema, PaiseSchema, ProblemSchema, buildOpenApiDocument } from '../src/index.js';
 
 describe('system contracts', () => {
   it('accepts a healthy response and a database-down response', () => {
@@ -37,7 +37,13 @@ describe('OpenAPI', () => {
   it('is generated from the Zod contracts', () => {
     expect(doc.openapi).toBe('3.1.0');
     expect(Object.keys(doc.paths ?? {}).sort()).toEqual(
-      ['/v1/auth/logout', '/v1/auth/otp/request', '/v1/auth/otp/verify', '/v1/auth/refresh', '/v1/buyer/profile', '/v1/buyer/profile/contact', '/v1/health', '/v1/me', '/v1/meta', '/v1/seller/payment', '/v1/seller/profile'].sort(),
+      [
+        '/v1/auth/logout', '/v1/auth/otp/request', '/v1/auth/otp/verify', '/v1/auth/refresh',
+        '/v1/buyer/feed', '/v1/buyer/listings/{id}', '/v1/buyer/profile', '/v1/buyer/profile/contact',
+        '/v1/health', '/v1/me', '/v1/media/upload/{id}', '/v1/media/{id}', '/v1/meta',
+        '/v1/seller/listings', '/v1/seller/listings/{id}', '/v1/seller/listings/{id}/status',
+        '/v1/seller/media/intents', '/v1/seller/media/{id}/complete', '/v1/seller/payment', '/v1/seller/profile',
+      ].sort(),
     );
   });
   it('marks signed-in routes as needing a bearer token', () => {
@@ -47,5 +53,27 @@ describe('OpenAPI', () => {
   it('documents the 503 health response and the simulated flag', () => {
     expect(JSON.stringify(doc.paths?.['/v1/health'])).toContain('503');
     expect(JSON.stringify(doc.components?.schemas)).toContain('simulated');
+  });
+});
+
+describe('listing and media contracts', () => {
+  const listing = { title: 'Kurta', category: 'Ethnic wear', price: 150000, media: [], variants: [], bargaining: { mode: 'FIXED', expiryHours: 24 }, checkout: { channel: 'DIRECT' } };
+  it('saves a draft unless the app says publish', () => {
+    expect(ListingInputSchema.parse(listing).publish).toBe(false);
+    expect(ListingInputSchema.parse({ ...listing, publish: true }).publish).toBe(true);
+  });
+  it('rejects ids that are not UUIDs and oversized lists', () => {
+    expect(ListingInputSchema.safeParse({ ...listing, media: [{ mediaId: 'abc' }] }).success).toBe(false);
+    expect(ListingInputSchema.safeParse({ ...listing, variants: Array.from({ length: 31 }, () => ({ label: 'M', stock: 1 })) }).success).toBe(false);
+  });
+  it('lets the upload address be a path on the API or a full address, and always PUT', () => {
+    const base = { mediaId: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', expiresAt: 1 };
+    expect(MediaIntentSchema.safeParse({ ...base, upload: { method: 'PUT', url: '/v1/media/upload/x', headers: {} } }).success).toBe(true);
+    expect(MediaIntentSchema.safeParse({ ...base, upload: { method: 'POST', url: '/x', headers: {} } }).success).toBe(false);
+  });
+  it('strips anything a buyer schema does not name, so private fields cannot slip through', () => {
+    const seller = { id: 's', name: 'n', handle: 'h', area: 'a', city: 'c' };
+    const parsed = BuyerFeedSchema.parse({ items: [{ id: 'l', title: 't', price: 1, category: 'c', soldOut: false, acceptsOffers: true, coverUrl: null, hasVideo: false, seller, rules: { autoAcceptAt: 1 }, dealCodes: { accept: 'X' } }], nextCursor: null });
+    expect(JSON.stringify(parsed)).not.toMatch(/rules|dealCodes|autoAccept/);
   });
 });

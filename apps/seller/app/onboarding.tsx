@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { Controller, useForm, type FieldPath } from 'react-hook-form';
 import { Modal, ScrollView } from 'react-native';
 import { CONDUCT_NOTE, CONDUCT_POINTS, CONDUCT_TITLE } from '../src/conduct';
+import { UpiQrField } from '../src/upi-qr-field';
 
 const HOURS_TEXT = (h: number) => (h === 1 ? '1 hour' : h < 24 ? `${h} hours` : `${h / 24} day${h === 24 ? '' : 's'}`);
 const DAYS_TEXT = (d: number) => (d === 1 ? '1 day' : `${d} days`);
@@ -74,6 +75,7 @@ function Steps({ existing, phone }: { existing: SellerProfile | null; phone: str
   const [step, setStep] = useState<1 | 2 | 3>(shopDone ? 3 : 1);
   const [formError, setFormError] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
+  const [qrError, setQrError] = useState<string | null>(null);
 
   const shop = useForm<SellerShopInput>({ resolver: zodResolver(ShopForm), defaultValues: existing ? fromProfile(existing) : shopDefaults(phone) });
   const pay = useForm<PaymentInput>({
@@ -107,7 +109,8 @@ function Steps({ existing, phone }: { existing: SellerProfile | null; phone: str
     } catch (e) {
       const { message, fields } = describeError(e);
       const keys = Object.keys(fields);
-      keys.forEach((k) => { if (k !== 'payment') pay.setError((PAY_MAP[k] ?? k) as FieldPath<PaymentInput>, { message: fields[k] ?? message }); });
+      setQrError(fields.upiQr ?? null);
+      keys.forEach((k) => { if (k !== 'payment' && k !== 'upiQr') pay.setError((PAY_MAP[k] ?? k) as FieldPath<PaymentInput>, { message: fields[k] ?? message }); });
       setFormError(fields.payment ?? (keys.length ? null : message));
     }
   });
@@ -156,6 +159,12 @@ function Steps({ existing, phone }: { existing: SellerProfile | null; phone: str
           <StepHeader step={3} total={3} title="How buyers pay you" />
           <AppText tone="muted" size={13}>Buyers pay you directly; Fayda never handles the money. Add at least one way, or your website.</AppText>
           {pf('upiId', 'UPI ID', { autoCapitalize: 'none', placeholder: 'name@okbank' })}
+          <UpiQrField
+            upiId={String(pay.watch('upiId') ?? '')}
+            value={pay.watch('upiQrMediaId') && pay.watch('upiQrPayload') ? { mediaId: String(pay.watch('upiQrMediaId')), payload: String(pay.watch('upiQrPayload')) } : null}
+            onChange={(v) => { pay.setValue('upiQrMediaId', v?.mediaId ?? null); pay.setValue('upiQrPayload', v?.payload ?? null); setQrError(null); }}
+            error={qrError ?? undefined}
+          />
           {pf('bankHolder', 'Bank account holder')}
           {pf('bankAccount', 'Bank account number', { keyboardType: 'number-pad' })}
           {pf('bankIfsc', 'IFSC', { autoCapitalize: 'characters', maxLength: 11 })}

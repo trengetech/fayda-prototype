@@ -4,4 +4,6 @@ export * from './errors.js';
 export * from './system.js';
 export * from './auth.js';
 export * from './profiles.js';
+export * from './media.js';
+export * from './listings.js';
 export * from './openapi.js';

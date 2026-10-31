@@ -38,6 +38,8 @@ function Routes() {
       </Stack.Protected>
       <Stack.Protected guard={complete}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="listings" />
+        <Stack.Screen name="listing/[id]" />
         <Stack.Screen name="gallery" />
       </Stack.Protected>
     </Stack>

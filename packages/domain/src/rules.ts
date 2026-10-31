@@ -15,6 +15,10 @@ export const RULES = Object.freeze({
   MIN_PRICE_PAISE: 50 * 100,
   MAX_PRICE_PAISE: 1_000_000 * 100,
   MAX_MEDIA_PER_LISTING: 6,
+  /** Upload caps (I-13). The phone enforces the reel length; the server enforces size, as it cannot probe duration. */
+  MAX_PHOTO_BYTES: 15_000_000,
+  MAX_VIDEO_BYTES: 80_000_000,
+  MAX_REEL_SECONDS: 60,
   REQUEST_OPEN_MS: 7 * DAY,
   MAX_MEDIA_PER_REVIEW: 4,
   MAX_MEDIA_PER_REQUEST: 4,
@@ -29,6 +33,10 @@ export const CONFIRM_HOURS_OPTIONS = [1, 2, 4, 6, 12, 24, 48] as const;
 export const SHIP_DAYS_OPTIONS = [1, 2, 3, 5, 7] as const;
 
 export const CATEGORIES = ['Ethnic wear', 'Western wear', 'Menswear', 'Accessories', 'Footwear'] as const;
+export const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export const VIDEO_MIMES = ['video/mp4', 'video/quicktime', 'video/webm'] as const;
+export const MEDIA_PURPOSES = ['LISTING', 'UPI_QR'] as const;
+
 export const BARGAIN_MODES = ['FIXED', 'PRIVATE', 'PUBLIC', 'BOTH'] as const;
 
 export const CANCEL_REASONS = {
