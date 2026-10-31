@@ -1,5 +1,5 @@
-import { act, fireEvent, screen } from '@testing-library/react-native';
-import { Linking } from 'react-native';
+import { act, fireEvent, screen, within } from '@testing-library/react-native';
+import { Linking, StyleSheet } from 'react-native';
 import OrdersScreen from '../app/orders';
 import OrderScreen from '../app/order/[id]';
 import { fakeApi, json, managerWith, renderWith, sellerOrder } from './utils';
@@ -30,6 +30,15 @@ const shipped = sellerOrder({ id: 'o3', number: 'FD-100003', status: 'SHIPPED', 
 const delivered = sellerOrder({ id: 'o4', number: 'FD-100004', status: 'DELIVERED', statusLabel: 'Delivered', buyerName: 'Kiran', canConfirm: false, canShip: false, canDeliver: false, canCancel: false, buyerContact: null });
 const list = (items: unknown[], extra = {}) => json({ items, needsConfirm: 1, unread: 2, ...extra });
 
+/** The text column of an order row: the nearest ancestor of the title that has flex: 1. */
+type Node = ReturnType<typeof screen.getByText>;
+function textColumn(title: Node): Node {
+  let n: Node | null = title.parent;
+  while (n && StyleSheet.flatten(n.props.style)?.flex !== 1) n = n.parent;
+  if (!n) throw new Error('no flex:1 text column above the title');
+  return n;
+}
+
 describe('orders list', () => {
   it('groups orders into the four tabs with their counts', async () => {
     fakeApi({ 'GET /v1/seller/orders': () => list([placed, confirmed, shipped, delivered]) }, fetchMock);
@@ -45,6 +54,16 @@ describe('orders list', () => {
     await act(async () => void fireEvent.press(screen.getByLabelText('Closed (1)')));
     expect(screen.getByText(/FD-100004/)).toBeOnTheScreen();
     expect(screen.getByText('Messages (2)')).toBeOnTheScreen();
+  });
+
+  it('keeps the status and unread labels in the text column, under the title (not in a squeezed side column)', async () => {
+    fakeApi({ 'GET /v1/seller/orders': () => list([placed]) }, fetchMock);
+    await renderWith(signedIn(), <OrdersScreen />);
+    const title = await screen.findByText(placed.listing.title);
+    const column = within(textColumn(title));
+    expect(column.getByText(/FD-100001/)).toBeOnTheScreen();
+    expect(column.getByText(/Confirm within/)).toBeOnTheScreen();
+    expect(column.getByText(placed.statusLabel)).toBeOnTheScreen();
   });
 
   it('opens an order and shows a friendly message when a tab is empty', async () => {

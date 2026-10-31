@@ -1,5 +1,5 @@
-import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
-import { Linking } from 'react-native';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
+import { Linking, StyleSheet } from 'react-native';
 import AgreementScreen from '../app/agreement';
 import ChatScreen from '../app/chat/[id]';
 import CheckoutScreen from '../app/checkout';
@@ -320,6 +320,15 @@ describe('placing an agreed offer from the negotiation screen', () => {
   });
 });
 
+/** The text column of an order row: the nearest ancestor of the title that has flex: 1. */
+type Node = ReturnType<typeof screen.getByText>;
+function textColumn(title: Node): Node {
+  let n: Node | null = title.parent;
+  while (n && StyleSheet.flatten(n.props.style)?.flex !== 1) n = n.parent;
+  if (!n) throw new Error('no flex:1 text column above the title');
+  return n;
+}
+
 describe('my orders', () => {
   const list = [
     buyerOrder({ unread: 3 }),
@@ -338,6 +347,16 @@ describe('my orders', () => {
     await pressLabel('All');
     await press('Rate seller');
     expect(mockRouter.push).toHaveBeenCalledWith('/order/o2?rate=1');
+  });
+
+  it('keeps the status and unread labels in the text column, under the title (not in a squeezed side column)', async () => {
+    fakeApi({ 'GET /v1/buyer/orders': () => json({ items: [buyerOrder({ unread: 3, statusLabel: 'Waiting for the seller to confirm your payment' })], unread: 3 }) }, fetchMock);
+    await renderWith(signedIn(), <OrdersScreen />);
+    const title = await screen.findByText(list[0]!.listing.title);
+    const column = within(textColumn(title));
+    expect(column.getByText('Waiting for the seller to confirm your payment')).toBeOnTheScreen();
+    expect(column.getByText('3 new messages')).toBeOnTheScreen();
+    expect(column.getByText(/FD-100001/)).toBeOnTheScreen();
   });
 
   it('shows an empty state and an error state with Try again', async () => {
