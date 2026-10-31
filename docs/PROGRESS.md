@@ -134,8 +134,8 @@ domain 67, contracts 12, api 70, api-client 22, ui 6, seller 56, buyer 30. API t
 - Buyer (signed in as `9000000001`): the feed shows the live listing with price, seller, area and "Open to offers"; the product page shows the carousel (swiped from 1/2 to 2/2), sizes, bargaining label, and disabled Buy and Make offer with the honest note. The feed payload carries no private rules or payment details.
 
 ### Known limits
-- **Not done on a physical phone**: the seller flow, the buyer screens and the QR decode were run on the emulator only.
-- **Video is not exercised for real.** Picking a video, making its cover on the phone, uploading it, and playing it in the product page are covered by tests with mocks only. The emulator listing has photos only.
+- **Not done on a physical phone**: the seller flow, the buyer screens, the QR decode and video were run on the emulator only. The emulator's disk is nearly full (97%), which once blocked an APK install; `adb shell pm trim-caches` freed enough.
+- **Video was checked on the emulator only, not on a real phone.** A real 4 s H.264 clip (made with macOS AVFoundation) went through the whole path: picked in the seller app, a cover frame made on the phone with `expo-video-thumbnails`, uploaded, published Live; the server's copy is byte-identical to the picked file (`cmp`), a mid-file Range request is identical and answers 206; the buyer feed card shows the cover with the Video badge; on the product page, Play started the clip (frame counter moved, and a second Play restarted it). Not covered: a long video near the 80 MB cap, a slow network, and a mid-range phone's decoder.
 - The test photos are plain dark images, so cover images look empty on screen. That is the data, not a display fault.
 - The feed is a plain list, newest first (full-screen reels, search, filters and Following are M3.5).
 - Offer invalidation when a price drops, stock runs out or a listing is paused is left to M3.3.
