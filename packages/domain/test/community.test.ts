@@ -26,6 +26,7 @@ import {
   validateResponse,
   validateReview,
   validateSellerReach,
+  validateSellerShop,
   type Order,
   type SellerProfile,
 } from '../src/index.js';
@@ -207,5 +208,19 @@ describe('Requests: reach sellers in the category, need photos, response → wan
     expect(isRequestDue(r, 1000 + 7 * DAY - 1)).toBe(false);
     expect(isRequestDue(r, 1000 + 7 * DAY)).toBe(true);
     expect(isRequestDue({ ...r, status: 'CLOSED' }, 1000 + 8 * DAY)).toBe(false);
+  });
+});
+
+describe('Seller shop basics', () => {
+  it('checks type, name, handle, area, GSTIN and bio', () => {
+    expect(Object.keys(validateSellerShop({}, false).errors).sort()).toEqual(['area', 'handle', 'name', 'sellerType']);
+    const bad = validateSellerShop({ sellerType: 'BUSINESS', name: 'Shop', handle: 'Has Caps!', area: 'Banjara Hills', gstin: 'nope', bio: 'x'.repeat(161) }, false);
+    expect(Object.keys(bad.errors).sort()).toEqual(['bio', 'gstin', 'handle']);
+    expect(validateSellerShop({ sellerType: 'INDIVIDUAL', name: 'Shop', handle: 'shop', area: 'Tolichowki' }, true).errors.handle).toBe('That handle is taken.');
+  });
+  it('cleans values and defaults the city', () => {
+    const r = validateSellerShop({ sellerType: 'INDIVIDUAL', name: ' Sana Studio ', handle: 'Sana.Studio', area: ' Tolichowki ', gstin: '' }, false);
+    expect(r.errors).toEqual({});
+    expect(r.clean).toMatchObject({ name: 'Sana Studio', handle: 'sana.studio', area: 'Tolichowki', city: 'Hyderabad', gstin: null });
   });
 });

@@ -36,7 +36,13 @@ describe('OpenAPI', () => {
   const doc = buildOpenApiDocument('0.0.0');
   it('is generated from the Zod contracts', () => {
     expect(doc.openapi).toBe('3.1.0');
-    expect(Object.keys(doc.paths ?? {})).toEqual(['/v1/health', '/v1/meta']);
+    expect(Object.keys(doc.paths ?? {}).sort()).toEqual(
+      ['/v1/auth/logout', '/v1/auth/otp/request', '/v1/auth/otp/verify', '/v1/auth/refresh', '/v1/buyer/profile', '/v1/buyer/profile/contact', '/v1/health', '/v1/me', '/v1/meta', '/v1/seller/payment', '/v1/seller/profile'].sort(),
+    );
+  });
+  it('marks signed-in routes as needing a bearer token', () => {
+    expect(JSON.stringify(doc.paths?.['/v1/me'])).toContain('bearerAuth');
+    expect(JSON.stringify(doc.paths?.['/v1/auth/otp/verify'])).not.toContain('bearerAuth');
   });
   it('documents the 503 health response and the simulated flag', () => {
     expect(JSON.stringify(doc.paths?.['/v1/health'])).toContain('503');

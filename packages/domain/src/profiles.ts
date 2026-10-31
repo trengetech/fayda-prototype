@@ -155,3 +155,47 @@ export interface PublicSellerProfile {
 export function publicSellerProfile(s: SellerProfile): PublicSellerProfile {
   return { id: s.id, name: s.name, handle: s.handle, area: s.area, city: s.city, categories: [...s.categories], mapsUrl: s.mapsUrl, googleProfileUrl: s.googleProfileUrl, socialUrl: s.socialUrl, sla: { ...s.sla } };
 }
+
+// ---------- seller shop basics (step 1) ----------
+const HANDLE_RE = /^[a-z0-9_.]{3,24}$/;
+const GSTIN_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+export const SELLER_TYPES = ['INDIVIDUAL', 'BUSINESS'] as const;
+export type SellerType = (typeof SELLER_TYPES)[number];
+
+export interface SellerShopInput {
+  sellerType?: string;
+  name?: string;
+  handle?: string;
+  area?: string;
+  city?: string | null;
+  gstin?: string | null;
+  bio?: string | null;
+}
+export interface SellerShop {
+  sellerType: SellerType;
+  name: string;
+  handle: string;
+  area: string;
+  city: string;
+  gstin: string | null;
+  bio: string;
+}
+export function validateSellerShop(i: SellerShopInput, handleTaken: boolean): { errors: Record<string, string>; clean: SellerShop } {
+  const f: Record<string, string> = {};
+  if (!(SELLER_TYPES as readonly string[]).includes(i.sellerType ?? '')) f.sellerType = 'Choose business or individual.';
+  const name = String(i.name ?? '').trim();
+  if (name.length < 2 || name.length > 60) f.name = 'Enter your shop name (2–60 characters).';
+  const handle = String(i.handle ?? '').trim().toLowerCase();
+  if (!HANDLE_RE.test(handle)) f.handle = 'Use 3–24 lowercase letters, numbers, dots or underscores.';
+  else if (handleTaken) f.handle = 'That handle is taken.';
+  const area = String(i.area ?? '').trim();
+  if (!area) f.area = 'Enter your area or locality.';
+  const gstin = String(i.gstin ?? '').trim().toUpperCase();
+  if (gstin && !GSTIN_RE.test(gstin)) f.gstin = 'Enter a valid 15-character GSTIN, or leave it blank.';
+  const bio = String(i.bio ?? '').trim();
+  if (bio.length > 160) f.bio = 'Keep it under 160 characters.';
+  return {
+    errors: f,
+    clean: { sellerType: i.sellerType as SellerType, name, handle, area, city: String(i.city ?? '').trim() || 'Hyderabad', gstin: gstin || null, bio },
+  };
+}

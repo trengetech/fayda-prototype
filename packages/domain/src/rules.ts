@@ -22,6 +22,7 @@ export const RULES = Object.freeze({
   LOW_RATING_MAX: 2,
   LOW_RATING_MIN_TEXT: 10,
   AGREEMENT_VERSION: 'draft-2026-10',
+  CONDUCT_VERSION: 'draft-2026-10',
 });
 
 export const CONFIRM_HOURS_OPTIONS = [1, 2, 4, 6, 12, 24, 48] as const;

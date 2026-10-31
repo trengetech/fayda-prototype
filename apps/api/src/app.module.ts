@@ -1,6 +1,14 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { systemClock } from '@fayda/domain';
+import { AUTH_VERIFIER, DevOtpVerifier } from './auth/auth-verifier.js';
+import { AuthController } from './auth/auth.controller.js';
+import { AuthGuard } from './auth/auth.guard.js';
+import { AuthService } from './auth/auth.service.js';
+import { TokenService } from './auth/token.service.js';
+import { BuyerController } from './profiles/buyer.controller.js';
+import { ProfileService } from './profiles/profile.service.js';
+import { SellerController } from './profiles/seller.controller.js';
 import { CLOCK } from './common/clock.js';
 import { IdempotencyService } from './common/idempotency.service.js';
 import { APP_CONFIG, type AppConfig } from './config.js';
@@ -14,13 +22,18 @@ export class AppModule {
     return {
       module: AppModule,
       imports: [ScheduleModule.forRoot()],
-      controllers: [SystemController],
+      controllers: [SystemController, AuthController, BuyerController, SellerController],
       providers: [
         { provide: APP_CONFIG, useValue: config },
         { provide: CLOCK, useValue: systemClock },
         DbService,
         IdempotencyService,
         SweepRunner,
+        TokenService,
+        ProfileService,
+        AuthService,
+        AuthGuard,
+        { provide: AUTH_VERIFIER, useClass: DevOtpVerifier },
       ],
       exports: [DbService, IdempotencyService, SweepRunner, CLOCK, APP_CONFIG],
     };

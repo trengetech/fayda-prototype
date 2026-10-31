@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.js';
 
-const base = { DATABASE_URL: 'postgresql://user:pw@host:6543/postgres' };
+const base = { DATABASE_URL: 'postgresql://user:pw@host:6543/postgres', JWT_SECRET: 'x'.repeat(40) };
 
 describe('loadConfig environment label', () => {
   it('defaults to NODE_ENV', () => {

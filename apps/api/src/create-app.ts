@@ -1,6 +1,8 @@
 import 'reflect-metadata';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
+import { HttpException } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module.js';
@@ -13,6 +15,13 @@ export async function createApp(config: AppConfig): Promise<NestFastifyApplicati
     logger: config.environment === 'test' ? false : ['log', 'warn', 'error'],
   });
   await app.register(helmet);
+  // Sign-in routes get a tight limit per client address; everything else allows 20 times as many requests.
+  await app.register(rateLimit, {
+    global: true,
+    timeWindow: '1 minute',
+    max: (req) => (req.url.startsWith('/v1/auth/') ? config.authRateLimitPerMin : config.authRateLimitPerMin * 20),
+    errorResponseBuilder: (_req, ctx) => new HttpException(`Too many requests. Try again in ${Math.ceil(ctx.ttl / 1000)} seconds.`, 429),
+  });
   await app.register(cors, { origin: config.corsOrigins.length ? config.corsOrigins : false });
   app.setGlobalPrefix('v1');
   app.useGlobalFilters(new ProblemFilter());

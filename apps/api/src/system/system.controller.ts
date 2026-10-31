@@ -4,6 +4,7 @@ import type { Clock } from '@fayda/domain';
 import type { FastifyReply } from 'fastify';
 import { CLOCK } from '../common/clock.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
+import { AUTH_VERIFIER, type AuthVerifier } from '../auth/auth-verifier.js';
 import { DbService } from '../db/db.service.js';
 import { APP_VERSION } from '../version.js';
 
@@ -13,6 +14,7 @@ export class SystemController {
     @Inject(DbService) private readonly database: DbService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(AUTH_VERIFIER) private readonly verifier: AuthVerifier,
   ) {}
 
   /** 200 when the database answers, 503 when it does not. Never includes error details. */
@@ -39,7 +41,7 @@ export class SystemController {
       environment: this.config.environment,
       version: APP_VERSION,
       providers: [
-        { key: 'auth', name: 'dev-otp', simulated: true },
+        { key: 'auth', name: this.verifier.name, simulated: this.verifier.simulated },
         { key: 'media', name: 'local-disk', simulated: true },
       ],
     });
