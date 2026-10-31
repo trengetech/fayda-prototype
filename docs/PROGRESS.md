@@ -109,6 +109,40 @@ Decisions D11 to D18 are merged into `docs/DECISIONS.md`. Founder choices: revie
 
 Next, when you are ready: M3.1 needs your answers on dev OTP, separate sessions per app, and `jose` plus `@fastify/rate-limit`.
 
+## M3.4: orders, chat, reviews, requests (31 Oct 2026): built and tested; NOT deployed, NOT run on an emulator or phone
+
+Founder decisions used: complete scope (orders plus chat, reviews and buyer requests, D18); order numbers must be extendable and never run out (I-17); an agreement that lapses without an order only frees its unit; a paused listing refuses an order. Branch `m3.4-orders`.
+
+### What was built
+- **Database (migration 0006, applied to the test database only):** `orders` (with a bigint identity `seq` from 100001, snapshots of price, address and listing, unique per agreement), `chat_threads`, `chat_messages`, `reviews`, `review_media`, `buyer_requests`, `request_media`, `request_responses`, `response_media`; `notifications` gained order, thread and request ids; media purposes now include REVIEW, REQUEST and CHAT.
+- **API:**
+  - Orders: buyer place, list, read, payment QR (own PLACED UPI order only); seller list, read, confirm, ship, deliver, cancel; seller record (own and public). Placement takes a unit, or consumes an agreement's reservation and marks the negotiation `PURCHASED`; a website deal records an order with no address; the sweep expires unconfirmed orders at 48 h and restocks once; a lazy check does the same on read.
+  - Chat (both apps): threads, messages with a retry-safe `clientKey`, read marks, unread counts; an order thread is created with the order.
+  - Reviews: one per order, only after `CONFIRMED`, editable; public shop reviews without buyer surnames or phones.
+  - Requests: create (reach counted by category, buyer's own shop excluded), respond (one per seller), want (opens a chat) or decline, close, 7-day expiry; a listing published from a wanted response is posted into that chat.
+  - Buyer media uploads (`/v1/buyer/media/*`); realtime `order.updated`, `chat.updated`, `request.updated` (ids only).
+  - The buyer listing now carries seller rating, declared times, categories and public record, and `checkout.payMethods` (names only); a negotiation carries its `orderId` once purchased.
+- **api-client:** methods, hooks, query keys and realtime invalidation for all of the above.
+- **Buyer app:** checkout, order screen (view-only; payment card with order number, UPI deep link with the no-UPI-app case, QR, bank, link; contact card; review form), My orders, Messages and chat, Requests (form, list, detail), contact and agreement screens, seller card with rating.
+- **Seller app:** Orders (four tabs, confirm, optional shipment, deliver, cancel with reason, contact card), Messages and chat (share a listing), Requests (New and Responded, respond with a photo, create a listing from a request), Shop (what buyers see, public record, reviews).
+
+### Tests: 481 passing (typecheck and lint clean, all 9 packages)
+domain 70, contracts 14, api 176 (against the real `fayda-test` database), api-client 39, ui 6, buyer 83, seller 93. The apps ran against fake servers only.
+- New API tests: orders 32, chat 9, reviews 12, requests 14 (and others unchanged).
+- **Break-it checks** (recipe in CLAUDE.md): orders, 12 deliberate breaks, all caught (size-row lock, restock on out-of-stock, payment shown after confirm, contact after close, agreed price ignored, agreement not used up, paused listing, another buyer reads an order, QR to any buyer, offers not closed when sold out, stock not taken). Only the two-buyer race catches a missing size-row lock; the agreement-versus-plain-buy race passes without it. Community, 11 breaks, 10 caught; the miss (dropping `status = 'OPEN'` from the request expiry query) behaves the same, but closed requests could fill the 100-row sweep batch. The seller app's cancel-reason guard was also broken and caught.
+
+### Not done (honest list)
+- **Not deployed.** Migration 0006 is not applied to the dev database and the API is not on the VM: the deploy was blocked by the permission check and needs your say-so (`pnpm db:migrate` then `infra/deploy-api.sh`).
+- **No emulator or phone run** of any M3.4 screen. UPI intents, WhatsApp, Call, the photo copy when creating a listing from a request, and review photo upload are untested on a device.
+- Website Buy now at list price creates no order and no visit counter exists (O-5).
+- No address editor: a buyer with no saved address cannot order direct.
+- Copy buttons use the share sheet (no approved clipboard library).
+- Review, request and chat photos are not access-controlled (I-19).
+- The seller record reads every order of the seller per product-page view; fine now, needs an aggregate later.
+- Messages sent in the same millisecond have no guaranteed order.
+- CI has not run on this branch (PR needed).
+- The shipment contract uses `courier`/`trackingNo`; the domain uses `carrier`/`trackingId`; the API and the seller app map between them.
+
 ## M3.3: bargaining (31 Oct 2026): approved by the founder; emulator-tested; phone test still to do
 
 Branch `m3.3-bargaining`; pull request into `dev` opened by the founder, CI clean. Founder decisions used: **two listing modes** (`BUY_NOW`, `BOTH`), bargaining always private, no public offers (DECISIONS B-1); **offer expiry per listing: 30 min, 1 h, 3 h, 6 h, 24 h** (offers only). Socket.IO 4.8.4 added (TECH_STACK).
