@@ -7,6 +7,7 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module.js';
 import { ProblemFilter } from './common/problem.filter.js';
+import { registerMediaRoutes } from './media/media-routes.js';
 import type { AppConfig } from './config.js';
 
 export async function createApp(config: AppConfig): Promise<NestFastifyApplication> {
@@ -23,6 +24,7 @@ export async function createApp(config: AppConfig): Promise<NestFastifyApplicati
     errorResponseBuilder: (_req, ctx) => new HttpException(`Too many requests. Try again in ${Math.ceil(ctx.ttl / 1000)} seconds.`, 429),
   });
   await app.register(cors, { origin: config.corsOrigins.length ? config.corsOrigins : false });
+  await registerMediaRoutes(app);
   app.setGlobalPrefix('v1');
   app.useGlobalFilters(new ProblemFilter());
   app.enableShutdownHooks();

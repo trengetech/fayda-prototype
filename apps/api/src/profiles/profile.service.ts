@@ -16,6 +16,7 @@ import { and, eq, ne } from 'drizzle-orm';
 import { AppError } from '../common/app-error.js';
 import { CLOCK } from '../common/clock.js';
 import { DbService } from '../db/db.service.js';
+import { MediaService } from '../media/media.service.js';
 import { buyerAddresses, buyerProfiles, sellerPaymentProfiles, sellers, users } from '../db/schema.js';
 
 const ms = (d: Date | null): number | null => (d ? d.getTime() : null);
@@ -26,6 +27,7 @@ export class ProfileService {
   constructor(
     @Inject(DbService) private readonly database: DbService,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(MediaService) private readonly mediaFiles: MediaService,
   ) {}
 
   private get db() {
@@ -139,7 +141,7 @@ export class ProfileService {
       contact: { phone: s.contactPhone, whatsapp: s.contactWhatsapp },
       sla: { confirmHours: s.slaConfirmHours, shipDays: s.slaShipDays },
       payment: pay
-        ? { upiId: pay.upiId, bankHolder: pay.bankHolder, bankAccount: pay.bankAccount, bankIfsc: pay.bankIfsc, bankName: pay.bankName, paymentLink: pay.paymentLink, website: pay.website }
+        ? { upiId: pay.upiId, upiQrMediaId: pay.upiQrMediaId, bankHolder: pay.bankHolder, bankAccount: pay.bankAccount, bankIfsc: pay.bankIfsc, bankName: pay.bankName, paymentLink: pay.paymentLink, website: pay.website }
         : null,
       conductAcceptedAt: ms(s.conductAcceptedAt),
       missing: await this.sellerMissing(userId),
@@ -197,10 +199,12 @@ export class ProfileService {
     const fields = { ...pay.errors };
     if (!input.conductAccepted) fields.conduct = 'You need to agree to the Seller Code of Conduct to register.';
     if (Object.keys(fields).length) throw invalid(fields);
+    // The QR must be this seller's own finished upload. Its text was checked against the UPI ID by validatePayment.
+    if (pay.clean.upiQrMediaId) await this.mediaFiles.requireOwnedReady(userId, pay.clean.upiQrMediaId, 'UPI_QR', 'image');
 
     const now = new Date(this.clock.now());
-    const { upiId, bankHolder, bankAccount, bankIfsc, bankName, paymentLink, website } = pay.clean;
-    const values = { upiId, bankHolder, bankAccount, bankIfsc, bankName, paymentLink, website, updatedAt: now };
+    const { upiId, upiQrMediaId, bankHolder, bankAccount, bankIfsc, bankName, paymentLink, website } = pay.clean;
+    const values = { upiId, upiQrMediaId, bankHolder, bankAccount, bankIfsc, bankName, paymentLink, website, updatedAt: now };
     await this.db.transaction(async (tx) => {
       await tx.insert(sellerPaymentProfiles).values({ sellerId: s.id, ...values }).onConflictDoUpdate({ target: sellerPaymentProfiles.sellerId, set: values });
       await tx.update(sellers).set({ conductVersion: RULES.CONDUCT_VERSION, conductAcceptedAt: now, updatedAt: now }).where(eq(sellers.id, s.id));

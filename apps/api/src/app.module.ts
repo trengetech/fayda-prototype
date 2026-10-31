@@ -10,6 +10,9 @@ import { BuyerController } from './profiles/buyer.controller.js';
 import { ProfileService } from './profiles/profile.service.js';
 import { SellerController } from './profiles/seller.controller.js';
 import { CLOCK } from './common/clock.js';
+import { MediaController } from './media/media.controller.js';
+import { DiskMediaStorage, MEDIA_STORAGE } from './media/media-storage.js';
+import { MediaService } from './media/media.service.js';
 import { IdempotencyService } from './common/idempotency.service.js';
 import { APP_CONFIG, type AppConfig } from './config.js';
 import { DbService } from './db/db.service.js';
@@ -22,7 +25,7 @@ export class AppModule {
     return {
       module: AppModule,
       imports: [ScheduleModule.forRoot()],
-      controllers: [SystemController, AuthController, BuyerController, SellerController],
+      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController],
       providers: [
         { provide: APP_CONFIG, useValue: config },
         { provide: CLOCK, useValue: systemClock },
@@ -31,11 +34,13 @@ export class AppModule {
         SweepRunner,
         TokenService,
         ProfileService,
+        { provide: MEDIA_STORAGE, useFactory: () => new DiskMediaStorage(config.uploadsDir) },
+        MediaService,
         AuthService,
         AuthGuard,
         { provide: AUTH_VERIFIER, useClass: DevOtpVerifier },
       ],
-      exports: [DbService, IdempotencyService, SweepRunner, CLOCK, APP_CONFIG],
+      exports: [DbService, IdempotencyService, SweepRunner, CLOCK, APP_CONFIG, MediaService],
     };
   }
 }
