@@ -29,3 +29,22 @@ export const renderWith = (manager: SessionManager, ui: ReactElement) =>
       </SessionProvider>
     </ThemeProvider>,
   );
+
+/** A fake API: routes are keyed "METHOD /path". An unexpected request fails the test with its name. */
+export type Route = (init: { method: string; headers: Record<string, string>; body: unknown }) => Response | Promise<Response>;
+export function fakeApi(routes: Record<string, Route>, fetchFn: jest.Mock) {
+  fetchFn.mockImplementation((url: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}) => {
+    const key = `${init.method ?? 'GET'} ${String(url).replace('http://api.test', '')}`;
+    const route = routes[key];
+    if (!route) return Promise.reject(new Error(`Unexpected request: ${key}`));
+    return Promise.resolve(route({ method: init.method ?? 'GET', headers: init.headers ?? {}, body: init.body ? JSON.parse(init.body) : undefined }));
+  });
+}
+
+export const sellerListing = (over: Record<string, unknown> = {}) => ({
+  id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', status: 'DRAFT', title: 'Cotton kurta', description: 'Block print', category: 'Ethnic wear', price: 150000,
+  media: [{ mediaId: 'm1', kind: 'image', url: '/v1/media/m1', posterMediaId: null, posterUrl: null }],
+  variants: [{ id: 'v1', label: 'M', stock: 3 }], bargaining: { mode: 'FIXED', expiryHours: 24 },
+  rules: { autoAcceptAt: null, autoDeclineBelow: null, autoCounterAt: null }, checkout: { channel: 'DIRECT', productUrl: null },
+  dealCodes: { accept: null, counter: null }, publishedAt: null, updatedAt: 1, ...over,
+});

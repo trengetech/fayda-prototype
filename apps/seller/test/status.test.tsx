@@ -3,7 +3,8 @@ import type { ReactElement } from 'react';
 import { json, managerWith, renderWith } from './utils';
 import StatusScreen from '../app/index';
 
-jest.mock('expo-router', () => ({ Link: ({ children }: { children: ReactElement }) => children }));
+const mockRouter = { push: jest.fn() };
+jest.mock('expo-router', () => ({ Link: ({ children }: { children: ReactElement }) => children, useRouter: () => mockRouter }));
 
 const time = '2026-10-31T10:00:00.000Z';
 const health = { status: 'ok', database: { status: 'up', latencyMs: 12 }, time };
@@ -72,5 +73,12 @@ describe('status screen', () => {
     await renderScreen();
     expect(await screen.findByText("Can't connect")).toBeOnTheScreen();
     expect(screen.getByText(/not with what this app expects/)).toBeOnTheScreen();
+  });
+
+  it('opens My listings', async () => {
+    fetchMock.mockImplementation((url: string) => Promise.resolve(String(url).endsWith('health') ? json(health) : json(meta)));
+    await renderScreen();
+    await act(async () => void fireEvent.press(screen.getByText('My listings')));
+    expect(mockRouter.push).toHaveBeenCalledWith('/listings');
   });
 });

@@ -2,9 +2,17 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import Onboarding from '../app/onboarding';
 import { json, managerWith, problem, renderWith } from './utils';
 
+const mockPick = jest.fn();
+jest.mock('expo-image-picker', () => ({ launchImageLibraryAsync: (...a: unknown[]) => mockPick(...a) }));
+const mockScan = jest.fn();
+jest.mock('expo-camera', () => ({ Camera: { scanFromURLAsync: (...a: unknown[]) => mockScan(...a) } }));
+jest.mock('expo-file-system/legacy', () => ({ FileSystemUploadType: { BINARY_CONTENT: 0 }, uploadAsync: jest.fn().mockResolvedValue({ status: 204 }), getInfoAsync: jest.fn() }));
+
 let fetchMock: jest.Mock;
 beforeEach(() => {
   fetchMock = jest.fn();
+  mockPick.mockReset();
+  mockScan.mockReset();
 });
 const press = (label: string) => act(async () => void fireEvent.press(screen.getByText(label)));
 const pressLabel = (label: string) => act(async () => void fireEvent.press(screen.getByLabelText(label)));
@@ -113,5 +121,43 @@ describe('seller onboarding', () => {
     await waitFor(() => expect(m.store.getState().profile?.complete).toBe(true));
     const put = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/v1/seller/payment'));
     expect(JSON.parse(put[1].body)).toMatchObject({ upiId: 'sana@okaxis', bankAccount: null, conductAccepted: true });
+  });
+
+  it('uploads a UPI QR on the payment step and sends it with the payment details', async () => {
+    const QR = 'e5e5e5e5-0000-4000-8000-000000000001';
+    fetchMock.mockImplementation((url: string, init: { method?: string }) => {
+      const u = String(url);
+      if (init.method === 'POST' && u.endsWith('/v1/seller/media/intents')) return Promise.resolve(json({ mediaId: QR, upload: { method: 'PUT', url: `/v1/media/upload/${QR}?token=t`, headers: { 'Content-Type': 'image/png' } }, expiresAt: 1 }, 201));
+      if (init.method === 'POST' && u.endsWith(`/v1/seller/media/${QR}/complete`)) return Promise.resolve(json({ id: QR, kind: 'image', purpose: 'UPI_QR', status: 'READY', size: 9, url: null }));
+      if (init.method === 'PUT' && u.endsWith('/v1/seller/payment')) return Promise.resolve(json({ ...shop([]), payment: { upiId: 'sana@okaxis', upiQrMediaId: QR, bankHolder: null, bankAccount: null, bankIfsc: null, bankName: null, paymentLink: null, website: null } }));
+      if (u.endsWith('/v1/me')) return Promise.resolve(json({ user: { id: 'u1', phone: '9876543210', name: null }, app: 'seller', profile: { complete: true, missing: [] } }));
+      return Promise.resolve(json(shop()));
+    });
+    mockPick.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///qr.png', mimeType: 'image/png', fileSize: 9000 }] });
+    mockScan.mockResolvedValue([{ data: 'upi://pay?pa=sana@okaxis&pn=Sana' }]);
+    const m = managerWith('seller', fetchMock, { missing: ['payment', 'conduct'] });
+    await renderWith(m, <Onboarding />);
+    await screen.findByText('Step 3 of 3');
+    await type('UPI ID', 'sana@okaxis');
+    await press('Upload QR image');
+    expect(await screen.findByText('QR added · pays to sana@okaxis')).toBeOnTheScreen();
+    await act(async () => void fireEvent.press(screen.getByRole('checkbox')));
+    await press('Finish setup');
+    await waitFor(() => expect(m.store.getState().profile?.complete).toBe(true));
+    const put = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/v1/seller/payment'));
+    expect(JSON.parse(put[1].body)).toMatchObject({ upiId: 'sana@okaxis', upiQrMediaId: QR, upiQrPayload: 'upi://pay?pa=sana@okaxis&pn=Sana', conductAccepted: true });
+  });
+
+  it('shows the server’s QR message under the QR when it refuses the payment', async () => {
+    fetchMock.mockImplementation((url: string, init: { method?: string }) => {
+      if (init.method === 'PUT' && String(url).endsWith('/v1/seller/payment')) return Promise.resolve(problem(400, 'VALIDATION', { upiQr: 'The QR belongs to other@okaxis, not sana@okaxis. Upload the right QR or fix the UPI ID.' }));
+      return Promise.resolve(json(shop()));
+    });
+    await renderWith(managerWith('seller', fetchMock, { missing: ['payment', 'conduct'] }), <Onboarding />);
+    await screen.findByText('Step 3 of 3');
+    await type('UPI ID', 'sana@okaxis');
+    await act(async () => void fireEvent.press(screen.getByRole('checkbox')));
+    await press('Finish setup');
+    expect(await screen.findByText(/The QR belongs to other@okaxis/)).toBeOnTheScreen();
   });
 });

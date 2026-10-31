@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import type { ListingInput } from '@fayda/contracts/schemas';
+import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import { createApiClient, type ApiClient } from './client';
@@ -31,6 +32,44 @@ export function useHealth() {
 export function useMeta() {
   const client = useApiClient();
   return useQuery({ queryKey: ['meta', client.baseUrl], queryFn: () => client.getMeta() });
+}
+
+export const sellerListingsKey = (baseUrl: string) => ['seller-listings', baseUrl] as const;
+
+export function useSellerListings() {
+  const client = useApiClient();
+  return useQuery({ queryKey: sellerListingsKey(client.baseUrl), queryFn: () => client.listSellerListings() });
+}
+
+export function useSellerListing(id: string | null) {
+  const client = useApiClient();
+  return useQuery({ queryKey: ['seller-listing', client.baseUrl, id], queryFn: () => client.getSellerListing(id as string), enabled: !!id });
+}
+
+/** Saves a listing (creates it when there is no `id`). Pass the same `idempotencyKey` when retrying the same save. */
+export function useSaveListing() {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input, idempotencyKey }: { id?: string | null; input: ListingInput; idempotencyKey?: string }) =>
+      id ? client.updateListing(id, input, idempotencyKey) : client.createListing(input, idempotencyKey),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-listings'] }).then(() => qc.invalidateQueries({ queryKey: ['seller-listing'] })),
+  });
+}
+
+export function useSetListingStatus() {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: 'ACTIVE' | 'PAUSED' }) => client.setListingStatus(id, status),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-listings'] }).then(() => qc.invalidateQueries({ queryKey: ['seller-listing'] })),
+  });
+}
+
+export function useDeleteListingDraft() {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (id: string) => client.deleteListingDraft(id), onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-listings'] }) });
 }
 
 const SessionContext = createContext<SessionManager | null>(null);
