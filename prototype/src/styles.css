@@ -249,3 +249,26 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
 .guide > div { background: var(--surface); color: var(--ink); border-radius: 20px; max-width: 560px; width: 100%; max-height: 90vh; overflow: auto; padding: 22px; }
 .guide ol { padding-left: 20px; margin: 10px 0; display: flex; flex-direction: column; gap: 8px; }
 .guide li span { color: var(--muted); font-size: 12px; }
+
+/* reviews, chat, requests */
+.stars { display: inline-flex; align-items: center; gap: 2px; color: #F59E0B; }
+.stars.input button { background: none; border: 0; padding: 2px; color: inherit; }
+.rating-chip { display: inline-flex; align-items: center; gap: 3px; font-weight: 800; font-size: 12px; }
+.chat { display: flex; flex-direction: column; gap: 8px; padding: 14px; }
+.chat .bubble { max-width: 80%; }
+.chat .listing-card { display: flex; gap: 10px; align-items: center; padding: 8px; border-radius: 14px; border: 1px solid var(--divider); background: var(--surface); color: var(--ink); max-width: 85%; }
+.chat .listing-card.me { align-self: flex-end; }
+.chat .media-msg { width: 180px; height: 220px; border-radius: 14px; overflow: hidden; position: relative; background: var(--surface-2); }
+.chat .media-msg.me { align-self: flex-end; }
+.composer { flex: none; display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--divider); background: var(--surface); }
+.composer .input { height: 44px; font-size: 15px; }
+.media-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.media-row .cell { width: 72px; height: 88px; border-radius: 10px; overflow: hidden; position: relative; background: var(--surface-2); border: 0; padding: 0; }
+.media-row .cell .x { position: absolute; top: 3px; right: 3px; z-index: 3; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .6); color: #fff; display: flex; align-items: center; justify-content: center; }
+.media-row .add { width: 72px; height: 88px; border-radius: 10px; border: 1.5px dashed var(--border); background: var(--surface-3); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 700; color: var(--muted); cursor: pointer; text-align: center; }
+.link-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.link-row a { text-decoration: none; }
+.agreement ol { padding-left: 18px; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.viewer { position: absolute; inset: 0; z-index: 85; background: rgba(0, 0, 0, .9); display: flex; align-items: center; justify-content: center; }
+.viewer .box { position: relative; width: 100%; height: 78%; }
+.viewer .close { position: absolute; top: 12px; right: 12px; z-index: 2; }

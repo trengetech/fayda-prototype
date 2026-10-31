@@ -260,6 +260,29 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
 .guide ol { padding-left: 20px; margin: 10px 0; display: flex; flex-direction: column; gap: 8px; }
 .guide li span { color: var(--muted); font-size: 12px; }
 
+/* reviews, chat, requests */
+.stars { display: inline-flex; align-items: center; gap: 2px; color: #F59E0B; }
+.stars.input button { background: none; border: 0; padding: 2px; color: inherit; }
+.rating-chip { display: inline-flex; align-items: center; gap: 3px; font-weight: 800; font-size: 12px; }
+.chat { display: flex; flex-direction: column; gap: 8px; padding: 14px; }
+.chat .bubble { max-width: 80%; }
+.chat .listing-card { display: flex; gap: 10px; align-items: center; padding: 8px; border-radius: 14px; border: 1px solid var(--divider); background: var(--surface); color: var(--ink); max-width: 85%; }
+.chat .listing-card.me { align-self: flex-end; }
+.chat .media-msg { width: 180px; height: 220px; border-radius: 14px; overflow: hidden; position: relative; background: var(--surface-2); }
+.chat .media-msg.me { align-self: flex-end; }
+.composer { flex: none; display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--divider); background: var(--surface); }
+.composer .input { height: 44px; font-size: 15px; }
+.media-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.media-row .cell { width: 72px; height: 88px; border-radius: 10px; overflow: hidden; position: relative; background: var(--surface-2); border: 0; padding: 0; }
+.media-row .cell .x { position: absolute; top: 3px; right: 3px; z-index: 3; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .6); color: #fff; display: flex; align-items: center; justify-content: center; }
+.media-row .add { width: 72px; height: 88px; border-radius: 10px; border: 1.5px dashed var(--border); background: var(--surface-3); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 700; color: var(--muted); cursor: pointer; text-align: center; }
+.link-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.link-row a { text-decoration: none; }
+.agreement ol { padding-left: 18px; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.viewer { position: absolute; inset: 0; z-index: 85; background: rgba(0, 0, 0, .9); display: flex; align-items: center; justify-content: center; }
+.viewer .box { position: relative; width: 100%; height: 78%; }
+.viewer .close { position: absolute; top: 12px; right: 12px; z-index: 2; }
+
 </style>
 <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -284,7 +307,10 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     AUTO_DECLINE_DELAY_MS: 2 * 60e3,       // PROVISIONAL (R8, §3.6)
     AUTO_COUNTER_DELAY_MS: 5e3,            // founder decision: automatic counters arrive after 5 s and look like the seller's own
     CHECKOUT_WINDOW_HOURS: 12,             // PROVISIONAL (R9)
-    ORDER_CONFIRM_WINDOW_HOURS: 48,        // PROVISIONAL: seller must confirm a placed order or it expires
+    ORDER_CONFIRM_WINDOW_HOURS: 48,
+    REQUEST_OPEN_DAYS: 7,                  // PROVISIONAL: buyer requests close after a week
+    CONFIRM_HOURS_OPTIONS: [1, 2, 4, 6, 12, 24, 48], SHIP_DAYS_OPTIONS: [1, 2, 3, 5, 7],
+    AGREEMENT_VERSION: 'draft-2026-10',        // PROVISIONAL: seller must confirm a placed order or it expires
     MIN_PRICE_PAISE: 50 * 100, MAX_PRICE_PAISE: 1000000 * 100,
     DEV_OTP: '123456'                      // SIMULATED sign-in code
   });
@@ -312,9 +338,9 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
   }
   function emptyState() {
     return {
-      v: 2, seq: 0, clockOffsetMs: 0, orderSeq: 10000,
+      v: 3, seq: 0, clockOffsetMs: 0, orderSeq: 10000,
       users: {}, buyerProfiles: {}, sellers: {}, listings: {}, privateRules: {},
-      negotiations: {}, reservations: {}, orders: {}, paymentProfiles: {}, dealCodes: {},
+      negotiations: {}, reservations: {}, orders: {}, paymentProfiles: {}, dealCodes: {}, chats: {}, reviews: {}, requests: {}, responses: {},
       likes: {}, saves: {}, follows: {}, comments: [], notifications: [],
       sessions: { buyer: null, seller: null }
     };
@@ -478,6 +504,7 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
       }
     });
     values(s.reservations).forEach((r) => { if (r.status === 'ACTIVE' && r.expiresAt <= now) { r.status = 'RELEASED'; changed = true; } });
+    values(s.requests).forEach((r) => { if (r.status === 'OPEN' && now >= r.expiresAt) { r.status = 'EXPIRED'; changed = true; } });
     values(s.orders).forEach((o) => {
       if (o.status === 'PLACED' && o.confirmBy && now >= o.confirmBy) {
         o.status = 'EXPIRED'; o.events.push({ status: 'EXPIRED', at: now }); restock(s, o);
@@ -501,6 +528,23 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
   const CODE_RE = /^[A-Za-z0-9_-]{3,40}$/;
   const isHttps = (u) => { try { const x = new URL(String(u)); return x.protocol === 'https:' && !!x.hostname && x.hostname.includes('.'); } catch (e) { return false; } };
   const channelOf = (l) => (l.checkout && l.checkout.channel) || 'DIRECT';
+  const urlParts = (u) => { try { const x = new URL(String(u).trim()); return x.protocol === 'https:' ? { host: x.hostname.toLowerCase().replace(/^www\./, ''), path: x.pathname } : null; } catch (e) { return null; } };
+  const isGoogleHost = (h) => /^google\.[a-z.]{2,6}$/.test(h) || /^maps\.google\.[a-z.]{2,6}$/.test(h);
+  function isMapsUrl(u) { const p = urlParts(u); if (!p) return false; return p.host === 'maps.app.goo.gl' || (p.host === 'goo.gl' && p.path.startsWith('/maps')) || (isGoogleHost(p.host) && (p.host.startsWith('maps.') || p.path.startsWith('/maps'))); }
+  function isGoogleProfileUrl(u) { const p = urlParts(u); if (!p) return false; return isMapsUrl(u) || ['g.page', 'share.google', 'business.google.com', 'g.co'].includes(p.host) || (isGoogleHost(p.host) && p.path.length > 1); }
+  function isSocialUrl(u) { const p = urlParts(u); if (!p || p.path.replace(/\//g, '').length < 2) return false; return ['instagram.com', 'facebook.com', 'm.facebook.com', 'fb.com'].includes(p.host); }
+  function validateContact(c, label) {
+    const e = {}; c = c || {};
+    const ph = normPhone(c.phone), wa = normPhone(c.whatsapp);
+    if (c.phone && !PHONE_RE.test(ph)) e.contactPhone = 'Enter a valid 10-digit mobile number.';
+    if (c.whatsapp && !PHONE_RE.test(wa)) e.contactWhatsapp = 'Enter a valid 10-digit WhatsApp number.';
+    if (!c.phone && !c.whatsapp) e.contact = label;
+    return { errors: e, clean: { phone: c.phone && PHONE_RE.test(ph) ? ph : null, whatsapp: c.whatsapp && PHONE_RE.test(wa) ? wa : null } };
+  }
+  function cleanMedia(list, max, imagesOnly) {
+    const out = (Array.isArray(list) ? list : []).filter((m) => m && (m.kind === 'seed' || ((m.kind === 'image' || (!imagesOnly && m.kind === 'video')) && typeof m.mediaId === 'string'))).slice(0, max);
+    return out.map((m) => (m.kind === 'seed' ? { kind: 'seed', scene: m.scene, palette: m.palette } : { kind: m.kind, mediaId: m.mediaId }));
+  }
 
   function cleanPayment(p) {
     p = p || {};
@@ -538,6 +582,11 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     if (clean.expectedDate && !/^\d{4}-\d{2}-\d{2}$/.test(clean.expectedDate)) f.expectedDate = 'Use a date like 2026-11-04.';
     return Object.keys(f).length ? { fields: f } : { clean };
   }
+  function openThread(s, base, now, systemText) {
+    const t = Object.assign({ id: newId(s, 'th'), messages: [{ id: newId(s, 'msg'), from: 'SYSTEM', type: 'TEXT', text: systemText, at: now }], readAt: { buyer: now, seller: 0 }, createdAt: now, updatedAt: now }, base);
+    s.chats[t.id] = t; return t.id;
+  }
+  function threadTitle(s, t) { return t.kind === 'ORDER' ? 'Order ' + (s.orders[t.orderId] || {}).number : 'Request: ' + (s.requests[t.requestId] || {}).title; }
   function restock(s, o) { const l = s.listings[o.listingId]; const v = l && variantOf(l, o.variantId); if (v && !o.restocked) { v.stock += 1; o.restocked = true; } }
 
   function validateAddress(a) {
@@ -613,10 +662,12 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
       const name = String(c.name || '').trim();
       const e = validateAddress(c.address);
       if (name.length < 2) e.fullName = 'Enter your name.';
+      const ct = validateContact(c.contact, 'Add a phone or WhatsApp number sellers can use for your orders.'); Object.assign(e, ct.errors);
+      if (!c.agreementAccepted) e.agreement = 'You need to accept the user agreement to continue.';
       if (Object.keys(e).length) return Object.assign(err('VALIDATION', 'Check the highlighted fields.'), { fields: e });
       if (!u.name) u.name = name;
       const addr = cleanAddress(c.address, newId(s, 'ad'));
-      s.buyerProfiles[u.id] = { userId: u.id, addresses: [addr], defaultAddressId: addr.id, createdAt: now };
+      s.buyerProfiles[u.id] = { userId: u.id, addresses: [addr], defaultAddressId: addr.id, contact: ct.clean, agreementAcceptedAt: now, agreementVersion: RULES.AGREEMENT_VERSION, createdAt: now };
       return { ok: true };
     },
     'buyer.saveAddress'(s, c) {
@@ -628,6 +679,12 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
         p.addresses[i] = cleanAddress(c.address, c.address.id);
       } else { const a = cleanAddress(c.address, newId(s, 'ad')); p.addresses.push(a); if (!p.defaultAddressId) p.defaultAddressId = a.id; return { ok: true, addressId: a.id }; }
       return { ok: true, addressId: c.address.id };
+    },
+    'buyer.updateContact'(s, c) {
+      const p = s.buyerProfiles[c.userId]; if (!p) return err('NO_PROFILE', 'Complete your profile first.');
+      const ct = validateContact(c.contact, 'Add a phone or WhatsApp number sellers can use for your orders.');
+      if (Object.keys(ct.errors).length) return Object.assign(err('VALIDATION', 'Check the highlighted fields.'), { fields: ct.errors });
+      p.contact = ct.clean; return { ok: true };
     },
     'buyer.deleteAddress'(s, c) {
       const p = s.buyerProfiles[c.userId]; if (!p) return err('NO_PROFILE', 'Complete your profile first.');
@@ -713,7 +770,17 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
       if (oldMode && oldMode !== 'FIXED' && l.bargaining.mode === 'FIXED') invalidateOpen(s, (n) => n.listingId === l.id, 'FIXED_PRICE', now);
       if (oldPrice && price < oldPrice) invalidateOpen(s, (n) => n.listingId === l.id && latest(n).amount >= price, 'PRICE_DROPPED', now);
       l.variants.forEach((v) => invalidateIfSoldOut(s, l, v, now));
-      return { ok: true, listingId: l.id };
+      let shared = false;
+      if (c.fromResponseId && l.status === 'ACTIVE') {
+        const x = s.responses[c.fromResponseId];
+        if (x && x.sellerId === sel.id && x.status === 'WANTED' && s.chats[x.threadId]) {
+          const t = s.chats[x.threadId]; x.listingId = l.id;
+          t.messages.push({ id: newId(s, 'msg'), from: 'SELLER', type: 'LISTING', listingId: l.id, at: now }); t.updatedAt = now; t.readAt.seller = now;
+          notify(s, t.buyerId, 'buyer', `${sel.name} listed the item you asked for: ${l.title}. Tap to view and buy.`, { type: 'chat', id: t.id }, now);
+          shared = true;
+        }
+      }
+      return { ok: true, listingId: l.id, sharedInChat: shared };
     },
     'listing.setStatus'(s, c, now) {
       const sel = sellerOfUser(s, c.userId); const l = s.listings[c.listingId];
@@ -851,6 +918,7 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
         channel, paymentMethod: method, address: addr ? clone(addr) : null, dealAccess: n && n.agreement.dealAccess ? clone(n.agreement.dealAccess) : null, productUrl: channel === 'WEBSITE' ? l.checkout.productUrl : null,
         status: 'PLACED', confirmBy: now + RULES.ORDER_CONFIRM_WINDOW_HOURS * HOUR, events: [{ status: 'PLACED', at: now }], shipment: null, createdAt: now };
       s.orders[o.id] = o;
+      o.threadId = openThread(s, { kind: 'ORDER', orderId: o.id, buyerId: u.id, sellerId: l.sellerId, sellerUserId: l.ownerUserId }, now, `Order ${o.number} placed. Use this chat for questions about payment and delivery.`);
       notify(s, u.id, 'buyer', channel === 'WEBSITE' ? `Order ${o.number} started on ${s.sellers[l.sellerId].name}’s website. The seller will confirm it here.` : `Order ${o.number} placed: pay ${fmt(price)} to ${s.sellers[l.sellerId].name} by ${PAY_METHODS[method]}. The seller confirms once it arrives.`, { type: 'order', id: o.id }, now);
       notify(s, l.ownerUserId, 'seller', channel === 'WEBSITE' ? `Order ${o.number}: a buyer is using your ${fmt(price)} deal on your website. Confirm it once you see the order.` : `New order ${o.number}: ${l.title} (${v.label}) — ${fmt(price)} by ${PAY_METHODS[method]}. Confirm when you receive the payment.`, { type: 'order', id: o.id }, now);
       invalidateIfSoldOut(s, l, v, now);
@@ -892,6 +960,108 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
       notify(s, o.buyerId, 'buyer', `Order ${o.number} was cancelled by the seller: ${CANCEL_REASONS[c.reason]}${note ? ' — ' + note : ''}.`, { type: 'order', id: o.id }, now);
       return { ok: true };
     },
+    'chat.send'(s, c, now) {
+      const t = s.chats[c.threadId]; if (!t) return err('NOT_FOUND', 'Chat not found.');
+      const side = c.userId === t.buyerId ? 'BUYER' : c.userId === t.sellerUserId ? 'SELLER' : null;
+      if (!side) return err('FORBIDDEN', 'You’re not part of this chat.');
+      const msg = { id: newId(s, 'msg'), from: side, at: now };
+      if (c.listingId) {
+        const l = s.listings[c.listingId];
+        if (side !== 'SELLER' || !l || l.sellerId !== t.sellerId || l.status !== 'ACTIVE') return err('INVALID_LISTING', 'Share one of your live listings.');
+        msg.type = 'LISTING'; msg.listingId = l.id;
+      } else if (c.media) {
+        const m = cleanMedia([c.media], 1); if (!m.length) return err('INVALID_MEDIA', 'Attach a photo or video.');
+        msg.type = 'MEDIA'; msg.media = m[0]; msg.text = String(c.text || '').trim().slice(0, 500);
+      } else {
+        const text = String(c.text || '').trim(); if (!text) return err('EMPTY', 'Write a message first.'); if (text.length > 1000) return err('TOO_LONG', 'Keep messages under 1,000 characters.');
+        msg.type = 'TEXT'; msg.text = text;
+      }
+      t.messages.push(msg); t.updatedAt = now; t.readAt[side === 'BUYER' ? 'buyer' : 'seller'] = now;
+      const name = side === 'BUYER' ? (s.users[t.buyerId] || {}).name || 'Buyer' : s.sellers[t.sellerId].name;
+      const preview = msg.type === 'LISTING' ? 'shared a listing' : msg.type === 'MEDIA' ? 'sent a photo' : `“${msg.text.slice(0, 60)}”`;
+      if (side === 'BUYER') notify(s, t.sellerUserId, 'seller', `${name} ${msg.type === 'TEXT' ? 'wrote' : ''} ${preview} · ${threadTitle(s, t)}`.replace('  ', ' '), { type: 'chat', id: t.id }, now);
+      else notify(s, t.buyerId, 'buyer', `${name} ${msg.type === 'TEXT' ? 'wrote' : ''} ${preview} · ${threadTitle(s, t)}`.replace('  ', ' '), { type: 'chat', id: t.id }, now);
+      return { ok: true, messageId: msg.id };
+    },
+    'chat.markRead'(s, c, now) {
+      const t = s.chats[c.threadId]; if (!t) return err('NOT_FOUND', 'Chat not found.');
+      if (c.userId === t.buyerId) t.readAt.buyer = now; else if (c.userId === t.sellerUserId) t.readAt.seller = now; else return err('FORBIDDEN', 'You’re not part of this chat.');
+      return { ok: true };
+    },
+
+    'review.save'(s, c, now) {
+      const o = s.orders[c.orderId]; if (!o || o.buyerId !== c.userId) return err('NOT_FOUND', 'Order not found.');
+      const rating = Number(c.rating);
+      const f = {};
+      if (!isInt(rating) || rating < 1 || rating > 5) f.rating = 'Choose 1 to 5 stars.';
+      const text = String(c.text || '').trim(); if (text.length > 1000) f.text = 'Keep it under 1,000 characters.';
+      if (rating && rating <= 2 && text.length < 10) f.text = 'Tell other buyers what went wrong (at least 10 characters).';
+      if (Array.isArray(c.media) && c.media.length > 4) f.media = 'Up to 4 photos or videos.';
+      if (Object.keys(f).length) return Object.assign(err('VALIDATION', 'Check your review.'), { fields: f });
+      const id = 'rv_' + o.id; const prev = s.reviews[id];
+      s.reviews[id] = { id, orderId: o.id, buyerId: o.buyerId, sellerId: o.sellerId, listingId: o.listingId, title: o.title, rating, text, media: c.media === undefined && prev ? prev.media : cleanMedia(c.media, 4), at: prev ? prev.at : now, editedAt: prev ? now : null, orderStatus: o.status };
+      notify(s, o.sellerUserId, 'seller', `${prev ? 'Updated' : 'New'} ${rating}★ review for ${o.title}${text ? ': “' + text.slice(0, 60) + '”' : ''}`, { type: 'reviews', id: o.sellerId }, now);
+      return { ok: true, reviewId: id };
+    },
+
+    'request.create'(s, c, now) {
+      const u = s.users[c.userId]; if (!u || !s.buyerProfiles[u.id]) return err('NO_PROFILE', 'Complete your buyer profile first.');
+      const f = {}; const title = String(c.title || '').trim(); const desc = String(c.description || '').trim();
+      if (!CATEGORIES.includes(c.category)) f.category = 'Choose a category.';
+      if (title.length < 3 || title.length > 80) f.title = 'Describe what you want in 3–80 characters.';
+      if (desc.length > 500) f.description = 'Keep it under 500 characters.';
+      const budget = c.budget === '' || c.budget == null ? null : Number(c.budget);
+      if (budget != null && (!isInt(budget) || budget < 50 || budget > 1000000)) f.budget = 'Enter a whole-rupee budget, or leave it blank.';
+      const media = cleanMedia(c.media, 4, true); if (!media.length) f.media = 'Add at least one photo of what you’re looking for.';
+      if (Object.keys(f).length) return Object.assign(err('VALIDATION', 'Check the highlighted fields.'), { fields: f });
+      const r = { id: newId(s, 'rq'), buyerId: u.id, category: c.category, title, description: desc, size: String(c.size || '').trim().slice(0, 20) || null, budget: budget == null ? null : budget * 100, media, status: 'OPEN', createdAt: now, expiresAt: now + RULES.REQUEST_OPEN_DAYS * DAY };
+      s.requests[r.id] = r;
+      const reached = values(s.sellers).filter((x) => (x.categories || []).includes(r.category) && x.userId !== u.id);
+      reached.forEach((x) => notify(s, x.userId, 'seller', `New buyer request in ${r.category}: “${title}”${r.budget ? ' · budget ' + fmt(r.budget) : ''}. Respond with a photo if you have it.`, { type: 'request', id: r.id }, now));
+      r.reached = reached.length;
+      return { ok: true, requestId: r.id, reached: reached.length };
+    },
+    'request.respond'(s, c, now) {
+      const sel = sellerOfUser(s, c.userId); const r = s.requests[c.requestId];
+      if (!sel) return err('NO_SELLER', 'Register your shop first.');
+      if (!r) return err('NOT_FOUND', 'Request not found.');
+      if (r.status !== 'OPEN') return err('CLOSED', 'This request is closed.');
+      if (r.buyerId === c.userId) return err('OWN_REQUEST', 'You can’t respond to your own request.');
+      if (!(sel.categories || []).includes(r.category)) return err('NOT_IN_CATEGORY', 'This request is for a category you don’t sell.');
+      if (values(s.responses).some((x) => x.requestId === r.id && x.sellerId === sel.id)) return err('ALREADY_RESPONDED', 'You’ve already responded to this request.');
+      const f = {}; const text = String(c.text || '').trim(); if (text.length > 500) f.text = 'Keep it under 500 characters.';
+      const price = c.price === '' || c.price == null ? null : Number(c.price);
+      if (price != null && (!isInt(price) || price < 50 || price > 1000000)) f.price = 'Enter a whole-rupee price, or leave it blank.';
+      const media = cleanMedia(c.media, 4, true); if (!media.length) f.media = 'Add a photo of the item you have.';
+      if (Object.keys(f).length) return Object.assign(err('VALIDATION', 'Check the highlighted fields.'), { fields: f });
+      const x = { id: newId(s, 'rp'), requestId: r.id, sellerId: sel.id, sellerUserId: sel.userId, text, price: price == null ? null : price * 100, media, status: 'SENT', at: now };
+      s.responses[x.id] = x;
+      notify(s, r.buyerId, 'buyer', `${sel.name} has something for your request “${r.title}”${x.price ? ' at ' + fmt(x.price) : ''}.`, { type: 'request', id: r.id }, now);
+      return { ok: true, responseId: x.id };
+    },
+    'request.want'(s, c, now) {
+      const x = s.responses[c.responseId]; const r = x && s.requests[x.requestId];
+      if (!x || !r || r.buyerId !== c.userId) return err('NOT_FOUND', 'Response not found.');
+      if (x.status !== 'SENT') return err('INVALID_STATE', x.status === 'WANTED' ? 'You already said you want this.' : 'You declined this response.');
+      x.status = 'WANTED'; x.wantedAt = now;
+      x.threadId = openThread(s, { kind: 'REQUEST', requestId: r.id, responseId: x.id, buyerId: r.buyerId, sellerId: x.sellerId, sellerUserId: x.sellerUserId }, now, `The buyer wants this item. Seller: add it as a listing and share the link here so they can buy it.`);
+      notify(s, x.sellerUserId, 'seller', `${(s.users[r.buyerId] || {}).name || 'A buyer'} wants your item for “${r.title}”. Add it as a listing and share the link in chat.`, { type: 'chat', id: x.threadId }, now);
+      return { ok: true, threadId: x.threadId };
+    },
+    'request.decline'(s, c, now) {
+      const x = s.responses[c.responseId]; const r = x && s.requests[x.requestId];
+      if (!x || !r || r.buyerId !== c.userId) return err('NOT_FOUND', 'Response not found.');
+      if (x.status !== 'SENT') return err('INVALID_STATE', 'You already answered this response.');
+      x.status = 'DECLINED';
+      notify(s, x.sellerUserId, 'seller', `The buyer passed on your item for “${r.title}”.`, { type: 'request', id: r.id }, now);
+      return { ok: true };
+    },
+    'request.close'(s, c, now) {
+      const r = s.requests[c.requestId]; if (!r || r.buyerId !== c.userId) return err('NOT_FOUND', 'Request not found.');
+      if (r.status !== 'OPEN') return err('CLOSED', 'This request is already closed.');
+      r.status = 'CLOSED'; r.closedAt = now; return { ok: true };
+    },
+
     'notifications.markRead'(s, c) { s.notifications.forEach((x) => { if (x.userId === c.userId && x.app === c.app) x.read = true; }); return { ok: true }; },
     'clock.advance'(s, c) { const ms = Number(c.ms); if (!(ms > 0) || ms > 30 * DAY) return err('INVALID', 'Invalid time skip.'); s.clockOffsetMs += ms; return { ok: true }; },
     'system.sweep'() { return { ok: true }; }
@@ -908,10 +1078,22 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     const gstin = String(c.gstin || '').trim().toUpperCase();
     if (gstin && !GSTIN_RE.test(gstin)) f.gstin = 'Enter a valid 15-character GSTIN, or leave it blank.';
     if (String(c.bio || '').length > 160) f.bio = 'Keep it under 160 characters.';
+    const cats = Array.isArray(c.categories) ? c.categories.filter((x) => CATEGORIES.includes(x)) : [];
+    if (!cats.length) f.categories = 'Choose at least one category you sell.';
+    if (!isMapsUrl(c.mapsUrl)) f.mapsUrl = 'Paste your shop’s Google Maps link (https://maps.app.goo.gl/… or https://www.google.com/maps/…).';
+    if (c.googleProfileUrl && !isGoogleProfileUrl(c.googleProfileUrl)) f.googleProfileUrl = 'Paste a Google Business Profile link (https://g.page/…, https://maps.app.goo.gl/…).';
+    if (c.socialUrl && !isSocialUrl(c.socialUrl)) f.socialUrl = 'Paste your Instagram or Facebook page link (https://instagram.com/yourshop).';
+    Object.assign(f, validateContact(c.contact, 'Add a phone or WhatsApp number buyers can use for open orders.').errors);
+    const sla = c.sla || {};
+    if (!RULES.CONFIRM_HOURS_OPTIONS.includes(Number(sla.confirmHours))) f.confirmHours = 'Choose how soon you usually confirm payments.';
+    if (!RULES.SHIP_DAYS_OPTIONS.includes(Number(sla.shipDays))) f.shipDays = 'Choose how soon you usually ship.';
     return f;
   }
   function sellerFields(c) {
-    return { type: c.sellerType, name: String(c.name).trim(), handle: String(c.handle).trim().toLowerCase(), area: String(c.area).trim(), city: String(c.city || 'Hyderabad').trim() || 'Hyderabad', gstin: String(c.gstin || '').trim().toUpperCase() || null, bio: String(c.bio || '').trim() };
+    return { type: c.sellerType, name: String(c.name).trim(), handle: String(c.handle).trim().toLowerCase(), area: String(c.area).trim(), city: String(c.city || 'Hyderabad').trim() || 'Hyderabad', gstin: String(c.gstin || '').trim().toUpperCase() || null, bio: String(c.bio || '').trim(),
+      categories: CATEGORIES.filter((x) => (c.categories || []).includes(x)), contact: validateContact(c.contact, '').clean,
+      mapsUrl: String(c.mapsUrl).trim(), googleProfileUrl: String(c.googleProfileUrl || '').trim() || null, socialUrl: String(c.socialUrl || '').trim() || null,
+      sla: { confirmHours: Number(c.sla.confirmHours), shipDays: Number(c.sla.shipDays) } };
   }
   function toggle(s, table, userId, key, target) {
     if (!target) return err('NOT_FOUND', 'Not found.'); if (!s.users[userId]) return err('NO_USER', 'Sign in first.');
@@ -939,11 +1121,14 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     const os = values(s.orders).filter((o) => o.sellerId === sellerId);
     const times = os.filter((o) => o.confirmedAt).map((o) => o.confirmedAt - o.createdAt).sort((a, b) => a - b);
     const median = times.length ? times[Math.floor((times.length - 1) / 2)] : null;
-    return { orders: os.length, completed: os.filter((o) => o.status === 'DELIVERED').length, confirmed: os.filter((o) => o.confirmedAt).length, cancelled: os.filter((o) => o.status === 'CANCELLED').length, expired: os.filter((o) => o.status === 'EXPIRED').length, medianConfirmMs: median };
+    const rv = values(s.reviews).filter((r) => r.sellerId === sellerId);
+    const rating = rv.length ? Math.round((rv.reduce((t, r) => t + r.rating, 0) / rv.length) * 10) / 10 : null;
+    return { orders: os.length, completed: os.filter((o) => o.status === 'DELIVERED').length, confirmed: os.filter((o) => o.confirmedAt).length, cancelled: os.filter((o) => o.status === 'CANCELLED').length, expired: os.filter((o) => o.status === 'EXPIRED').length, medianConfirmMs: median, rating, reviewCount: rv.length };
   }
   function sellerPublic(s, sellerId, viewerId) {
     const x = s.sellers[sellerId];
-    return { id: x.id, name: x.name, handle: x.handle, type: x.type, area: x.area, city: x.city, verification: x.verification, bio: x.bio, following: !!s.follows[viewerId + '|' + x.id], followers: Object.keys(s.follows).filter((k) => k.endsWith('|' + x.id)).length, isMe: x.userId === viewerId, stats: sellerStats(s, x.id) };
+    return { id: x.id, name: x.name, handle: x.handle, type: x.type, area: x.area, city: x.city, verification: x.verification, bio: x.bio, following: !!s.follows[viewerId + '|' + x.id], followers: Object.keys(s.follows).filter((k) => k.endsWith('|' + x.id)).length, isMe: x.userId === viewerId, stats: sellerStats(s, x.id),
+      categories: x.categories || [], mapsUrl: x.mapsUrl || null, googleProfileUrl: x.googleProfileUrl || null, socialUrl: x.socialUrl || null, sla: x.sla || null };
     // NOTE: payment details are never part of the public seller view.
   }
   function paymentForBuyer(s, sellerId) {
@@ -1023,8 +1208,11 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     },
     negotiations(s, userId, now) { return values(s.negotiations).filter((n) => n.buyerId === userId).sort((a, b) => b.updatedAt - a.updatedAt).map((n) => negBuyerDTO(s, n, userId, now)); },
     negotiation(s, userId, id, now) { const n = s.negotiations[id]; return n && n.buyerId === userId ? negBuyerDTO(s, n, userId, now) : null; },
-    orders(s, userId) { return values(s.orders).filter((o) => o.buyerId === userId).sort((a, b) => b.createdAt - a.createdAt).map((o) => orderDTO(s, o, false)); },
-    order(s, userId, id) { const o = s.orders[id]; return o && o.buyerId === userId ? orderDTO(s, o, o.status === 'PLACED' && o.channel === 'DIRECT') : null; },
+    orders(s, userId, now) { return values(s.orders).filter((o) => o.buyerId === userId).sort((a, b) => b.createdAt - a.createdAt).map((o) => orderDTO(s, o, false, 'buyer', now)); },
+    order(s, userId, id, now) { const o = s.orders[id]; return o && o.buyerId === userId ? orderDTO(s, o, o.status === 'PLACED' && o.channel === 'DIRECT', 'buyer', now) : null; },
+    requests(s, userId) { return values(s.requests).filter((r) => r.buyerId === userId).sort((a, b) => b.createdAt - a.createdAt).map((r) => requestBuyerDTO(s, r)); },
+    request(s, userId, id) { const r = s.requests[id]; return r && r.buyerId === userId ? requestBuyerDTO(s, r) : null; },
+    reachable(s, userId, category) { return values(s.sellers).filter((x) => (x.categories || []).includes(category) && x.userId !== userId).length; },
     profile(s, userId, now) {
       const u = s.users[userId]; const p = s.buyerProfiles[userId]; if (!u) return null;
       const orders = values(s.orders).filter((o) => o.buyerId === userId);
@@ -1042,10 +1230,47 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     }
   };
 
-  function orderDTO(s, o, withPayment) {
-    const d = Object.assign(clone(o), { sellerName: s.sellers[o.sellerId].name, buyerName: (s.users[o.buyerId] || {}).name || 'Buyer', statusLabel: orderStatusLabel(o), cancelText: o.cancelReason ? CANCEL_REASONS[o.cancelReason] : null });
+  const OPEN_ORDER = ['PLACED', 'CONFIRMED', 'SHIPPED'];
+  function orderDTO(s, o, withPayment, audience, now) {
+    const sel = s.sellers[o.sellerId];
+    const d = Object.assign(clone(o), { sellerName: sel.name, buyerName: (s.users[o.buyerId] || {}).name || 'Buyer', statusLabel: orderStatusLabel(o), cancelText: o.cancelReason ? CANCEL_REASONS[o.cancelReason] : null });
     if (withPayment) d.payTo = paymentForBuyer(s, o.sellerId);
+    const open = OPEN_ORDER.includes(o.status);
+    const rv = s.reviews['rv_' + o.id]; d.review = rv ? clone(rv) : null;
+    d.unread = o.threadId ? unreadCount(s, s.chats[o.threadId], audience) : 0;
+    if (audience === 'buyer') {
+      d.seller = { id: sel.id, sla: sel.sla || null, stats: sellerStats(s, sel.id), contact: open ? clone(sel.contact || {}) : null };
+      const l = s.listings[o.listingId]; const v = l && variantOf(l, o.variantId);
+      d.buyAgain = l && l.status === 'ACTIVE' ? { listingId: l.id, variantId: v && available(s, l, v, now || 0) > 0 ? v.id : null, anyAvailable: l.variants.some((x) => available(s, l, x, now || 0) > 0), channel: channelOf(l), productUrl: channelOf(l) === 'WEBSITE' ? l.checkout.productUrl : null } : null;
+    } else {
+      const bp = s.buyerProfiles[o.buyerId] || {}; d.buyerContact = open ? clone(bp.contact || {}) : null;
+    }
     return d;
+  }
+  function unreadCount(s, t, audience) {
+    if (!t) return 0; const since = t.readAt[audience === 'buyer' ? 'buyer' : 'seller'] || 0; const mine = audience === 'buyer' ? 'BUYER' : 'SELLER';
+    return t.messages.filter((m) => m.from !== mine && m.from !== 'SYSTEM' && m.at > since).length;
+  }
+  function threadDTO(s, t, audience, now) {
+    const sel = s.sellers[t.sellerId]; const buyer = s.users[t.buyerId] || {};
+    const o = t.orderId ? s.orders[t.orderId] : null; const r = t.requestId ? s.requests[t.requestId] : null; const x = t.responseId ? s.responses[t.responseId] : null;
+    const counterpart = audience === 'buyer' ? sel.name : buyer.name || 'Buyer';
+    return {
+      id: t.id, kind: t.kind, title: threadTitle(s, t), counterpart, orderId: t.orderId || null, requestId: t.requestId || null, responseId: t.responseId || null,
+      orderStatus: o ? orderStatusLabel(o) : null, requestTitle: r ? r.title : null, responseListingId: x ? x.listingId || null : null, responseMedia: x ? x.media[0] : null, category: r ? r.category : null,
+      messages: t.messages.map((m) => {
+        const base = { id: m.id, side: m.from === 'SYSTEM' ? 'SYSTEM' : (audience === 'buyer' ? (m.from === 'BUYER' ? 'ME' : 'THEM') : (m.from === 'SELLER' ? 'ME' : 'THEM')), type: m.type, text: m.text || '', at: m.at, media: m.media || null };
+        if (m.type === 'LISTING') { const l = s.listings[m.listingId]; base.listing = l ? { id: l.id, title: l.title, price: l.price, media: l.media[0] || null, status: l.status, available: l.variants.some((v) => available(s, l, v, now) > 0), channel: channelOf(l) } : null; }
+        return base;
+      }),
+      unread: unreadCount(s, t, audience), updatedAt: t.updatedAt, last: t.messages[t.messages.length - 1]
+    };
+  }
+  function reviewsFor(s, sellerId) {
+    return values(s.reviews).filter((r) => r.sellerId === sellerId).sort((a, b) => b.at - a.at).map((r) => ({ id: r.id, rating: r.rating, text: r.text, media: clone(r.media), at: r.at, editedAt: r.editedAt, title: r.title, buyerName: ((s.users[r.buyerId] || {}).name || 'Buyer').split(' ')[0], orderStatus: (s.orders[r.orderId] || {}).status }));
+  }
+  function requestBuyerDTO(s, r) {
+    return Object.assign(clone(r), { responses: values(s.responses).filter((x) => x.requestId === r.id).sort((a, b) => a.at - b.at).map((x) => Object.assign(clone(x), { seller: sellerPublic(s, x.sellerId, r.buyerId) })) });
   }
   function orderStatusLabel(o) {
     const web = o.channel === 'WEBSITE';
@@ -1058,6 +1283,9 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
       return s.comments.filter((c) => c.listingId === listingId).map((c) => ({ id: c.id, text: c.text, at: c.at, name: (s.users[c.userId] || {}).name || 'Someone', isSeller: l && c.userId === l.ownerUserId, shopName: l && c.userId === l.ownerUserId ? s.sellers[l.sellerId].name : null, userId: c.userId }));
     },
     notifications(s, userId, app) { return s.notifications.filter((n) => n.userId === userId && n.app === app); },
+    threads(s, userId, app, now) { return values(s.chats).filter((t) => (app === 'buyer' ? t.buyerId === userId : t.sellerUserId === userId)).sort((a, b) => b.updatedAt - a.updatedAt).map((t) => threadDTO(s, t, app, now)); },
+    thread(s, userId, app, id, now) { const t = s.chats[id]; if (!t || (app === 'buyer' ? t.buyerId !== userId : t.sellerUserId !== userId)) return null; return threadDTO(s, t, app, now); },
+    reviews(s, sellerId) { return reviewsFor(s, sellerId); },
     unread(s, userId, app) { return s.notifications.filter((n) => n.userId === userId && n.app === app && !n.read).length; },
     user(s, userId) { const u = s.users[userId]; return u ? { id: u.id, name: u.name, phone: u.phone } : null; }
   };
@@ -1112,9 +1340,17 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     negotiation(s, userId, id, now) { const x = sellerOfUser(s, userId); const n = s.negotiations[id]; return x && n && n.sellerId === x.id ? negSellerDTO(s, n, now) : null; },
     orders(s, userId) {
       const x = sellerOfUser(s, userId); if (!x) return [];
-      return values(s.orders).filter((o) => o.sellerId === x.id).sort((a, b) => b.createdAt - a.createdAt).map((o) => orderDTO(s, o, false));
+      return values(s.orders).filter((o) => o.sellerId === x.id).sort((a, b) => b.createdAt - a.createdAt).map((o) => orderDTO(s, o, false, 'seller'));
     },
-    order(s, userId, id) { const x = sellerOfUser(s, userId); const o = s.orders[id]; return x && o && o.sellerId === x.id ? orderDTO(s, o, false) : null; },
+    order(s, userId, id) { const x = sellerOfUser(s, userId); const o = s.orders[id]; return x && o && o.sellerId === x.id ? orderDTO(s, o, false, 'seller') : null; },
+    requests(s, userId) {
+      const x = sellerOfUser(s, userId); if (!x) return [];
+      return values(s.requests).filter((r) => (x.categories || []).includes(r.category) && r.buyerId !== userId).sort((a, b) => b.createdAt - a.createdAt).map((r) => {
+        const mine = values(s.responses).find((p) => p.requestId === r.id && p.sellerId === x.id);
+        return { id: r.id, category: r.category, title: r.title, description: r.description, size: r.size, budget: r.budget, media: clone(r.media), status: r.status, createdAt: r.createdAt, expiresAt: r.expiresAt, buyerName: ((s.users[r.buyerId] || {}).name || 'Buyer').split(' ')[0], responses: values(s.responses).filter((p) => p.requestId === r.id).length, mine: mine ? clone(mine) : null };
+      });
+    },
+    reviews(s, userId) { const x = sellerOfUser(s, userId); return x ? reviewsFor(s, x.id) : []; },
     payment(s, userId) { const x = sellerOfUser(s, userId); return x ? clone(s.paymentProfiles[x.id] || {}) : null; },
     stats(s, userId) { const x = sellerOfUser(s, userId); return x ? sellerStats(s, x.id) : null; },
     dashboard(s, userId, now) {
@@ -1122,6 +1358,8 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
       return {
         totals: { views: ls.reduce((t, l) => t + l.views, 0), likes: ls.reduce((t, l) => t + l.likes, 0), offers: negs.length, orders: orders.length, revenue: orders.filter((o) => ['CONFIRMED', 'SHIPPED', 'DELIVERED'].includes(o.status)).reduce((t, o) => t + o.price, 0), bargained: orders.filter((o) => o.priceSource === 'NEGOTIATED').length, websiteClicks: ls.reduce((t, l) => t + l.websiteClicks, 0) },
         needsReply: negs.filter((n) => n.statusLabel === 'Needs your reply').length,
+        newRequests: seller.requests(s, userId).filter((r) => r.status === 'OPEN' && !r.mine).length,
+        unreadChats: common.threads(s, userId, 'seller', now).reduce((t, x) => t + x.unread, 0),
         toConfirm: orders.filter((o) => o.status === 'PLACED').length, toShip: orders.filter((o) => o.status === 'CONFIRMED').length,
         active: ls.filter((l) => l.status === 'ACTIVE').length, drafts: ls.filter((l) => l.status === 'DRAFT').length,
         top: ls.filter((l) => l.status === 'ACTIVE').sort((a, b) => (b.views + b.likes * 3 + b.offers * 5) - (a.views + a.likes * 3 + a.offers * 5)).slice(0, 3)
@@ -1129,7 +1367,7 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     }
   };
 
-  root.FaydaEngine = { RULES, CATEGORIES, MODES, ORDER_FLOW, CANCEL_REASONS, PAY_METHODS, validatePayment, HOUR, DAY, emptyState, exec, runSweep, buyer, seller, common, fmt, validateListingDraft, normPhone };
+  root.FaydaEngine = { RULES, CATEGORIES, MODES, ORDER_FLOW, CANCEL_REASONS, PAY_METHODS, validatePayment, isMapsUrl, isGoogleProfileUrl, isSocialUrl, HOUR, DAY, emptyState, exec, runSweep, buyer, seller, common, fmt, validateListingDraft, normPhone };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 /* Seed data for the Fayda prototype. Built through engine commands so seeded state obeys the same rules. */
@@ -1148,15 +1386,15 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
 
     // Sellers
     const sellers = [
-      { phone: '9000011111', owner: 'Ravi Kumar', type: 'BUSINESS', name: 'Indigo Threads', handle: 'indigothreads', area: 'Banjara Hills', gstin: '36AABCI1234F1Z5', bio: 'Hand-block printed cotton, made in small batches.', payment: { upiId: 'indigothreads@okhdfcbank', bankHolder: 'Indigo Threads LLP', bankAccount: '50200012345678', bankIfsc: 'HDFC0001234', bankName: 'HDFC Bank' } },
-      { phone: '9000033333', owner: 'Farah Siddiqui', type: 'BUSINESS', name: 'Loom & Co.', handle: 'loomandco', area: 'Jubilee Hills', gstin: '', bio: 'Handloom linens and Pochampally ikat. We ship from our own store.', payment: { website: 'https://loomandco.example.com' } },
-      { phone: '9000022222', owner: 'Meher Reddy', type: 'INDIVIDUAL', name: 'Meher’s Closet', handle: 'meherscloset', area: 'Kondapur', gstin: '', bio: 'Jewellery and accessories I source from Laad Bazaar.', payment: { upiId: 'meher.closet@okaxis', paymentLink: 'https://pay.example.com/meherscloset' } }
+      { phone: '9000011111', owner: 'Ravi Kumar', type: 'BUSINESS', name: 'Indigo Threads', handle: 'indigothreads', area: 'Banjara Hills', gstin: '36AABCI1234F1Z5', bio: 'Hand-block printed cotton, made in small batches.', payment: { upiId: 'indigothreads@okhdfcbank', bankHolder: 'Indigo Threads LLP', bankAccount: '50200012345678', bankIfsc: 'HDFC0001234', bankName: 'HDFC Bank' }, categories: ['Ethnic wear', 'Western wear'], contact: { phone: '9000011111', whatsapp: '9000011111' }, mapsUrl: 'https://maps.app.goo.gl/indigoThreadsBH', googleProfileUrl: 'https://g.page/indigothreads-hyd', socialUrl: 'https://instagram.com/indigothreads.hyd', sla: { confirmHours: 4, shipDays: 2 } },
+      { phone: '9000033333', owner: 'Farah Siddiqui', type: 'BUSINESS', name: 'Loom & Co.', handle: 'loomandco', area: 'Jubilee Hills', gstin: '', bio: 'Handloom linens and Pochampally ikat. We ship from our own store.', payment: { website: 'https://loomandco.example.com' }, categories: ['Ethnic wear', 'Western wear', 'Menswear'], contact: { phone: '9000033333' }, mapsUrl: 'https://www.google.com/maps/place/Jubilee+Hills,+Hyderabad', googleProfileUrl: null, socialUrl: 'https://facebook.com/loomandco.hyd', sla: { confirmHours: 12, shipDays: 3 } },
+      { phone: '9000022222', owner: 'Meher Reddy', type: 'INDIVIDUAL', name: 'Meher’s Closet', handle: 'meherscloset', area: 'Kondapur', gstin: '', bio: 'Jewellery and accessories I source from Laad Bazaar.', payment: { upiId: 'meher.closet@okaxis', paymentLink: 'https://pay.example.com/meherscloset' }, categories: ['Accessories', 'Footwear'], contact: { whatsapp: '9000022222' }, mapsUrl: 'https://maps.app.goo.gl/mehersClosetKdp', googleProfileUrl: null, socialUrl: 'https://instagram.com/meherscloset', sla: { confirmHours: 2, shipDays: 3 } }
     ];
     const sellerUser = {};
     sellers.forEach((x, i) => {
       const uid = login(x.phone, 'seller', t0 + i * 1000);
       run({ type: 'user.updateName', userId: uid, name: x.owner }, t0);
-      run({ type: 'seller.register', userId: uid, sellerType: x.type, name: x.name, handle: x.handle, area: x.area, city: 'Hyderabad', gstin: x.gstin, bio: x.bio, payment: x.payment, conductAccepted: true }, t0 + i * 1000);
+      run({ type: 'seller.register', userId: uid, sellerType: x.type, name: x.name, handle: x.handle, area: x.area, city: 'Hyderabad', gstin: x.gstin, bio: x.bio, payment: x.payment, categories: x.categories, contact: x.contact, mapsUrl: x.mapsUrl, googleProfileUrl: x.googleProfileUrl, socialUrl: x.socialUrl, sla: x.sla, conductAccepted: true }, t0 + i * 1000);
       sellerUser[x.handle] = uid;
     });
 
@@ -1199,7 +1437,7 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     const B = {};
     buyers.forEach((b, i) => {
       const uid = login(b.phone, 'buyer', t0 + 3 * E.DAY + i);
-      run({ type: 'buyer.completeProfile', userId: uid, name: b.name, address: b.addr }, t0 + 3 * E.DAY + i);
+      run({ type: 'buyer.completeProfile', userId: uid, name: b.name, address: b.addr, contact: { phone: b.phone, whatsapp: b.phone }, agreementAccepted: true }, t0 + 3 * E.DAY + i);
       B[b.name.split(' ')[0]] = uid;
     });
     const addrOf = (uid) => s.buyerProfiles[uid].defaultAddressId;
@@ -1210,6 +1448,16 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     const o = run({ type: 'order.place', userId: B.Aarav, negotiationId: ng, addressId: addrOf(B.Aarav), paymentMethod: 'UPI' }, at + 600e3).orderId;
     run({ type: 'order.confirm', userId: sellerUser.indigothreads, orderId: o, shipment: { carrier: 'DTDC', trackingId: 'D1234567890', expectedDate: new Date(at + 3 * E.DAY).toISOString().slice(0, 10) } }, at + 3 * E.HOUR);
     run({ type: 'order.deliver', userId: sellerUser.indigothreads, orderId: o }, at + 2 * E.DAY);
+    const th = s.orders[o].threadId;
+    run({ type: 'chat.send', userId: B.Aarav, threadId: th, text: 'Paid ₹1,150 by UPI with note ' + s.orders[o].number + '.' }, at + 20 * 60e3);
+    run({ type: 'chat.send', userId: sellerUser.indigothreads, threadId: th, text: 'Got it, thank you! Shipping today by DTDC.' }, at + 3 * E.HOUR);
+    run({ type: 'review.save', userId: B.Aarav, orderId: o, rating: 5, text: 'Colours exactly like the video and the mul is very soft. Packed neatly.', media: [] }, at + 2 * E.DAY + E.HOUR);
+    const jh = Object.values(s.listings).find((l) => l.title.startsWith('Oxidised'));
+    const o2 = run({ type: 'order.place', userId: B.Priya, listingId: jh.id, variantId: jh.variants[0].id, addressId: addrOf(B.Priya), paymentMethod: 'UPI' }, at + E.DAY).orderId;
+    run({ type: 'order.confirm', userId: sellerUser.meherscloset, orderId: o2 }, at + E.DAY + 90 * 60e3);
+    run({ type: 'order.ship', userId: sellerUser.meherscloset, orderId: o2, shipment: { note: 'Sent with a local courier' } }, at + 2 * E.DAY);
+    run({ type: 'order.deliver', userId: sellerUser.meherscloset, orderId: o2 }, at + 3 * E.DAY);
+    run({ type: 'review.save', userId: B.Priya, orderId: o2, rating: 4, text: 'Lovely and light. Took a little longer to arrive than I expected.', media: [] }, at + 3 * E.DAY + E.HOUR);
 
     // Social graph
     run({ type: 'social.toggleFollow', userId: B.Aarav, sellerId: s.listings[kurta].sellerId }, now - 3 * E.DAY);
@@ -1229,6 +1477,8 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     run({ type: 'system.sweep' }, now - 30 * 60e3 + 6e3);
     // Saree auto-countered at 6,199 for Aarav (rule). Leave it for the demo.
 
+    const rq = run({ type: 'request.create', userId: B.Priya, category: 'Ethnic wear', title: 'Mustard Kota doria dupatta', description: 'Looking for a mustard or haldi-yellow Kota doria dupatta with a thin gold border, for a haldi function next week.', size: '', budget: 1500, media: [{ kind: 'seed', scene: 'dupatta', palette: 'clay' }] }, now - 5 * E.HOUR).requestId;
+    run({ type: 'request.respond', userId: sellerUser.indigothreads, requestId: rq, text: 'We have this in haldi yellow with a zari border. Can list it today.', price: 1399, media: [{ kind: 'seed', scene: 'dupatta', palette: 'sand' }] }, now - 3 * E.HOUR);
     s.sessions = { buyer: null, seller: null };
     s.notifications.forEach((n) => { n.read = n.at < now - E.DAY; });
     s.seededAt = now;
@@ -1251,7 +1501,7 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
   const Store = (() => {
     let storageOk = true; let state;
     function load() {
-      try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && s.v === 2 && s.listings && s.paymentProfiles && s.dealCodes) return s; } } catch (e) { storageOk = false; }
+      try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && s.v === 3 && s.listings && s.paymentProfiles && s.dealCodes && s.chats && s.requests) return s; } } catch (e) { storageOk = false; }
       return Seed.createSeedState(Date.now());
     }
     function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); storageOk = true; } catch (e) { storageOk = false; } }
@@ -1262,7 +1512,7 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     function dispatch(cmd) { const r = E.exec(state, cmd, now()); if (r.result.ok) { state = r.state; save(); emit(); } return r.result; }
     function tick() { const s2 = E.runSweep(state, now()); if (s2) { state = s2; save(); } emit(); }
     function reset() { state = Seed.createSeedState(Date.now()); save(); emit(); }
-    try { window.addEventListener('storage', (e) => { if (e.key === KEY && e.newValue) { try { const x = JSON.parse(e.newValue); if (x && x.v === 2) { state = x; emit(); } } catch (x) { /* ignore */ } } }); } catch (e) { /* ignore */ }
+    try { window.addEventListener('storage', (e) => { if (e.key === KEY && e.newValue) { try { const x = JSON.parse(e.newValue); if (x && x.v === 3) { state = x; emit(); } } catch (x) { /* ignore */ } } }); } catch (e) { /* ignore */ }
     setInterval(tick, 1000);
     return { get state() { return state; }, now, dispatch, reset, subscribe(f) { subs.add(f); return () => subs.delete(f); }, get storageOk() { return storageOk; } };
   })();
@@ -1352,6 +1602,13 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     pause: '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>',
     image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
     video: '<path d="m16 13 5.2 3.1a.5.5 0 0 0 .8-.4V8.3a.5.5 0 0 0-.8-.4L16 11"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
+    star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
+    msg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    megaphone: '<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+    external: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/>',
+    clip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+    repeat: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
     shield: '<path d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/>'
   };
   function Icon({ name, size = 22, fill = 'none', sw = 2, style }) {
@@ -1672,6 +1929,154 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
   Object.assign(U, { AuthFlow, AddressForm, EMPTY_ADDR, addrLine, CommentsPanel, Notifications, Timeline, CounterBox, OrderSteps, ORDER_TONE, MODE_LABEL, ShipmentCard, ShipmentFields, DealAccessInput, StatsLine, PaymentForm });
 })();
 
+/* Reviews, chat, contact, requests and agreement components shared by both apps. */
+(function () {
+  'use strict';
+  const U = window.FaydaUI; const { h, E, Store, Media, money, left, ago, when, Icon, Btn, Field, Input, Chip, Badge, Empty, Page, Sheet, Thumb, Avatar, Kv, MediaView, BRAND } = U;
+  const { useState, useEffect, useRef } = React;
+
+  // ---------- stars ----------
+  function Stars({ value, size = 14 }) {
+    const full = Math.round(value || 0);
+    return h('span', { className: 'stars', 'aria-label': `${value} out of 5 stars` }, [1, 2, 3, 4, 5].map((i) => h(Icon, { key: i, name: 'star', size, sw: 1.5, fill: i <= full ? 'currentColor' : 'none' })));
+  }
+  function RatingChip({ stats, light }) {
+    if (!stats || !stats.reviewCount) return h('span', { className: 'rating-chip', style: { opacity: 0.8, color: light ? '#fff' : 'var(--muted)' } }, 'No reviews yet');
+    return h('span', { className: 'rating-chip', style: light ? { color: '#fff' } : null }, h(Icon, { name: 'star', size: 13, sw: 1.5, fill: '#F59E0B', style: { color: '#F59E0B' } }), stats.rating.toFixed(1), h('span', { style: { fontWeight: 600, opacity: 0.8 } }, `(${stats.reviewCount})`));
+  }
+  function StarInput({ value, onChange }) {
+    return h('div', { className: 'stars input', role: 'radiogroup', 'aria-label': 'Rating' }, [1, 2, 3, 4, 5].map((i) => h('button', { key: i, type: 'button', role: 'radio', 'aria-checked': value === i, 'aria-label': `${i} star${i === 1 ? '' : 's'}`, onClick: () => onChange(i) }, h(Icon, { name: 'star', size: 34, sw: 1.5, fill: i <= value ? 'currentColor' : 'none' }))));
+  }
+  const confirmText = (hrs) => (hrs === 1 ? 'within 1 hour' : hrs < 24 ? `within ${hrs} hours` : hrs === 24 ? 'within a day' : `within ${hrs / 24} days`);
+  const shipText = (d) => `within ${d} day${d === 1 ? '' : 's'}`;
+  function SlaLines({ sla, stats }) {
+    if (!sla) return null;
+    return h('div', { className: 'small', style: { display: 'flex', flexDirection: 'column', gap: 2 } },
+      h('div', null, h('b', null, 'Confirms payment: '), 'usually ' + confirmText(sla.confirmHours), stats && stats.medianConfirmMs != null ? h('span', { className: 'muted' }, ` · typically ${left(stats.medianConfirmMs)} on ${BRAND}`) : null),
+      h('div', null, h('b', null, 'Ships: '), 'usually ' + shipText(sla.shipDays)));
+  }
+
+  // ---------- media ----------
+  function MediaViewer({ m, onClose }) {
+    return h('div', { className: 'viewer', onClick: (e) => e.target === e.currentTarget && onClose() }, h('button', { className: 'glass round close', onClick: onClose, 'aria-label': 'Close' }, h(Icon, { name: 'x', size: 18 })), h('div', { className: 'box' }, h(MediaView, { m, active: true, controls: m.kind === 'video' })));
+  }
+  function MediaRow({ media, onOpen }) {
+    if (!media || !media.length) return null;
+    return h('div', { className: 'media-row' }, media.map((m, i) => h('button', { key: i, className: 'cell', onClick: () => onOpen && onOpen(m), 'aria-label': m.kind === 'video' ? 'Play video' : 'View photo' }, h(MediaView, { m, small: true }), m.kind === 'video' && h('span', { style: { position: 'absolute', left: 4, bottom: 4, zIndex: 3 } }, h(Badge, { tone: 'dark' }, 'Video')))));
+  }
+  function MediaPicker({ value, onChange, max = 4, videos = true, label, error, sample }) {
+    const [busy, setBusy] = useState(false); const [msg, setMsg] = useState(null);
+    async function add(files) {
+      setMsg(null); const out = value.slice(); const notes = [];
+      for (const f of Array.from(files)) {
+        if (out.length >= max) { notes.push(`Up to ${max}.`); break; }
+        const isV = f.type.startsWith('video/'), isI = f.type.startsWith('image/');
+        if (!isI && !(videos && isV)) { notes.push(`${f.name}: choose ${videos ? 'a photo or video' : 'a photo'}.`); continue; }
+        if (isI && f.size > 15e6) { notes.push(`${f.name}: photos up to 15 MB.`); continue; }
+        if (isV && f.size > 80e6) { notes.push(`${f.name}: videos up to 80 MB.`); continue; }
+        setBusy(true); const r = await Media.put(f); setBusy(false);
+        out.push({ kind: isV ? 'video' : 'image', mediaId: r.id });
+      }
+      onChange(out); if (notes.length) setMsg(notes.join(' '));
+    }
+    return h('div', { className: 'stack', style: { gap: 6 } }, label && h('div', { className: 'label' }, label),
+      h('div', { className: 'media-row' }, value.map((m, i) => h('div', { key: i, className: 'cell' }, h(MediaView, { m, small: true }), h('button', { className: 'x', 'aria-label': 'Remove', onClick: () => onChange(value.filter((_, j) => j !== i)) }, h(Icon, { name: 'x', size: 12 })))),
+        value.length < max && h('label', { className: 'add' }, h(Icon, { name: 'upload', size: 18 }), busy ? 'Adding…' : videos ? 'Photo or video' : 'Add photo', h('input', { type: 'file', accept: videos ? 'image/*,video/*' : 'image/*', multiple: true, style: { display: 'none' }, onChange: (e) => { add(e.target.files); e.target.value = ''; } }))),
+      sample && value.length < max && h('button', { className: 'btn ghost sm', style: { padding: 0, alignSelf: 'flex-start' }, onClick: () => onChange(value.concat([sample()])) }, 'No photo handy? Use sample artwork'),
+      msg && h('div', { className: 'hint' }, msg), error && h('div', { className: 'error' }, error));
+  }
+
+  // ---------- reviews ----------
+  function ReviewCard({ r, now, onOpenMedia }) {
+    return h('div', { className: 'card stack', style: { gap: 6 } },
+      h('div', { className: 'row between' }, h('div', { className: 'row', style: { gap: 8 } }, h(Avatar, { name: r.buyerName }), h('div', null, h('div', { className: 'strong small' }, r.buyerName), h('div', { className: 'tiny muted' }, ago(r.at, now) + (r.editedAt ? ' · edited' : '')))), h(Stars, { value: r.rating })),
+      h('div', { className: 'tiny muted' }, 'Verified order · ' + r.title), r.text && h('div', null, r.text), h(MediaRow, { media: r.media, onOpen: onOpenMedia }));
+  }
+  function ReviewsList({ reviews, stats, now }) {
+    const [view, setView] = useState(null);
+    return h('div', { className: 'stack' },
+      h('div', { className: 'row', style: { gap: 10 } }, h('div', { style: { fontSize: 34, fontWeight: 800, letterSpacing: -1 } }, stats && stats.reviewCount ? stats.rating.toFixed(1) : '—'), h('div', null, h(Stars, { value: stats ? stats.rating : 0, size: 16 }), h('div', { className: 'tiny muted' }, `${stats ? stats.reviewCount : 0} review${stats && stats.reviewCount === 1 ? '' : 's'} from buyers with orders`))),
+      reviews.length ? reviews.map((r) => h(ReviewCard, { key: r.id, r, now, onOpenMedia: setView })) : h('div', { className: 'small muted' }, 'No reviews yet.'),
+      view && h(MediaViewer, { m: view, onClose: () => setView(null) }));
+  }
+  function ReviewForm({ order, onDone, toast }) {
+    const prev = order.review;
+    const [rating, setRating] = useState(prev ? prev.rating : 0); const [text, setText] = useState(prev ? prev.text : ''); const [media, setMedia] = useState(prev ? prev.media : []); const [errors, setErrors] = useState({});
+    const save = () => { const r = Store.dispatch({ type: 'review.save', userId: order.buyerId, orderId: order.id, rating, text, media }); if (!r.ok) { setErrors(r.fields || {}); return; } toast(prev ? 'Review updated' : 'Thanks — your review is live on the seller’s profile'); onDone(); };
+    return h('div', { className: 'stack' },
+      h(StarInput, { value: rating, onChange: (v) => { setRating(v); setErrors({}); } }), errors.rating && h('div', { className: 'error' }, errors.rating),
+      h(Field, { label: 'Your feedback', id: 'rv-text', error: errors.text, hint: 'Fit, quality, packaging, how the seller handled payment and delivery.' }, h(Input, { id: 'rv-text', multiline: true, maxLength: 1000, value: text, onChange: (e) => { setText(e.target.value); setErrors({}); } })),
+      h(MediaPicker, { value: media, onChange: setMedia, max: 4, label: 'Photos or videos (optional)', error: errors.media }),
+      h('div', { className: 'card small', style: { background: 'var(--surface-3)' } }, h('b', null, 'Please be honest. '), `If feedback is found to be misleading, ${BRAND} may ban the account from the platform.`),
+      h(Btn, { block: true, onClick: save, disabled: !rating }, prev ? 'Update review' : 'Post review'));
+  }
+
+  // ---------- contact & links ----------
+  const waLink = (num, text) => `https://wa.me/91${num}?text=${encodeURIComponent(text || '')}`;
+  function ContactButtons({ contact, chatLabel, onChat, unread, note }) {
+    return h('div', { className: 'stack', style: { gap: 8 } },
+      h(Btn, { kind: 'dark', block: true, onClick: onChat }, h(Icon, { name: 'msg', size: 18 }), chatLabel || 'Chat in app', unread ? h('span', { className: 'badge accent' }, unread + ' new') : null),
+      contact && (contact.whatsapp || contact.phone) && h('div', { className: contact.whatsapp && contact.phone ? 'btn-row' : '' },
+        contact.whatsapp && h('a', { className: 'btn outline block', style: { textDecoration: 'none' }, href: waLink(contact.whatsapp, note), target: '_blank', rel: 'noopener noreferrer' }, h(Icon, { name: 'chat', size: 18 }), 'WhatsApp'),
+        contact.phone && h('a', { className: 'btn outline block', style: { textDecoration: 'none' }, href: 'tel:+91' + contact.phone }, h(Icon, { name: 'phone', size: 18 }), 'Call')));
+  }
+  function SellerLinks({ seller }) {
+    const links = [[seller.mapsUrl, 'Shop location', 'pin'], [seller.googleProfileUrl, 'Google profile', 'external'], [seller.socialUrl, /instagram/i.test(seller.socialUrl || '') ? 'Instagram' : 'Facebook', 'external']].filter((x) => x[0]);
+    if (!links.length) return null;
+    return h('div', { className: 'link-row' }, links.map(([u, t, ic]) => h('a', { key: t, className: 'btn outline sm', href: u, target: '_blank', rel: 'noopener noreferrer' }, h(Icon, { name: ic, size: 16 }), t)));
+  }
+
+  // ---------- user agreement ----------
+  const AGREEMENT = [
+    `${BRAND} helps you discover sellers and agree prices. Payment and delivery happen directly between you and the seller.`,
+    `Any dispute about payment, delivery, quality, returns or refunds must be resolved directly with the seller. ${BRAND} does not mediate or resolve disputes and is not responsible for their outcome.`,
+    'Before you buy, check the seller’s reviews, star rating and order record to decide which seller to shop from.',
+    'Pay only using the details shown on your order, and only to the seller you are buying from.',
+    `Please be honest in your feedback for sellers. If feedback is found to be misleading, ${BRAND} holds the right to ban any user from the platform.`
+  ];
+  function AgreementText() { return h('div', { className: 'agreement stack', style: { gap: 8 } }, h(Badge, { tone: 'accent' }, 'Draft — pending legal review'), h('ol', { className: 'small' }, AGREEMENT.map((t, i) => h('li', { key: i }, t)))); }
+
+  // ---------- chat ----------
+  function ChatScreen({ app, userId, threadId, onBack, onOpenListing, onShareListing, header, toast }) {
+    const now = Store.now(); const t = E.common.thread(Store.state, userId, app, threadId, now);
+    const [text, setText] = useState(''); const [view, setView] = useState(null); const endRef = useRef(null);
+    const count = t ? t.messages.length : 0;
+    useEffect(() => { if (t && t.unread) Store.dispatch({ type: 'chat.markRead', userId, threadId }); }, [count]);
+    useEffect(() => { if (endRef.current && endRef.current.scrollIntoView) endRef.current.scrollIntoView({ block: 'end' }); }, [count]);
+    if (!t) return h(Page, { title: 'Chat', onBack }, h(Empty, { title: 'Chat not found' }));
+    const send = (payload) => { const r = Store.dispatch(Object.assign({ type: 'chat.send', userId, threadId }, payload)); if (!r.ok) toast(r.message, true); return r.ok; };
+    const attach = async (f) => { if (!f) return; if (!f.type.startsWith('image/') || f.size > 15e6) { toast('Choose a photo under 15 MB.', true); return; } const m = await Media.put(f); send({ media: { kind: 'image', mediaId: m.id } }); };
+    return h('div', { className: 'page' }, h(U.AppBar, { title: t.counterpart, onBack }),
+      h('div', { className: 'screen' },
+        h('div', { className: 'pad', style: { paddingBottom: 0 } }, header || h('div', { className: 'small muted' }, t.title + (t.orderStatus ? ' · ' + t.orderStatus : ''))),
+        h('div', { className: 'chat' }, t.messages.map((m) => {
+          if (m.side === 'SYSTEM') return h('div', { key: m.id, className: 'sysmsg' }, m.text);
+          if (m.type === 'LISTING') return m.listing ? h('button', { key: m.id, className: 'listing-card' + (m.side === 'ME' ? ' me' : ''), onClick: () => onOpenListing(m.listing.id) }, h(Thumb, { m: m.listing.media }), h('div', { className: 'grow', style: { textAlign: 'left' } }, h('div', { className: 'strong small ellipsis' }, m.listing.title), h('div', { className: 'small' }, h('b', null, money(m.listing.price)), m.listing.status !== 'ACTIVE' ? ' · not available' : !m.listing.available ? ' · sold out' : ''), h('div', { className: 'tiny', style: { color: 'var(--accent)', fontWeight: 800 } }, app === 'buyer' ? 'View and buy' : 'View listing'))) : null;
+          if (m.type === 'MEDIA') return h('button', { key: m.id, className: 'media-msg' + (m.side === 'ME' ? ' me' : ''), style: { border: 0, padding: 0, alignSelf: m.side === 'ME' ? 'flex-end' : 'flex-start' }, onClick: () => setView(m.media) }, h(MediaView, { m: m.media, small: true }));
+          return h('div', { key: m.id, className: 'bubble ' + (m.side === 'ME' ? 'me' : 'them') }, m.text, h('span', { className: 'meta' }, ago(m.at, now)));
+        }), h('div', { ref: endRef }))),
+      h('div', { className: 'composer' },
+        h('label', { className: 'iconbtn plain', 'aria-label': 'Attach photo', style: { cursor: 'pointer' } }, h(Icon, { name: 'clip', size: 20 }), h('input', { type: 'file', accept: 'image/*', style: { display: 'none' }, onChange: (e) => { attach(e.target.files[0]); e.target.value = ''; } })),
+        onShareListing && h('button', { className: 'iconbtn plain', 'aria-label': 'Share a listing', onClick: onShareListing }, h(Icon, { name: 'tag', size: 20 })),
+        h(Input, { 'aria-label': 'Message', placeholder: 'Message…', value: text, maxLength: 1000, onChange: (e) => setText(e.target.value), onKeyDown: (e) => { if (e.key === 'Enter' && text.trim() && send({ text })) setText(''); } }),
+        h(Btn, { kind: 'primary', size: 'sm', disabled: !text.trim(), onClick: () => { if (send({ text })) setText(''); } }, 'Send')),
+      view && h(MediaViewer, { m: view, onClose: () => setView(null) }));
+  }
+  function ThreadsScreen({ app, userId, onBack, onOpen }) {
+    const now = Store.now(); const list = E.common.threads(Store.state, userId, app, now);
+    return h(Page, { title: 'Messages', onBack }, list.length ? list.map((t) => h('button', { key: t.id, className: 'listrow', onClick: () => onOpen(t.id) }, h(Avatar, { name: t.counterpart }),
+      h('div', { className: 'grow' }, h('div', { className: 'row between' }, h('span', { className: 'strong ellipsis' }, t.counterpart), h('span', { className: 'tiny muted' }, ago(t.updatedAt, now))), h('div', { className: 'tiny muted ellipsis' }, t.title), h('div', { className: 'small ellipsis', style: { fontWeight: t.unread ? 700 : 400 } }, t.last.type === 'LISTING' ? 'Shared a listing' : t.last.type === 'MEDIA' ? 'Photo' : t.last.text)),
+      t.unread ? h('span', { className: 'badge accent' }, t.unread) : null))
+      : h(Empty, { icon: 'msg', title: 'No messages yet', body: app === 'buyer' ? 'A chat with the seller opens when you place an order or say you want an item from a request.' : 'Chats open when a buyer places an order or wants an item you offered for their request.' }));
+  }
+  function MsgButton({ app, userId, onClick }) {
+    const n = E.common.threads(Store.state, userId, app, Store.now()).reduce((t, x) => t + x.unread, 0);
+    return h('button', { className: 'iconbtn', onClick, 'aria-label': `Messages${n ? `, ${n} unread` : ''}` }, h(Icon, { name: 'msg', size: 20 }), n ? h('span', { className: 'dot' }, n) : null);
+  }
+
+  Object.assign(U, { Stars, RatingChip, StarInput, SlaLines, confirmText, shipText, MediaViewer, MediaRow, MediaPicker, ReviewCard, ReviewsList, ReviewForm, ContactButtons, SellerLinks, AgreementText, ChatScreen, ThreadsScreen, MsgButton, waLink });
+})();
+
 /* Fayda Buyer app (prototype). Reads only buyer-scoped DTOs from the engine. */
 (function () {
   'use strict';
@@ -1689,15 +2094,32 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
   function BuyerOnboarding({ uid }) {
     const u = Store.state.users[uid];
     const [name, setName] = useState(u.name || ''); const [addr, setAddr] = useState(Object.assign({}, U.EMPTY_ADDR, { name: u.name || '' })); const [errors, setErrors] = useState({});
-    const save = () => { const r = Store.dispatch({ type: 'buyer.completeProfile', userId: uid, name, address: Object.assign({}, addr, { name: addr.name || name }) }); if (!r.ok) setErrors(r.fields || { form: r.message }); };
+    const [contact, setContact] = useState({ phone: u.phone, whatsapp: u.phone }); const [agree, setAgree] = useState(false); const [showTerms, setShowTerms] = useState(false);
+    const save = () => { const r = Store.dispatch({ type: 'buyer.completeProfile', userId: uid, name, address: Object.assign({}, addr, { name: addr.name || name }), contact, agreementAccepted: agree }); if (!r.ok) setErrors(r.fields || { form: r.message }); };
     return h('div', { className: 'body' }, h('div', { className: 'screen' }, h('div', { className: 'pad stack', style: { gap: 16 } },
       h('div', null, h('div', { className: 'small muted strong' }, 'One last step'), h('div', { className: 'h2' }, 'Where should we deliver?')),
       h(Field, { label: 'Your name', id: 'ob-fullname', error: errors.fullName }, h(Input, { id: 'ob-fullname', value: name, autoComplete: 'name', invalid: !!errors.fullName, onChange: (e) => setName(e.target.value) })),
       h(U.AddressForm, { value: addr, onChange: setAddr, errors, idp: 'ob-' }),
-      h('div', { className: 'hint' }, 'Location detection and map pins come with the production app.'))),
-      h('div', { className: 'actionbar' }, h(Btn, { size: 'lg', block: true, onClick: save }, 'Save address and start shopping'),
-        h('button', { className: 'btn ghost sm', onClick: () => Store.dispatch({ type: 'auth.signOut', app: 'buyer' }) }, 'Use a different number')));
+      h(ContactFields, { value: contact, onChange: (c) => { setContact(c); setErrors({}); }, errors, idp: 'obc-', who: 'Sellers' }),
+      h('div', { className: 'card stack', style: { gap: 8 } }, h('div', { className: 'strong' }, 'User agreement'),
+        h('div', { className: 'small' }, `Disputes are between you and the seller — ${BRAND} doesn’t resolve them. Check seller reviews before you buy, and keep your own feedback honest.`),
+        h('button', { className: 'btn ghost sm', style: { padding: 0, alignSelf: 'flex-start' }, onClick: () => setShowTerms(true) }, 'Read the full agreement'),
+        h('label', { className: 'row', style: { gap: 8, fontWeight: 700, alignItems: 'flex-start' } }, h('input', { type: 'checkbox', checked: agree, onChange: (e) => { setAgree(e.target.checked); setErrors({}); }, style: { marginTop: 3 } }), 'I have read and agree to the user agreement'),
+        errors.agreement && h('div', { className: 'error' }, errors.agreement)))),
+      h('div', { className: 'actionbar' }, h(Btn, { size: 'lg', block: true, onClick: save }, 'Agree and start shopping'),
+        h('button', { className: 'btn ghost sm', onClick: () => Store.dispatch({ type: 'auth.signOut', app: 'buyer' }) }, 'Use a different number')),
+      showTerms && h('div', { className: 'dialog', role: 'dialog', 'aria-label': 'User agreement' }, h('div', { style: { maxHeight: '90%', overflow: 'auto' } }, h('div', { className: 'h3', style: { fontSize: 18 } }, BRAND + ' user agreement'), h(U.AgreementText), h(Btn, { block: true, onClick: () => { setAgree(true); setShowTerms(false); setErrors({}); } }, 'I agree'), h(Btn, { kind: 'outline', block: true, onClick: () => setShowTerms(false) }, 'Close'))));
   }
+  function ContactFields({ value, onChange, errors, idp, who }) {
+    const set = (k) => (e) => onChange(Object.assign({}, value, { [k]: e.target.value.replace(/\D/g, '').slice(0, 10) }));
+    return h('div', { className: 'stack', style: { gap: 10 } },
+      h('div', null, h('div', { className: 'label' }, `How can ${who.toLowerCase()} reach you about open orders?`), h('div', { className: 'hint' }, 'In-app chat is always on. Add at least one more: phone or WhatsApp.')),
+      h('div', { className: 'grid2' },
+        h(Field, { label: 'Phone', id: idp + 'p', error: errors.contactPhone }, h(Input, { id: idp + 'p', inputMode: 'numeric', placeholder: '10 digits', value: value.phone || '', invalid: !!errors.contactPhone, onChange: set('phone') })),
+        h(Field, { label: 'WhatsApp', id: idp + 'w', error: errors.contactWhatsapp }, h(Input, { id: idp + 'w', inputMode: 'numeric', placeholder: '10 digits', value: value.whatsapp || '', invalid: !!errors.contactWhatsapp, onChange: set('whatsapp') }))),
+      errors.contact && h('div', { className: 'error' }, errors.contact));
+  }
+  U.ContactFields = ContactFields;
 
   function BuyerMain({ uid }) {
     const nav = useNav('home'); const [toast, toastNode] = useToast(); const [sheet, setSheet] = useState(null);
@@ -1706,7 +2128,8 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     const actionable = negs.filter((n) => n.canRespond || n.status === 'AGREED').length;
     const unread = E.common.unread(s, uid, 'buyer');
     const ctx = { app: 'buyer', uid, nav, toast, openSheet: (type, params) => setSheet({ type, params: params || {} }), closeSheet: () => setSheet(null), unread };
-    const tabs = [['home', 'Home', 'home'], ['search', 'Search', 'search'], ['offers', 'Offers', 'tag', actionable], ['orders', 'Orders', 'box'], ['profile', 'Profile', 'user']];
+    const unreadChats = E.common.threads(s, uid, 'buyer', now).reduce((t, x) => t + x.unread, 0);
+    const tabs = [['home', 'Home', 'home'], ['search', 'Search', 'search'], ['offers', 'Offers', 'tag', actionable], ['orders', 'Orders', 'box', unreadChats], ['profile', 'Profile', 'user']];
     const Tab = { home: HomeFeed, search: SearchScreen, offers: OffersScreen, orders: OrdersScreen, profile: ProfileScreen }[nav.tab];
     const top = nav.top; const Screen = top ? SCREENS[top.screen] : null;
     const Sh = sheet ? SHEETS[sheet.type] : null;
@@ -1761,7 +2184,7 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
         h('button', { onClick: () => { toggle('social.toggleSave'); if (!it.saved) toast('Saved to your profile'); }, 'aria-pressed': it.saved, 'aria-label': 'Save' }, h('span', { className: 'rail-ic' }, h(Icon, { name: 'bookmark', size: 22, fill: it.saved ? '#fff' : 'none' })), it.saved ? 'Saved' : 'Save'),
         h('button', { onClick: () => shareListing(it, toast), 'aria-label': 'Share' }, h('span', { className: 'rail-ic' }, h(Icon, { name: 'send', size: 22 })), 'Share')),
       h('div', { className: 'reel-info' },
-        h('div', { className: 'seller' }, h('button', { style: { background: 'none', border: 0, padding: 0, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }, onClick: () => nav.go('shop', { sellerId: it.seller.id }) }, h(Avatar, { name: it.seller.name }), h('span', { className: 'strong' }, it.seller.name)),
+        h('div', { className: 'seller' }, h('button', { style: { background: 'none', border: 0, padding: 0, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }, onClick: () => nav.go('shop', { sellerId: it.seller.id }) }, h(Avatar, { name: it.seller.name }), h('span', { style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 } }, h('span', { className: 'strong' }, it.seller.name), h(U.RatingChip, { stats: it.seller.stats, light: true }))),
           !it.seller.isMe && h('button', { className: 'follow', 'aria-pressed': it.seller.following, onClick: () => { const r = Store.dispatch({ type: 'social.toggleFollow', userId: uid, sellerId: it.seller.id }); if (!r.ok) toast(r.message, true); } }, it.seller.following ? 'Following' : 'Follow')),
         h('div', { className: 'title' }, it.title),
         h('div', { className: 'reel-badges', style: { alignItems: 'center' } }, h('span', { style: { fontSize: 20, fontWeight: 800, letterSpacing: -0.3, marginRight: 4, textShadow: '0 1px 4px rgba(0,0,0,.45)' } }, money(it.price)), it.soldOut ? h(Badge, null, 'Sold out') : it.bargaining.acceptsOffers ? h(Badge, { tone: 'accent' }, 'Accepts offers') : h(Badge, null, 'Fixed price'), h(Badge, null, it.category)),
@@ -1812,7 +2235,7 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
         h('div', { className: 'card small' }, h('b', null, d.checkout.channel === 'WEBSITE' ? 'Bought on the seller’s website. ' : 'Pay the seller directly. '), d.checkout.channel === 'WEBSITE' ? 'Checkout, payment and delivery happen on their site. If your offer is accepted you get a coupon code or link for that price.' : `By ${d.checkout.methods.map((m) => E.PAY_METHODS[m]).join(', ')}. The seller confirms your payment and handles delivery — ${BRAND} doesn’t process payments or ship orders.`),
         d.bargaining.acceptsOffers && h('div', { className: 'card tint small' }, h('b', null, 'How offers work here: '), `${d.bargaining.mode === 'PUBLIC' ? 'offers are public — other buyers see the amount, never your name' : d.bargaining.mode === 'BOTH' ? 'choose a private or public offer' : 'offers are private between you and the seller'}. The seller has ${d.bargaining.expiryHours} hours to respond. If they accept, one unit is held for you for ${E.RULES.CHECKOUT_WINDOW_HOURS} hours.`),
         d.publicOffers && d.publicOffers.length > 0 && h('div', null, h('div', { className: 'section-title' }, 'Public offers'), d.publicOffers.map((o) => h('div', { key: o.id, className: 'kv' }, h('span', null, h('b', null, o.who), h('span', { className: 'muted small' }, ' · ' + o.variant + ' · ' + ago(o.at, now))), h('span', null, h('b', null, money(o.amount)), ' ', h(Badge, null, o.status))))),
-        h('button', { className: 'card row', style: { textAlign: 'left', color: 'var(--ink)' }, onClick: () => nav.go('shop', { sellerId: d.seller.id }) }, h(Avatar, { name: d.seller.name }), h('div', { className: 'grow' }, h('div', { className: 'strong' }, d.seller.name), h('div', { className: 'tiny muted' }, (d.seller.type === 'BUSINESS' ? 'Business' : 'Individual seller') + ' · ' + d.seller.area + ' · Not verified (prototype)'), h('div', { className: 'tiny', style: { marginTop: 2 } }, h(U.StatsLine, { st: d.seller.stats }))), h(Icon, { name: 'back', size: 18, style: { transform: 'rotate(180deg)' } })),
+        h('button', { className: 'card row', style: { textAlign: 'left', color: 'var(--ink)' }, onClick: () => nav.go('shop', { sellerId: d.seller.id }) }, h(Avatar, { name: d.seller.name }), h('div', { className: 'grow' }, h('div', { className: 'strong' }, d.seller.name), h('div', { className: 'tiny muted' }, (d.seller.type === 'BUSINESS' ? 'Business' : 'Individual seller') + ' · ' + d.seller.area + ' · Not verified (prototype)'), h('div', { className: 'tiny', style: { marginTop: 2 } }, h(U.RatingChip, { stats: d.seller.stats }), ' · ', h(U.StatsLine, { st: d.seller.stats })), d.seller.sla && h('div', { className: 'tiny muted' }, `Confirms payment ${U.confirmText(d.seller.sla.confirmHours)} · ships ${U.shipText(d.seller.sla.shipDays)}`)), h(Icon, { name: 'back', size: 18, style: { transform: 'rotate(180deg)' } })),
         h('div', null, h('div', { className: 'section-title' }, `Comments (${d.comments})`), h(U.CommentsPanel, { listingId: id, userId: uid, compact: true }))));
   }
 
@@ -1851,7 +2274,7 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     if (!d) return h(Page, { title: 'Offer', onBack: nav.back }, h(Empty, { title: 'Negotiation not found' }));
     const act = (action, amount) => { const r = Store.dispatch({ type: 'offer.respond', userId: uid, negotiationId: id, action, amount }); if (r.ok) { setCountering(false); toast(action === 'ACCEPT' ? 'Price agreed — checkout is open' : action === 'COUNTER' ? 'Counter sent' : 'Offer declined'); } else toast(r.message, true); return r; };
     const last = d.offers[d.offers.length - 1];
-    const order = d.status === 'PURCHASED' ? B.orders(Store.state, uid).find((o) => o.negotiationId === id) : null;
+    const order = d.status === 'PURCHASED' ? B.orders(Store.state, uid, now).find((o) => o.negotiationId === id) : null;
     let footer;
     if (d.status === 'AGREED' && d.channel === 'WEBSITE') footer = h(WebsiteDeal, { d, now });
     else if (d.status === 'AGREED') footer = h(React.Fragment, null, h('div', { className: 'card success' }, h('div', { className: 'strong' }, 'Price agreed: ' + money(d.agreement.price)), h('div', { className: 'small' }, `One unit is held for you until ${when(d.agreement.deadline)} (${left(d.agreement.deadline - now)} left).`)), h(Btn, { size: 'lg', block: true, onClick: () => nav.go('checkout', { negotiationId: id }) }, 'Continue · ' + money(d.agreement.price)));
@@ -1920,15 +2343,24 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
 
   // ---------- Orders ----------
   const SHORT = { PLACED: 'Awaiting seller', CONFIRMED: 'Confirmed', SHIPPED: 'Shipped', DELIVERED: 'Delivered', CANCELLED: 'Cancelled', EXPIRED: 'Expired' };
+  function buyAgainAction(o, nav) {
+    const b = o.buyAgain; if (!b || !b.anyAvailable) return null;
+    if (b.channel === 'WEBSITE') return () => nav.go('product', { id: b.listingId });
+    return () => (b.variantId ? nav.go('checkout', { listingId: b.listingId, variantId: b.variantId }) : nav.go('product', { id: b.listingId, needSize: true }));
+  }
   function OrdersScreen() {
-    const { uid, nav } = useApp(); const orders = B.orders(Store.state, uid); const now = Store.now();
-    return h('div', { className: 'screen' }, h(U.AppBar, { title: 'Orders', right: h(Bell) }),
-      orders.length ? orders.map((o) => h('button', { key: o.id, className: 'listrow', onClick: () => nav.go('order', { id: o.id }) }, h(Thumb, { m: o.media }), h('div', { className: 'grow' }, h('div', { className: 'strong ellipsis' }, o.title), h('div', { className: 'tiny muted' }, `${o.number} · ${o.sellerName} · ${ago(o.createdAt, now)}`), h('div', { className: 'small' }, h('b', null, money(o.price)), o.listPrice > o.price ? h('span', { style: { color: 'var(--success)', fontWeight: 700 } }, ' · saved ' + money(o.listPrice - o.price)) : null)), h(Badge, { tone: U.ORDER_TONE[o.status] }, SHORT[o.status])))
+    const { uid, nav } = useApp(); const now = Store.now(); const orders = B.orders(Store.state, uid, now);
+    return h('div', { className: 'screen' }, h(U.AppBar, { title: 'Orders', right: h('div', { className: 'row', style: { gap: 8 } }, h(U.MsgButton, { app: 'buyer', userId: uid, onClick: () => nav.go('threads') }), h(Bell)) }),
+      orders.length ? orders.map((o) => { const again = buyAgainAction(o, nav); return h('div', { key: o.id, style: { borderBottom: '1px solid var(--divider)' } },
+        h('button', { className: 'listrow', style: { borderBottom: 0 }, onClick: () => nav.go('order', { id: o.id }) }, h(Thumb, { m: o.media }), h('div', { className: 'grow' }, h('div', { className: 'strong ellipsis' }, o.title), h('div', { className: 'tiny muted' }, `${o.number} · ${o.sellerName} · ${ago(o.createdAt, now)}`), h('div', { className: 'small' }, h('b', null, money(o.price)), o.listPrice > o.price ? h('span', { style: { color: 'var(--success)', fontWeight: 700 } }, ' · saved ' + money(o.listPrice - o.price)) : null, o.unread ? h('span', { className: 'badge accent', style: { marginLeft: 6 } }, o.unread + ' new message' + (o.unread === 1 ? '' : 's')) : null)), h(Badge, { tone: U.ORDER_TONE[o.status] }, SHORT[o.status])),
+        (again || !o.review) && h('div', { className: 'row', style: { padding: '0 16px 10px 84px', gap: 8 } }, again && h(Btn, { kind: 'outline', size: 'sm', onClick: again }, h(Icon, { name: 'repeat', size: 15 }), 'Buy again'), !o.review && h(Btn, { kind: 'ghost', size: 'sm', onClick: () => nav.go('order', { id: o.id, review: true }) }, h(Icon, { name: 'star', size: 15 }), 'Rate seller'))); })
         : h(Empty, { icon: 'box', title: 'No orders yet', body: 'Place an order or use an accepted offer and it will appear here.', action: h(Btn, { kind: 'dark', onClick: () => nav.setTab('home') }, 'Browse the feed') }));
   }
-  function OrderScreen({ id }) {
-    const { uid, nav, toast } = useApp(); const now = Store.now(); const o = B.order(Store.state, uid, id);
+  function OrderScreen({ id, review }) {
+    const { uid, nav, toast } = useApp(); const now = Store.now(); const o = B.order(Store.state, uid, id, now);
+    const [editing, setEditing] = useState(false);
     if (!o) return h(Page, { title: 'Order', onBack: nav.back }, h(Empty, { title: 'Order not found' }));
+    const buyAgain = buyAgainAction(o, nav);
     const p = o.payTo; const note = o.number;
     const copyRow = (k, v, label) => h('div', { className: 'kv' }, h('span', { className: 'muted', style: { whiteSpace: 'nowrap' } }, k), h('span', { className: 'row', style: { gap: 6, minWidth: 0 } }, h('b', { style: { userSelect: 'all', wordBreak: 'break-all', textAlign: 'right' } }, v), h('button', { className: 'btn ghost sm', style: { height: 26, padding: '0 4px' }, onClick: () => U.copyText(v, toast, label || k) }, 'Copy')));
     return h(Page, { title: 'Order ' + o.number, onBack: nav.back }, h('div', { className: 'pad stack' },
@@ -1943,6 +2375,14 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
       o.status === 'PLACED' && o.channel === 'WEBSITE' && h('div', { className: 'card tint stack', style: { gap: 6 } }, h('div', { className: 'strong' }, 'Finish your order on the seller’s website'), o.dealAccess && o.dealAccess.type === 'CODE' && copyRow('Coupon code', o.dealAccess.value, 'Code'), h('a', { className: 'btn outline block', style: { textDecoration: 'none' }, href: o.dealAccess && o.dealAccess.type === 'LINK' ? o.dealAccess.value : o.productUrl, target: '_blank', rel: 'noopener noreferrer' }, 'Open website', h(Icon, { name: 'send', size: 16 })), h('div', { className: 'tiny muted' }, `The seller confirms the order here within ${left(o.confirmBy - now)}, otherwise it expires.`)),
       h(U.OrderSteps, { order: o }),
       h(U.ShipmentCard, { sh: o.shipment }),
+      h('div', { className: 'card stack', style: { gap: 10 } }, h('div', { className: 'row between' }, h('div', { className: 'strong' }, 'Contact seller'), h(U.RatingChip, { stats: o.seller.stats })),
+        h(U.SlaLines, { sla: o.seller.sla, stats: o.seller.stats }),
+        h(U.ContactButtons, { contact: o.seller.contact, unread: o.unread, onChat: () => nav.go('chat', { id: o.threadId }), note: `Hi, about my ${BRAND} order ${o.number} (${o.title}).` }),
+        !o.seller.contact && h('div', { className: 'tiny muted' }, 'Phone and WhatsApp are shown while an order is open. Chat stays available.')),
+      buyAgain && h(Btn, { kind: 'outline', block: true, onClick: buyAgain }, h(Icon, { name: 'repeat', size: 16 }), 'Buy again'),
+      h('div', null, h('div', { className: 'section-title' }, 'Your review of ' + o.sellerName),
+        o.review && !editing ? h('div', { className: 'stack', style: { gap: 8 } }, h(U.ReviewCard, { r: Object.assign({ buyerName: 'You', title: o.title }, o.review), now }), h(Btn, { kind: 'outline', size: 'sm', onClick: () => setEditing(true) }, 'Edit review'))
+          : h('div', { className: 'card' }, h(U.ReviewForm, { order: o, toast, onDone: () => setEditing(false) }))),
       h('div', null, h('div', { className: 'section-title' }, 'Price'), h(Kv, { k: 'Listed price', v: money(o.listPrice) }), h(Kv, { k: o.priceSource === 'NEGOTIATED' ? 'Agreed price' : 'Price', v: money(o.price) }), o.listPrice > o.price && h(Kv, { k: 'You saved', v: money(o.listPrice - o.price), tone: 'success', strong: true }), h(Kv, { k: 'Paid via', v: o.channel === 'WEBSITE' ? 'Seller’s website' : E.PAY_METHODS[o.paymentMethod] + ' (direct to seller)' })),
       o.address && h('div', null, h('div', { className: 'section-title' }, 'Delivery address'), h('div', { className: 'small' }, o.address.name + ', ' + U.addrLine(o.address))),
       h('div', { className: 'hint' }, `Only the seller updates this order. ${BRAND} doesn’t handle payments, delivery or refunds.`)));
@@ -1970,12 +2410,13 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
       h('div', { className: 'chips scroll' }, ['All'].concat(E.CATEGORIES).map((c) => h(Chip, { key: c, on: q.category === c, onClick: () => set('category', c) }, c))),
       h('div', { className: 'chips scroll' }, h(Chip, { accent: true, on: q.offersOnly, onClick: () => set('offersOnly', !q.offersOnly) }, 'Accepts offers'), [100000, 200000, 500000].map((p) => h(Chip, { key: p, accent: true, on: q.maxPrice === p, onClick: () => set('maxPrice', q.maxPrice === p ? null : p) }, 'Under ' + money(p))), h(Chip, { accent: true, on: q.sellerType === 'BUSINESS', onClick: () => set('sellerType', q.sellerType === 'BUSINESS' ? null : 'BUSINESS') }, 'Business sellers'), h(Chip, { accent: true, on: q.sellerType === 'INDIVIDUAL', onClick: () => set('sellerType', q.sellerType === 'INDIVIDUAL' ? null : 'INDIVIDUAL') }, 'Individual sellers')),
       h('div', { className: 'chips scroll' }, h('span', { className: 'small muted strong', style: { alignSelf: 'center' } }, 'Size'), sizes.map((z) => h(Chip, { key: z, accent: true, on: q.size === z, onClick: () => set('size', q.size === z ? null : z) }, z))),
+      h('button', { className: 'card tint row', style: { textAlign: 'left', color: 'var(--ink)' }, onClick: () => nav.go('requestNew', { category: q.category !== 'All' ? q.category : undefined }) }, h(Icon, { name: 'megaphone' }), h('div', { className: 'grow' }, h('div', { className: 'strong' }, 'Can’t find it? Ask sellers'), h('div', { className: 'tiny muted' }, 'Post a photo and every seller in the category can reply.')), h(Icon, { name: 'back', size: 18, style: { transform: 'rotate(180deg)' } })),
       h('div', { className: 'row between' }, h('span', { className: 'small muted' }, `${res.length} result${res.length === 1 ? '' : 's'}`), h('button', { className: 'btn ghost sm', style: { padding: 0 }, onClick: reset }, 'Clear filters')),
       res.length ? h('div', { className: 'grid2' }, res.map((it) => h(Tile, { key: it.id, it, onClick: () => nav.go('product', { id: it.id }) }))) : h(Empty, { icon: 'search', title: 'No matches', body: 'Try fewer filters or a different word.', action: h(Btn, { kind: 'dark', onClick: reset }, 'Clear filters') })));
   }
   function Tile({ it, onClick }) {
     return h('button', { className: 'tile', onClick }, h('div', { className: 'media' }, h(MediaView, { m: it.media[0], small: true }), it.soldOut && h('div', { className: 'seed-tag', style: { top: 8 } }, 'Sold out')),
-      h('div', { className: 'strong small ellipsis', style: { width: '100%' } }, it.title), h('div', { className: 'row', style: { gap: 6 } }, h('b', null, money(it.price)), it.bargaining.acceptsOffers && h(Badge, { tone: 'accent' }, 'Offers')), h('div', { className: 'tiny muted ellipsis', style: { width: '100%' } }, it.seller.name));
+      h('div', { className: 'strong small ellipsis', style: { width: '100%' } }, it.title), h('div', { className: 'row', style: { gap: 6 } }, h('b', null, money(it.price)), it.bargaining.acceptsOffers && h(Badge, { tone: 'accent' }, 'Offers')), h('div', { className: 'tiny muted ellipsis', style: { width: '100%' } }, it.seller.name), h(U.RatingChip, { stats: it.seller.stats }));
   }
 
   // ---------- Profile & shop ----------
@@ -1988,21 +2429,76 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
       h('div', null, h('div', { className: 'section-title' }, `Saved items (${p.saved.length})`), p.saved.length ? h('div', { className: 'grid2' }, p.saved.map((it) => h(Tile, { key: it.id, it, onClick: () => nav.go('product', { id: it.id }) }))) : h('div', { className: 'small muted' }, 'Tap Save on a reel to keep it here.')),
       h('div', null, h('div', { className: 'section-title' }, `Following (${p.following.length})`), p.following.length ? p.following.map((x) => h('button', { key: x.id, className: 'listrow', style: { padding: '10px 0' }, onClick: () => nav.go('shop', { sellerId: x.id }) }, h(Avatar, { name: x.name }), h('div', { className: 'grow' }, h('div', { className: 'strong' }, x.name), h('div', { className: 'tiny muted' }, '@' + x.handle + ' · ' + x.area)))) : h('div', { className: 'small muted' }, 'Follow shops to see their posts in your Following feed.')),
       h('div', null, h('div', { className: 'section-title' }, 'Addresses'), p.profile.addresses.map((a) => h('div', { key: a.id, className: 'card', style: { marginBottom: 8 } }, h('div', { className: 'row between' }, h('div', { className: 'strong' }, a.label + ' · ' + a.name), h('div', { className: 'row', style: { gap: 4 } }, h('button', { className: 'iconbtn plain', 'aria-label': 'Edit address', onClick: () => openSheet('address', { address: a }) }, h(Icon, { name: 'edit', size: 18 })), p.profile.addresses.length > 1 && h('button', { className: 'iconbtn plain', 'aria-label': 'Delete address', onClick: () => setConfirmDel(a) }, h(Icon, { name: 'trash', size: 18 })))), h('div', { className: 'small muted' }, U.addrLine(a)))), h(Btn, { kind: 'outline', size: 'sm', onClick: () => openSheet('address') }, '+ Add address')),
+      h('div', null, h('div', { className: 'section-title' }, 'Contact for orders'), h('div', { className: 'card row between' }, h('div', { className: 'small' }, h('div', null, 'In-app chat'), p.profile.contact && p.profile.contact.phone && h('div', null, 'Phone +91 ' + p.profile.contact.phone), p.profile.contact && p.profile.contact.whatsapp && h('div', null, 'WhatsApp +91 ' + p.profile.contact.whatsapp)), h(Btn, { kind: 'outline', size: 'sm', onClick: () => openSheet('contact') }, 'Edit')), h('div', { className: 'hint', style: { marginTop: 4 } }, 'Sellers see these only while you have an open order with them.')),
+      h('div', { className: 'stack', style: { gap: 0 } }, [['Your requests', 'megaphone', () => nav.go('requests')], ['Messages', 'msg', () => nav.go('threads')], ['User agreement', 'shield', () => openSheet('agreement')]].map(([t, ic, fn]) => h('button', { key: t, className: 'listrow', style: { padding: '12px 0' }, onClick: fn }, h(Icon, { name: ic }), h('span', { className: 'grow strong' }, t), h(Icon, { name: 'back', size: 18, style: { transform: 'rotate(180deg)' } })))),
       h('div', { className: 'card' }, h('div', { className: 'strong' }, p.hasShop ? 'You also have a shop' : 'Want to sell?'), h('div', { className: 'small muted' }, p.hasShop ? 'Manage it in the seller app with this same number.' : 'Open the seller app and sign in with this number. Your account works in both apps.')),
       h(Btn, { kind: 'danger', block: true, onClick: () => Store.dispatch({ type: 'auth.signOut', app: 'buyer' }) }, 'Sign out')),
       confirmDel && h(Confirm, { title: 'Delete this address?', body: U.addrLine(confirmDel), confirmLabel: 'Delete', danger: true, onCancel: () => setConfirmDel(null), onConfirm: () => { const r = Store.dispatch({ type: 'buyer.deleteAddress', userId: uid, addressId: confirmDel.id }); setConfirmDel(null); toast(r.ok ? 'Address deleted' : r.message, !r.ok); } }));
   }
   function ShopScreen({ sellerId }) {
-    const { uid, nav, toast } = useApp(); const d = B.shop(Store.state, uid, sellerId, Store.now());
+    const { uid, nav, toast } = useApp(); const now = Store.now(); const d = B.shop(Store.state, uid, sellerId, now);
+    const [tab, setTab] = useState('listings');
     if (!d) return h(Page, { title: 'Shop', onBack: nav.back }, h(Empty, { title: 'Shop not found' }));
-    const x = d.seller;
+    const x = d.seller; const reviews = E.common.reviews(Store.state, sellerId);
     return h(Page, { title: x.name, onBack: nav.back }, h('div', { className: 'pad stack' },
-      h('div', { className: 'row' }, h(Avatar, { name: x.name, lg: true }), h('div', { className: 'grow' }, h('div', { className: 'h3', style: { fontSize: 18 } }, x.name), h('div', { className: 'small muted' }, '@' + x.handle + ' · ' + x.area + ', ' + x.city), h('div', { className: 'row', style: { gap: 6, marginTop: 4 } }, h(Badge, null, x.type === 'BUSINESS' ? 'Business' : 'Individual'), h(Badge, null, 'Not verified (prototype)')))),
+      h('div', { className: 'row' }, h(Avatar, { name: x.name, lg: true }), h('div', { className: 'grow' }, h('div', { className: 'h3', style: { fontSize: 18 } }, x.name), h('div', { className: 'small muted' }, '@' + x.handle + ' · ' + x.area + ', ' + x.city), h('div', { className: 'row', style: { gap: 6, marginTop: 4 } }, h(U.RatingChip, { stats: x.stats }), h(Badge, null, x.type === 'BUSINESS' ? 'Business' : 'Individual'), h(Badge, null, 'Not verified (prototype)')))),
       x.bio && h('div', null, x.bio),
-      h('div', { className: 'card small' }, h('div', { className: 'strong', style: { marginBottom: 2 } }, 'Order record'), h(U.StatsLine, { st: x.stats }), h('div', { className: 'tiny muted', style: { marginTop: 4 } }, 'Based on what the seller confirmed in the app. Buyers pay sellers directly.')),
+      h(U.SellerLinks, { seller: x }),
+      h('div', { className: 'card small stack', style: { gap: 6 } }, h(U.SlaLines, { sla: x.sla, stats: x.stats }), h('div', null, h('b', null, 'Order record: '), h(U.StatsLine, { st: x.stats })), h('div', { className: 'tiny muted' }, 'Based on what the seller confirmed in the app. Buyers pay sellers directly.')),
       h('div', { className: 'row' }, h('span', { className: 'small muted' }, `${x.followers} follower${x.followers === 1 ? '' : 's'} · ${d.listings.length} listing${d.listings.length === 1 ? '' : 's'}`), h('div', { className: 'grow' }), !x.isMe && h(Btn, { kind: x.following ? 'outline' : 'dark', size: 'sm', onClick: () => { const r = Store.dispatch({ type: 'social.toggleFollow', userId: uid, sellerId }); if (!r.ok) toast(r.message, true); } }, x.following ? 'Following' : 'Follow')),
-      d.listings.length ? h('div', { className: 'grid2' }, d.listings.map((it) => h(Tile, { key: it.id, it, onClick: () => nav.go('product', { id: it.id }) }))) : h(Empty, { title: 'No listings right now' })));
+      h(Seg, { label: 'Shop sections', value: tab, onChange: setTab, options: [{ value: 'listings', label: `Listings (${d.listings.length})` }, { value: 'reviews', label: `Reviews (${reviews.length})` }] }),
+      tab === 'listings' ? (d.listings.length ? h('div', { className: 'grid2' }, d.listings.map((it) => h(Tile, { key: it.id, it, onClick: () => nav.go('product', { id: it.id }) }))) : h(Empty, { title: 'No listings right now' })) : h(U.ReviewsList, { reviews, stats: x.stats, now })));
   }
+
+  // ---------- Requests (buyer) ----------
+  function RequestNewScreen({ category }) {
+    const { uid, nav, toast } = useApp();
+    const [v, setV] = useState({ category: category || 'Ethnic wear', title: '', description: '', size: '', budget: '' }); const [media, setMedia] = useState([]); const [errors, setErrors] = useState({});
+    const reach = B.reachable(Store.state, uid, v.category);
+    const set = (k) => (e) => { setV(Object.assign({}, v, { [k]: k === 'budget' ? e.target.value.replace(/\D/g, '').slice(0, 7) : e.target.value })); setErrors({}); };
+    const post = () => { const r = Store.dispatch(Object.assign({ type: 'request.create', userId: uid, media }, v)); if (!r.ok) { setErrors(r.fields || {}); return; } nav.replace('request', { id: r.requestId }); toast(`Sent to ${r.reached} seller${r.reached === 1 ? '' : 's'} in ${v.category}`); };
+    return h(Page, { title: 'Ask sellers', onBack: nav.back, footer: h(Btn, { size: 'lg', block: true, onClick: post }, `Send to ${reach} seller${reach === 1 ? '' : 's'}`) }, h('div', { className: 'pad stack' },
+      h('div', { className: 'small muted' }, 'Describe what you’re looking for and add a photo. Every seller in the category gets it and can reply with a photo of what they have.'),
+      h('div', null, h('div', { className: 'label', style: { marginBottom: 6 } }, 'Category'), h('div', { className: 'chips' }, E.CATEGORIES.map((c) => h(Chip, { key: c, on: v.category === c, onClick: () => setV(Object.assign({}, v, { category: c })) }, c))), errors.category && h('div', { className: 'error' }, errors.category)),
+      h(Field, { label: 'What do you want?', id: 'rq-title', error: errors.title }, h(Input, { id: 'rq-title', maxLength: 80, placeholder: 'e.g. Mustard Kota doria dupatta', value: v.title, invalid: !!errors.title, onChange: set('title') })),
+      h(Field, { label: 'Details (optional)', id: 'rq-desc', error: errors.description }, h(Input, { id: 'rq-desc', multiline: true, maxLength: 500, placeholder: 'Colour, fabric, occasion, when you need it…', value: v.description, onChange: set('description') })),
+      h('div', { className: 'grid2' }, h(Field, { label: 'Size (optional)', id: 'rq-size' }, h(Input, { id: 'rq-size', maxLength: 20, value: v.size, onChange: set('size') })), h(Field, { label: 'Budget (optional)', id: 'rq-budget', error: errors.budget }, h('div', { className: 'input-group' }, h('div', { className: 'prefix' }, '₹'), h(Input, { id: 'rq-budget', inputMode: 'numeric', value: v.budget, onChange: set('budget') })))),
+      h(U.MediaPicker, { value: media, onChange: (m) => { setMedia(m); setErrors({}); }, max: 4, videos: false, label: 'Photo of what you want', error: errors.media, sample: () => ({ kind: 'seed', scene: U.SCENE_FOR_CATEGORY[v.category] || 'kurta', palette: U.PALETTE_NAMES[media.length % U.PALETTE_NAMES.length] }) }),
+      h('div', { className: 'hint' }, `Requests stay open for ${E.RULES.REQUEST_OPEN_DAYS} days.`)));
+  }
+  const RQ_TONE = { OPEN: 'success', CLOSED: '', EXPIRED: '' };
+  function RequestsScreen() {
+    const { uid, nav } = useApp(); const now = Store.now(); const list = B.requests(Store.state, uid);
+    return h(Page, { title: 'Your requests', onBack: nav.back, right: h('button', { className: 'iconbtn', onClick: () => nav.go('requestNew'), 'aria-label': 'New request' }, h(Icon, { name: 'plus', size: 20 })) },
+      list.length ? list.map((r) => h('button', { key: r.id, className: 'listrow', onClick: () => nav.go('request', { id: r.id }) }, h(Thumb, { m: r.media[0] }), h('div', { className: 'grow' }, h('div', { className: 'strong ellipsis' }, r.title), h('div', { className: 'tiny muted' }, `${r.category} · ${ago(r.createdAt, now)} · sent to ${r.reached || 0} seller${r.reached === 1 ? '' : 's'}`), h('div', { className: 'small' }, `${r.responses.length} response${r.responses.length === 1 ? '' : 's'}`)), h(Badge, { tone: RQ_TONE[r.status] }, r.status === 'OPEN' ? 'Open' : r.status === 'CLOSED' ? 'Closed' : 'Expired')))
+        : h(Empty, { icon: 'megaphone', title: 'No requests yet', body: 'Can’t find something? Ask every seller in a category at once.', action: h(Btn, { onClick: () => nav.go('requestNew') }, 'Ask sellers') }));
+  }
+  function RequestScreen({ id }) {
+    const { uid, nav, toast } = useApp(); const now = Store.now(); const r = B.request(Store.state, uid, id); const [view, setView] = useState(null);
+    if (!r) return h(Page, { title: 'Request', onBack: nav.back }, h(Empty, { title: 'Request not found' }));
+    const act = (type, responseId, ok) => { const x = Store.dispatch({ type, userId: uid, responseId }); if (!x.ok) toast(x.message, true); else { toast(ok); if (x.threadId) nav.go('chat', { id: x.threadId }); } };
+    return h(Page, { title: r.title, onBack: nav.back, footer: r.status === 'OPEN' ? h(Btn, { kind: 'outline', block: true, onClick: () => { const x = Store.dispatch({ type: 'request.close', userId: uid, requestId: id }); toast(x.ok ? 'Request closed' : x.message, !x.ok); } }, 'Close request') : null },
+      h('div', { className: 'pad stack' },
+        h('div', { className: 'row' }, h(Thumb, { m: r.media[0], lg: true }), h('div', { className: 'grow' }, h('div', { className: 'small muted' }, r.category + (r.size ? ' · size ' + r.size : '') + (r.budget ? ' · budget ' + money(r.budget) : '')), r.description && h('div', { className: 'small' }, r.description), h('div', { className: 'tiny muted' }, r.status === 'OPEN' ? `Open · closes in ${left(r.expiresAt - now)}` : r.status === 'CLOSED' ? 'Closed' : 'Expired'))),
+        h('div', { className: 'section-title' }, `Responses (${r.responses.length})`),
+        r.responses.length ? r.responses.map((x) => h('div', { key: x.id, className: 'card stack', style: { gap: 8 } },
+          h('button', { className: 'row', style: { background: 'none', border: 0, padding: 0, color: 'var(--ink)', textAlign: 'left' }, onClick: () => nav.go('shop', { sellerId: x.seller.id }) }, h(Avatar, { name: x.seller.name }), h('div', { className: 'grow' }, h('div', { className: 'strong' }, x.seller.name), h('div', { className: 'tiny' }, h(U.RatingChip, { stats: x.seller.stats }), ' · ', x.seller.area)), x.price && h('b', null, money(x.price))),
+          h(U.MediaRow, { media: x.media, onOpen: setView }), x.text && h('div', null, x.text),
+          x.status === 'SENT' ? h('div', { className: 'btn-row' }, h(Btn, { kind: 'outline', onClick: () => act('request.decline', x.id, 'Seller told you passed') }, 'Not for me'), h(Btn, { onClick: () => act('request.want', x.id, 'Seller notified — they’ll share a listing in chat') }, 'I want this'))
+            : x.status === 'WANTED' ? h(Btn, { kind: 'dark', block: true, onClick: () => nav.go('chat', { id: x.threadId }) }, h(Icon, { name: 'msg', size: 18 }), x.listingId ? 'Open chat · listing shared' : 'Open chat with seller')
+              : h('div', { className: 'small muted' }, 'You passed on this.')))
+          : h(Empty, { icon: 'megaphone', title: 'No responses yet', body: 'Sellers in this category have been notified. Replies with photos appear here.' })),
+      view && h(U.MediaViewer, { m: view, onClose: () => setView(null) }));
+  }
+  function ThreadsScreenB() { const { uid, nav } = useApp(); return h(U.ThreadsScreen, { app: 'buyer', userId: uid, onBack: nav.back, onOpen: (id) => nav.go('chat', { id }) }); }
+  function ChatScreenB({ id }) { const { uid, nav, toast } = useApp(); return h(U.ChatScreen, { app: 'buyer', userId: uid, threadId: id, onBack: nav.back, toast, onOpenListing: (lid) => nav.go('product', { id: lid }) }); }
+  function ContactSheet() {
+    const { uid, closeSheet, toast } = useApp(); const p = Store.state.buyerProfiles[uid];
+    const [v, setV] = useState(Object.assign({ phone: '', whatsapp: '' }, p.contact || {})); const [errors, setErrors] = useState({});
+    const save = () => { const r = Store.dispatch({ type: 'buyer.updateContact', userId: uid, contact: v }); if (!r.ok) { setErrors(r.fields || {}); return; } closeSheet(); toast('Contact details saved'); };
+    return h(Sheet, { title: 'Contact for orders', onClose: closeSheet, footer: h(Btn, { block: true, onClick: save }, 'Save') }, h(ContactFields, { value: v, onChange: (x) => { setV(x); setErrors({}); }, errors, idp: 'cs-', who: 'Sellers' }));
+  }
+  function AgreementSheet() { const { closeSheet } = useApp(); return h(Sheet, { title: BRAND + ' user agreement', onClose: closeSheet }, h(U.AgreementText), h('div', { className: 'tiny muted', style: { marginTop: 8 } }, 'You accepted this when you signed up.')); }
 
   // ---------- sheets ----------
   function CommentsSheet({ listingId }) { const { uid, closeSheet } = useApp(); return h(Sheet, { title: 'Comments', onClose: closeSheet }, h(U.CommentsPanel, { listingId, userId: uid })); }
@@ -2023,11 +2519,11 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
   }
   function NotificationsScreen() {
     const { uid, nav } = useApp();
-    return h(U.Notifications, { app: 'buyer', userId: uid, onBack: nav.back, onOpen: (ref) => { if (ref.type === 'negotiation') nav.replace('negotiation', { id: ref.id }); if (ref.type === 'order') nav.replace('order', { id: ref.id }); if (ref.type === 'listing') nav.replace('product', { id: ref.id }); } });
+    return h(U.Notifications, { app: 'buyer', userId: uid, onBack: nav.back, onOpen: (ref) => { if (ref.type === 'negotiation') nav.replace('negotiation', { id: ref.id }); if (ref.type === 'order') nav.replace('order', { id: ref.id }); if (ref.type === 'listing') nav.replace('product', { id: ref.id }); if (ref.type === 'chat') nav.replace('chat', { id: ref.id }); if (ref.type === 'request') nav.replace('request', { id: ref.id }); } });
   }
 
-  const SCREENS = { product: ProductScreen, negotiation: NegotiationScreen, checkout: CheckoutScreen, order: OrderScreen, shop: ShopScreen, notifications: NotificationsScreen };
-  const SHEETS = { offer: OfferSheet, comments: CommentsSheet, category: CategorySheet, address: AddressSheet, name: NameSheet };
+  const SCREENS = { product: ProductScreen, negotiation: NegotiationScreen, checkout: CheckoutScreen, order: OrderScreen, shop: ShopScreen, notifications: NotificationsScreen, threads: ThreadsScreenB, chat: ChatScreenB, requestNew: RequestNewScreen, requests: RequestsScreen, request: RequestScreen };
+  const SHEETS = { offer: OfferSheet, comments: CommentsSheet, category: CategorySheet, address: AddressSheet, name: NameSheet, contact: ContactSheet, agreement: AgreementSheet };
   window.FaydaBuyerApp = BuyerApp;
 })();
 
@@ -2045,14 +2541,47 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     return h(SellerMain, { uid });
   }
 
+  // Shop location, links, contact and declared timings (onboarding step 2 + shop settings)
+  function ReachFields({ v, setV, errors, setErrors, idp }) {
+    const set = (k) => (e) => { setV(Object.assign({}, v, { [k]: e.target.value.trim() })); setErrors(Object.assign({}, errors, { [k]: null })); };
+    const f = (k, label, ph, hint) => h(Field, { label, id: idp + k, error: errors[k], hint }, h(Input, { id: idp + k, inputMode: 'url', autoCapitalize: 'none', placeholder: ph, value: v[k] || '', invalid: !!errors[k], onChange: set(k) }));
+    const sla = v.sla || {};
+    return h('div', { className: 'stack', style: { gap: 14 } },
+      f('mapsUrl', 'Google Maps location of your shop', 'https://maps.app.goo.gl/…', 'In Google Maps, open your shop, tap Share and copy the link.'),
+      f('googleProfileUrl', 'Google Business Profile (optional)', 'https://g.page/…'),
+      f('socialUrl', 'Instagram or Facebook page (optional)', 'https://instagram.com/yourshop'),
+      h(U.ContactFields, { value: v.contact || {}, onChange: (c) => { setV(Object.assign({}, v, { contact: c })); setErrors(Object.assign({}, errors, { contact: null, contactPhone: null, contactWhatsapp: null })); }, errors, idp: idp + 'c', who: 'Buyers' }),
+      h('div', null, h('div', { className: 'label', style: { marginBottom: 6 } }, 'You usually confirm a payment'), h('div', { className: 'chips' }, E.RULES.CONFIRM_HOURS_OPTIONS.map((x) => h(Chip, { key: x, on: Number(sla.confirmHours) === x, onClick: () => { setV(Object.assign({}, v, { sla: Object.assign({}, sla, { confirmHours: x }) })); setErrors(Object.assign({}, errors, { confirmHours: null })); } }, U.confirmText(x).replace('within ', '')))), errors.confirmHours && h('div', { className: 'error' }, errors.confirmHours)),
+      h('div', null, h('div', { className: 'label', style: { marginBottom: 6 } }, 'You usually ship within'), h('div', { className: 'chips' }, E.RULES.SHIP_DAYS_OPTIONS.map((x) => h(Chip, { key: x, on: Number(sla.shipDays) === x, onClick: () => { setV(Object.assign({}, v, { sla: Object.assign({}, sla, { shipDays: x }) })); setErrors(Object.assign({}, errors, { shipDays: null })); } }, x + (x === 1 ? ' day' : ' days')))), errors.shipDays && h('div', { className: 'error' }, errors.shipDays)),
+      h('div', { className: 'hint' }, 'Buyers see your declared times next to how fast you actually confirm on ' + BRAND + '.'));
+  }
+  function CategoryChips({ v, setV, errors }) {
+    const cats = v.categories || [];
+    return h('div', null, h('div', { className: 'label', style: { marginBottom: 6 } }, 'Categories you sell'), h('div', { className: 'chips' }, E.CATEGORIES.map((c) => h(Chip, { key: c, on: cats.includes(c), onClick: () => setV(Object.assign({}, v, { categories: cats.includes(c) ? cats.filter((x) => x !== c) : cats.concat([c]) })) }, c))), errors.categories ? h('div', { className: 'error' }, errors.categories) : h('div', { className: 'hint', style: { marginTop: 4 } }, 'You’ll get buyer requests for these categories.'));
+  }
+  function checkReach(v) {
+    const e = {};
+    if (!E.isMapsUrl(v.mapsUrl)) e.mapsUrl = 'Paste your shop’s Google Maps link (https://maps.app.goo.gl/… or https://www.google.com/maps/…).';
+    if (v.googleProfileUrl && !E.isGoogleProfileUrl(v.googleProfileUrl)) e.googleProfileUrl = 'Paste a Google Business Profile link (https://g.page/…).';
+    if (v.socialUrl && !E.isSocialUrl(v.socialUrl)) e.socialUrl = 'Paste your Instagram or Facebook page link.';
+    const c = v.contact || {}; const ok = (x) => /^[6-9]\d{9}$/.test(x || '');
+    if (c.phone && !ok(c.phone)) e.contactPhone = 'Enter a valid 10-digit mobile number.';
+    if (c.whatsapp && !ok(c.whatsapp)) e.contactWhatsapp = 'Enter a valid 10-digit WhatsApp number.';
+    if (!c.phone && !c.whatsapp) e.contact = 'Add a phone or WhatsApp number buyers can use for open orders.';
+    if (!v.sla || !v.sla.confirmHours) e.confirmHours = 'Choose how soon you usually confirm payments.';
+    if (!v.sla || !v.sla.shipDays) e.shipDays = 'Choose how soon you usually ship.';
+    return e;
+  }
+
   // ---------- onboarding ----------
   function SellerOnboarding({ uid }) {
     const u = Store.state.users[uid];
     const [step, setStep] = useState('shop');
-    const [v, setV] = useState({ sellerType: null, name: '', handle: '', area: '', city: 'Hyderabad', gstin: '', bio: '', ownerName: u.name || '' });
+    const [v, setV] = useState({ sellerType: null, name: '', handle: '', area: '', city: 'Hyderabad', gstin: '', bio: '', ownerName: u.name || '', categories: [], mapsUrl: '', googleProfileUrl: '', socialUrl: '', contact: { phone: u.phone, whatsapp: '' }, sla: { confirmHours: null, shipDays: null } });
     const [pay, setPay] = useState({ upiId: '', upiQrMediaId: null, bankHolder: '', bankAccount: '', bankIfsc: '', bankName: '', paymentLink: '', website: '' });
     const [errors, setErrors] = useState({}); const [conduct, setConduct] = useState(false); const [toast, toastNode] = useToast(); const [touchedHandle, setTouchedHandle] = useState(false);
-    const SHOP_FIELDS = ['sellerType', 'name', 'handle', 'area', 'city', 'gstin', 'bio', 'ownerName'];
+    const SHOP_FIELDS = ['sellerType', 'name', 'handle', 'area', 'city', 'gstin', 'bio', 'ownerName', 'categories'];
+    const REACH_FIELDS = ['mapsUrl', 'googleProfileUrl', 'socialUrl', 'contact', 'contactPhone', 'contactWhatsapp', 'confirmHours', 'shipDays'];
     const set = (k) => (e) => { const val = e.target.value; const next = Object.assign({}, v, { [k]: k === 'gstin' ? val.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 15) : val }); if (k === 'name' && !touchedHandle) next.handle = val.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 24); if (k === 'handle') setTouchedHandle(true); setV(next); setErrors(Object.assign({}, errors, { [k]: null })); };
     const nextFromShop = () => {
       const e = {};
@@ -2061,20 +2590,23 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
       if (v.name.trim().length < 2) e.name = 'Enter your shop name (2–60 characters).';
       if (!/^[a-z0-9_.]{3,24}$/.test(v.handle)) e.handle = 'Use 3–24 lowercase letters, numbers, dots or underscores.';
       if (!v.area.trim()) e.area = 'Enter your area or locality.';
+      if (!v.categories.length) e.categories = 'Choose at least one category you sell.';
       if (Object.keys(e).length) { setErrors(e); return; }
-      setErrors({}); setStep('pay');
+      setErrors({}); setStep('reach');
     };
+    const nextFromReach = () => { const e = checkReach(v); if (Object.keys(e).length) { setErrors(e); return; } setErrors({}); setStep('pay'); };
     const nextFromPay = () => { const r = E.validatePayment(pay); if (Object.keys(r.errors).length) { setErrors(r.errors); return; } setErrors({}); setConduct(true); };
     const register = () => {
       setConduct(false);
       if (!u.name) Store.dispatch({ type: 'user.updateName', userId: uid, name: v.ownerName });
       const r = Store.dispatch(Object.assign({ type: 'seller.register', userId: uid, conductAccepted: true, payment: pay }, v));
-      if (!r.ok) { const f = r.fields || {}; setErrors(f); if (Object.keys(f).some((k) => SHOP_FIELDS.includes(k))) setStep('shop'); toast(r.message, true); }
+      if (!r.ok) { const f = r.fields || {}; setErrors(f); const ks = Object.keys(f); if (ks.some((k) => SHOP_FIELDS.includes(k))) setStep('shop'); else if (ks.some((k) => REACH_FIELDS.includes(k))) setStep('reach'); toast(r.message, true); }
     };
     const f = (k, label, extra, hint) => h(Field, { label, id: 'so-' + k, error: errors[k], hint }, h(Input, Object.assign({ id: 'so-' + k, value: v[k], invalid: !!errors[k], onChange: set(k) }, extra || {})));
+    const back = (to) => h('button', { className: 'iconbtn', onClick: () => { setStep(to); setErrors({}); }, 'aria-label': 'Back' }, h(Icon, { name: 'back' }));
     return h('div', { className: 'body' }, h('div', { className: 'screen' }, h('div', { className: 'pad stack', style: { gap: 16 } },
       step === 'shop' ? h(React.Fragment, null,
-        h('div', null, h('div', { className: 'small muted strong' }, 'Step 1 of 2 · Your shop'), h('div', { className: 'h2' }, 'Tell buyers who you are')),
+        h('div', null, h('div', { className: 'small muted strong' }, 'Step 1 of 3 · Your shop'), h('div', { className: 'h2' }, 'Tell buyers who you are')),
         h('div', { className: 'stack', style: { gap: 10 } },
           [['BUSINESS', 'Registered business', 'Boutiques, brands and retailers. Add your GSTIN if you have one.', 'store'], ['INDIVIDUAL', 'Individual seller', 'Home sellers and small resellers. No business registration needed.', 'user']].map(([k, t, d, ic]) => h('button', { key: k, className: 'choice', 'aria-pressed': v.sellerType === k, onClick: () => { setV(Object.assign({}, v, { sellerType: k })); setErrors(Object.assign({}, errors, { sellerType: null })); } }, h('div', { className: 'ic' }, h(Icon, { name: ic })), h('div', null, h('div', { className: 'strong', style: { fontSize: 16 } }, t), h('div', { className: 'small muted' }, d)))),
           errors.sellerType && h('div', { className: 'error' }, errors.sellerType)),
@@ -2082,17 +2614,19 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
         f('name', 'Shop name', { autoComplete: 'organization' }),
         f('handle', 'Shop handle', { autoCapitalize: 'none' }, 'Buyers see this as @' + (v.handle || 'yourshop')),
         h('div', { className: 'grid2' }, f('area', 'Area', { placeholder: 'e.g. Kondapur' }), f('city', 'City')),
+        h(CategoryChips, { v, setV: (x) => { setV(x); setErrors(Object.assign({}, errors, { categories: null })); }, errors }),
         v.sellerType === 'BUSINESS' && f('gstin', 'GSTIN (optional)', { placeholder: '15 characters', autoCapitalize: 'characters' }, 'Stored only. GST verification isn’t part of this prototype.'),
         h(Field, { label: 'About your shop (optional)', id: 'so-bio', error: errors.bio }, h(Input, { id: 'so-bio', multiline: true, maxLength: 160, value: v.bio, onChange: set('bio') })))
-      : h(React.Fragment, null,
-        h('button', { className: 'iconbtn', onClick: () => { setStep('shop'); setErrors({}); }, 'aria-label': 'Back' }, h(Icon, { name: 'back' })),
-        h('div', null, h('div', { className: 'small muted strong' }, 'Step 2 of 2 · Getting paid'), h('div', { className: 'h2' }, 'How will buyers pay you?'), h('div', { className: 'small muted', style: { marginTop: 4 } }, 'Add any that you use. You can change these later.')),
+      : step === 'reach' ? h(React.Fragment, null, back('shop'),
+        h('div', null, h('div', { className: 'small muted strong' }, 'Step 2 of 3 · Location and contact'), h('div', { className: 'h2' }, 'Where buyers can find you')),
+        h(ReachFields, { v, setV, errors, setErrors, idp: 'sor-' }))
+      : h(React.Fragment, null, back('reach'),
+        h('div', null, h('div', { className: 'small muted strong' }, 'Step 3 of 3 · Getting paid'), h('div', { className: 'h2' }, 'How will buyers pay you?'), h('div', { className: 'small muted', style: { marginTop: 4 } }, 'Add any that you use. You can change these later.')),
         h(U.PaymentForm, { value: pay, onChange: (x) => { setPay(x); setErrors({}); }, errors, idp: 'sop-' })))),
-      h('div', { className: 'actionbar' }, h(Btn, { size: 'lg', block: true, onClick: step === 'shop' ? nextFromShop : nextFromPay }, 'Continue'), step === 'shop' && h('button', { className: 'btn ghost sm', onClick: () => Store.dispatch({ type: 'auth.signOut', app: 'seller' }) }, 'Use a different number')),
+      h('div', { className: 'actionbar' }, h(Btn, { size: 'lg', block: true, onClick: step === 'shop' ? nextFromShop : step === 'reach' ? nextFromReach : nextFromPay }, 'Continue'), step === 'shop' && h('button', { className: 'btn ghost sm', onClick: () => Store.dispatch({ type: 'auth.signOut', app: 'seller' }) }, 'Use a different number')),
       conduct && h('div', { className: 'dialog', role: 'dialog', 'aria-label': 'Seller Code of Conduct' }, h('div', { style: { maxHeight: '90%', overflow: 'auto' } },
         h('div', { className: 'h3', style: { fontSize: 18 } }, 'Seller Code of Conduct'), h(Badge, { tone: 'accent' }, 'Draft — pending legal review'),
-        h('ol', { className: 'small', style: { paddingLeft: 18, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 } }, h('li', null, 'List genuine products with accurate photos, videos and descriptions.'), h('li', null, 'Honour prices you agree with buyers, including coupon codes and discount links you give them.'), h('li', null, 'Confirm payments and orders promptly and keep stock accurate.'), h('li', null, 'Payment details you add must be your own. Deliver what buyers paid for, and refund them yourself if you can’t.'), h('li', null, 'Respond to buyers respectfully and resolve genuine complaints.')),
-        h('div', { className: 'hint' }, `${BRAND} doesn’t handle payments, delivery or refunds. Enforcement and appeals are open policy decisions and aren’t part of this prototype.`),
+        h('ol', { className: 'small', style: { paddingLeft: 18, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 } }, h('li', null, 'List genuine products with accurate photos, videos and descriptions.'), h('li', null, 'Honour prices you agree with buyers, including coupon codes and discount links you give them.'), h('li', null, 'Confirm payments and ship within the times you declare, and keep stock accurate.'), h('li', null, 'Payment details, shop location and links you add must be your own. Deliver what buyers paid for, and refund them yourself if you can’t.'), h('li', null, `Resolve disputes directly with buyers — ${BRAND} doesn’t mediate.`), h('li', null, `If listings, details or behaviour are found to be misleading, ${BRAND} may ban the account from the platform.`)),
         h('div', { className: 'btn-row' }, h(Btn, { kind: 'outline', onClick: () => { setConduct(false); toast('Registration cancelled. Nothing was saved.'); } }, 'Disagree'), h(Btn, { onClick: register }, 'Agree and register')))), toastNode);
   }
 
@@ -2101,8 +2635,8 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     const nav = useNav('home'); const [toast, toastNode] = useToast(); const [sheet, setSheet] = useState(null);
     const s = Store.state; const now = Store.now(); const dash = S.dashboard(s, uid, now); const unread = E.common.unread(s, uid, 'seller');
     const ctx = { app: 'seller', uid, nav, toast, unread, openSheet: (type, params) => setSheet({ type, params: params || {} }), closeSheet: () => setSheet(null) };
-    const tabs = [['home', 'Home', 'chart'], ['listings', 'Listings', 'list'], ['offers', 'Offers', 'tag', dash.needsReply], ['orders', 'Orders', 'box', dash.toConfirm + dash.toShip], ['profile', 'Shop', 'store']];
-    const Tab = { home: Dashboard, listings: ListingsScreen, offers: OffersInbox, orders: SellerOrders, profile: ShopProfile }[nav.tab];
+    const tabs = [['home', 'Home', 'chart'], ['listings', 'Listings', 'list'], ['offers', 'Offers', 'tag', dash.needsReply], ['requests', 'Requests', 'megaphone', dash.newRequests], ['orders', 'Orders', 'box', dash.toConfirm + dash.toShip], ['profile', 'Shop', 'store']];
+    const Tab = { home: Dashboard, listings: ListingsScreen, offers: OffersInbox, requests: RequestsInbox, orders: SellerOrders, profile: ShopProfile }[nav.tab];
     const Sh = sheet ? SHEETS[sheet.type] : null;
     return h(AppCtx.Provider, { value: ctx }, h('div', { className: 'body' },
       h(Tab, null),
@@ -2117,8 +2651,8 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
 
   function Dashboard() {
     const { uid, nav } = useApp(); const s = Store.state; const now = Store.now(); const me = S.me(s, uid); const d = S.dashboard(s, uid, now);
-    const actions = [[d.needsReply, d.needsReply === 1 ? 'offer needs your reply' : 'offers need your reply', () => nav.setTab('offers')], [d.toConfirm, d.toConfirm === 1 ? 'order waiting for your confirmation' : 'orders waiting for your confirmation', () => nav.setTab('orders')], [d.toShip, `order${d.toShip === 1 ? '' : 's'} to ship`, () => nav.setTab('orders')], [d.drafts, d.drafts === 1 ? 'draft isn’t published' : 'drafts aren’t published', () => nav.setTab('listings')]].filter((x) => x[0] > 0);
-    return h('div', { className: 'screen' }, h(U.AppBar, { title: me.name, right: h(Bell) }), h('div', { className: 'pad stack' },
+    const actions = [[d.unreadChats, d.unreadChats === 1 ? 'unread message from a buyer' : 'unread messages from buyers', () => nav.go('threads')], [d.newRequests, d.newRequests === 1 ? 'new buyer request in your categories' : 'new buyer requests in your categories', () => nav.setTab('requests')], [d.needsReply, d.needsReply === 1 ? 'offer needs your reply' : 'offers need your reply', () => nav.setTab('offers')], [d.toConfirm, d.toConfirm === 1 ? 'order waiting for your confirmation' : 'orders waiting for your confirmation', () => nav.setTab('orders')], [d.toShip, `order${d.toShip === 1 ? '' : 's'} to ship`, () => nav.setTab('orders')], [d.drafts, d.drafts === 1 ? 'draft isn’t published' : 'drafts aren’t published', () => nav.setTab('listings')]].filter((x) => x[0] > 0);
+    return h('div', { className: 'screen' }, h(U.AppBar, { title: me.name, right: h('div', { className: 'row', style: { gap: 8 } }, h(U.MsgButton, { app: 'seller', userId: uid, onClick: () => nav.go('threads') }), h(Bell)) }), h('div', { className: 'pad stack' },
       h('div', { className: 'row between' }, h('div', null, h('div', { className: 'small muted' }, 'Hello, ' + (Store.state.users[uid].name || 'there').split(' ')[0]), h('div', { className: 'h2' }, actions.length ? 'Here’s what needs you' : 'You’re up to date')), h(Btn, { size: 'sm', onClick: () => nav.go('editor', {}) }, h(Icon, { name: 'plus', size: 18 }), 'New listing')),
       actions.length ? h('div', { className: 'stack', style: { gap: 8 } }, actions.map(([n, t, go], i) => h('button', { key: i, className: 'card tint row', style: { textAlign: 'left', color: 'var(--ink)' }, onClick: go }, h('span', { style: { fontSize: 22, fontWeight: 800, color: 'var(--accent)', minWidth: 28 } }, n), h('span', { className: 'grow strong' }, t), h(Icon, { name: 'back', size: 18, style: { transform: 'rotate(180deg)' } })))) : h('div', { className: 'small muted' }, 'New offers and orders will appear here.'),
       h('div', { className: 'section-title' }, 'All-time activity'),
@@ -2177,8 +2711,9 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
 
   // ---------- listing editor (publish flow) ----------
   const toStr = (p) => (p == null ? '' : String(Math.round(p / 100)));
-  function ListingEditor({ id }) {
+  function ListingEditor({ id, fromResponseId }) {
     const { uid, nav, toast } = useApp(); const s = Store.state;
+    const resp = fromResponseId ? s.responses[fromResponseId] : null; const req = resp ? s.requests[resp.requestId] : null;
     const pay = S.payment(s, uid) || {}; const hasDirect = !!(pay.upiId || pay.upiQrMediaId || pay.bankAccount || pay.paymentLink);
     const existing = id ? S.listing(s, uid, id) : null; const summary = existing ? S.listingSummary(s, s.listings[id], Store.now()) : null;
     const [d, setD] = useState(() => existing ? {
@@ -2186,7 +2721,7 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
       variants: existing.variants.map((v) => ({ id: v.id, label: v.label, stock: String(v.stock) })), bargaining: Object.assign({}, existing.bargaining),
       rules: { autoAcceptAt: toStr(existing.rules.autoAcceptAt), autoDeclineBelow: toStr(existing.rules.autoDeclineBelow), autoCounterAt: toStr(existing.rules.autoCounterAt) },
       checkout: Object.assign({ productUrl: '' }, existing.checkout), dealCodes: { accept: existing.dealCodes.accept || null, counter: existing.dealCodes.counter || null }
-    } : { title: '', description: '', category: 'Ethnic wear', price: '', media: [], variants: [{ label: 'S', stock: '' }, { label: 'M', stock: '' }, { label: 'L', stock: '' }], bargaining: { mode: 'BOTH', expiryHours: 24 }, rules: { autoAcceptAt: '', autoDeclineBelow: '', autoCounterAt: '' }, checkout: { channel: hasDirect ? 'DIRECT' : 'WEBSITE', productUrl: pay.website ? pay.website.replace(/\/$/, '') + '/' : '' }, dealCodes: { accept: null, counter: null } });
+    } : resp && req ? { title: req.title.slice(0, 80), description: req.description || '', category: req.category, price: resp.price ? toStr(resp.price) : '', media: resp.media.slice(), variants: [{ label: req.size || 'One size', stock: '1' }], bargaining: { mode: 'FIXED', expiryHours: 24 }, rules: { autoAcceptAt: '', autoDeclineBelow: '', autoCounterAt: '' }, checkout: { channel: hasDirect ? 'DIRECT' : 'WEBSITE', productUrl: pay.website ? pay.website.replace(/\/$/, '') + '/' : '' }, dealCodes: { accept: null, counter: null } } : { title: '', description: '', category: 'Ethnic wear', price: '', media: [], variants: [{ label: 'S', stock: '' }, { label: 'M', stock: '' }, { label: 'L', stock: '' }], bargaining: { mode: 'BOTH', expiryHours: 24 }, rules: { autoAcceptAt: '', autoDeclineBelow: '', autoCounterAt: '' }, checkout: { channel: hasDirect ? 'DIRECT' : 'WEBSITE', productUrl: pay.website ? pay.website.replace(/\/$/, '') + '/' : '' }, dealCodes: { accept: null, counter: null } });
     const [errors, setErrors] = useState({}); const [busy, setBusy] = useState(false); const [mediaMsg, setMediaMsg] = useState(null); const [advanced, setAdvanced] = useState(!!(existing && (existing.rules.autoDeclineBelow != null || existing.rules.autoCounterAt != null)));
     const fileRef = useRef(null);
     const set = (patch) => { setD(Object.assign({}, d, patch)); };
@@ -2213,8 +2748,9 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
 
     const save = (publish) => {
       const draft = Object.assign({}, d, { price: d.price === '' ? NaN : Number(d.price), variants: d.variants.map((v) => ({ id: v.id, label: v.label, stock: v.stock === '' ? 0 : Number(v.stock) })), rules: advanced ? d.rules : Object.assign({}, d.rules, { autoDeclineBelow: '', autoCounterAt: '' }) });
-      const r = Store.dispatch({ type: 'listing.save', userId: uid, listingId: id || null, draft, publish });
+      const r = Store.dispatch({ type: 'listing.save', userId: uid, listingId: id || null, draft, publish, fromResponseId: fromResponseId || null });
       if (!r.ok) { setErrors(r.fields || {}); toast(r.message, true); return; }
+      if (r.sharedInChat) { nav.replace('chat', { id: resp.threadId }); toast('Published and shared in the chat with the buyer'); return; }
       nav.replace('listing', { id: r.listingId });
       toast(publish ? (existing && existing.status === 'ACTIVE' ? 'Changes saved' : 'Published — it’s in the buyer feed now') : existing && existing.status !== 'DRAFT' ? 'Changes saved' : 'Draft saved');
     };
@@ -2222,8 +2758,9 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     const P = Number(d.price) || 0; const A = d.rules.autoAcceptAt === '' ? null : Number(d.rules.autoAcceptAt);
     const footer = h('div', { className: live ? '' : 'btn-row' }, !live && h(Btn, { kind: 'outline', onClick: () => save(false), disabled: busy }, 'Save draft'), h(Btn, { block: live, onClick: () => save(!existing || existing.status === 'DRAFT'), disabled: busy }, busy ? 'Uploading…' : live ? 'Save changes' : 'Publish'));
     const presets = [['S–XL', ['S', 'M', 'L', 'XL']], ['One size', ['One size']], ['UK 6–9', ['6', '7', '8', '9']]];
-    return h(Page, { title: existing ? 'Edit listing' : 'New listing', onBack: nav.back, footer },
+    return h(Page, { title: existing ? 'Edit listing' : resp ? 'List item for buyer' : 'New listing', onBack: nav.back, footer },
       h('div', { className: 'pad stack', style: { gap: 18 } },
+        resp && h('div', { className: 'card info small' }, `Listing the item for “${req.title}”. When you publish, the link is shared in your chat with the buyer.`),
         h('div', null, h('div', { className: 'label', style: { marginBottom: 8 } }, 'Video and photos'),
           h('div', { className: 'upload-grid' },
             d.media.map((m, i) => h('div', { key: (m.mediaId || m.scene) + i, className: 'upload-cell' }, h(MediaView, { m, small: true }), h('button', { className: 'x', 'aria-label': 'Remove', onClick: () => set({ media: d.media.filter((_, j) => j !== i) }) }, h(Icon, { name: 'x', size: 14 })), h('span', { className: 'kind' }, h(Badge, { tone: 'dark' }, i === 0 ? 'Cover' : m.kind === 'seed' ? 'Sample' : m.kind === 'video' ? 'Video' : 'Photo')), i > 0 && h('button', { className: 'x', style: { right: 'auto', left: 4 }, 'aria-label': 'Make cover', onClick: () => move(i, -i) }, h(Icon, { name: 'back', size: 14, style: { transform: 'rotate(90deg)' } })))),
@@ -2308,7 +2845,7 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     const { uid, nav } = useApp(); const all = S.orders(Store.state, uid); const now = Store.now(); const [f, setF] = useState('PLACED');
     const groups = { PLACED: all.filter((o) => o.status === 'PLACED'), CONFIRMED: all.filter((o) => o.status === 'CONFIRMED'), SHIPPED: all.filter((o) => o.status === 'SHIPPED'), DONE: all.filter((o) => ['DELIVERED', 'CANCELLED', 'EXPIRED'].includes(o.status)) };
     const list = groups[f];
-    return h('div', { className: 'screen' }, h(U.AppBar, { title: 'Orders', right: h(Bell) }),
+    return h('div', { className: 'screen' }, h(U.AppBar, { title: 'Orders', right: h('div', { className: 'row', style: { gap: 8 } }, h(U.MsgButton, { app: 'seller', userId: uid, onClick: () => nav.go('threads') }), h(Bell)) }),
       h('div', { style: { padding: '12px 16px' } }, h(Seg, { label: 'Order status', value: f, onChange: setF, options: [{ value: 'PLACED', label: `New (${groups.PLACED.length})` }, { value: 'CONFIRMED', label: `To ship (${groups.CONFIRMED.length})` }, { value: 'SHIPPED', label: 'Shipped' }, { value: 'DONE', label: 'Closed' }] })),
       list.length ? list.map((o) => h('button', { key: o.id, className: 'listrow', onClick: () => nav.go('order', { id: o.id }) }, h(Thumb, { m: o.media }), h('div', { className: 'grow' }, h('div', { className: 'strong ellipsis' }, o.title), h('div', { className: 'tiny muted' }, `${o.number} · ${o.buyerName} · ${U.sizeText(o.variantLabel).toLowerCase()} · ${ago(o.createdAt, now)}`), h('div', { className: 'small' }, h('b', null, money(o.price)), ' · ', o.channel === 'WEBSITE' ? 'website' : E.PAY_METHODS[o.paymentMethod], o.priceSource === 'NEGOTIATED' ? ' · bargained' : '', o.status === 'PLACED' ? ` · ${left(o.confirmBy - now)} to confirm` : '')), h(Badge, { tone: U.ORDER_TONE[o.status] }, { PLACED: 'To confirm', CONFIRMED: 'Confirmed', SHIPPED: 'Shipped', DELIVERED: 'Delivered', CANCELLED: 'Cancelled', EXPIRED: 'Expired' }[o.status])))
         : h(Empty, { icon: 'box', title: { PLACED: 'No new orders', CONFIRMED: 'Nothing waiting to ship', SHIPPED: 'Nothing in transit', DONE: 'No closed orders yet' }[f], body: f === 'PLACED' ? 'When a buyer places an order, confirm it here once you see the payment or the website order.' : null }));
@@ -2330,6 +2867,8 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
       h('div', { className: 'pad stack' },
         h('div', { className: 'row' }, h(Thumb, { m: o.media, lg: true }), h('div', { className: 'grow' }, h('div', { className: 'strong' }, o.title), h('div', { className: 'small muted' }, `${U.sizeText(o.variantLabel)} · Qty 1 · ${o.buyerName}`), h('div', { style: { marginTop: 4 } }, h(Badge, { tone: U.ORDER_TONE[o.status] }, o.statusLabel)))),
         h(U.OrderSteps, { order: o }),
+        h('div', { className: 'card stack', style: { gap: 8 } }, h('div', { className: 'strong' }, 'Contact buyer'), h(U.ContactButtons, { contact: o.buyerContact, unread: o.unread, onChat: () => nav.go('chat', { id: o.threadId }), note: `Hi ${o.buyerName.split(' ')[0]}, about your ${BRAND} order ${o.number} (${o.title}).` }), !o.buyerContact && h('div', { className: 'tiny muted' }, 'Phone and WhatsApp are shown while the order is open. Chat stays available.')),
+        o.review && h('div', null, h('div', { className: 'section-title' }, 'Buyer’s review'), h(U.ReviewCard, { r: Object.assign({ buyerName: o.buyerName.split(' ')[0], title: o.title }, o.review), now })),
         o.status === 'CONFIRMED' && !o.shipment && h('div', { className: 'hint' }, 'Shipment details are optional. Add them if you use a courier, or mark the order delivered when the buyer has it.'),
         h(U.ShipmentCard, { sh: o.shipment }),
         h('div', null, h('div', { className: 'section-title' }, 'Sale'), h(Kv, { k: 'Listed price', v: money(o.listPrice) }), h(Kv, { k: o.priceSource === 'NEGOTIATED' ? 'Agreed price' : 'Sold at', v: money(o.price), strong: true }), h(Kv, { k: 'Buyer pays via', v: web ? 'Your website' : E.PAY_METHODS[o.paymentMethod] }), web && o.dealAccess && h(Kv, { k: o.dealAccess.type === 'CODE' ? 'Coupon used' : 'Discount link', v: o.dealAccess.type === 'CODE' ? o.dealAccess.value : 'Given to buyer' }), h(Kv, { k: 'Payment reference', v: o.number })),
@@ -2347,11 +2886,11 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
   }
 
   // ---------- shop profile ----------
-  // ---------- shop profile ----------
   function ShopProfile() {
     const { uid, toast } = useApp(); const me = S.me(Store.state, uid); const u = Store.state.users[uid]; const pay = S.payment(Store.state, uid); const st = S.stats(Store.state, uid);
     const [edit, setEdit] = useState(null); const [v, setV] = useState(null); const [errors, setErrors] = useState({});
-    const start = () => { setV({ name: me.name, handle: me.handle, area: me.area, city: me.city, gstin: me.gstin || '', bio: me.bio || '' }); setErrors({}); setEdit('shop'); };
+    const start = () => { setV({ name: me.name, handle: me.handle, area: me.area, city: me.city, gstin: me.gstin || '', bio: me.bio || '', categories: (me.categories || []).slice(), mapsUrl: me.mapsUrl || '', googleProfileUrl: me.googleProfileUrl || '', socialUrl: me.socialUrl || '', contact: Object.assign({ phone: '', whatsapp: '' }, me.contact || {}), sla: Object.assign({}, me.sla || {}) }); setErrors({}); setEdit('shop'); };
+    const reviews = S.reviews(Store.state, uid); const now = Store.now();
     const startPay = () => { setV(Object.assign({ upiId: '', upiQrMediaId: null, bankHolder: '', bankAccount: '', bankIfsc: '', bankName: '', paymentLink: '', website: '' }, Object.fromEntries(Object.entries(pay).filter(([, x]) => x != null)))); setErrors({}); setEdit('pay'); };
     const save = () => { const r = Store.dispatch(Object.assign({ type: 'seller.updateProfile', userId: uid }, v)); if (!r.ok) { setErrors(r.fields || {}); return; } setEdit(null); toast('Shop details saved'); };
     const savePay = () => { const r = Store.dispatch({ type: 'seller.updatePayment', userId: uid, payment: v }); if (!r.ok) { setErrors(r.fields || {}); toast(r.message, true); return; } setEdit(null); toast('Payment details saved'); };
@@ -2359,10 +2898,12 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
     const mask = (x) => (x ? '•••• ' + x.slice(-4) : '');
     if (edit === 'pay') return h('div', { className: 'screen' }, h(U.AppBar, { title: 'Payment details', onBack: () => setEdit(null) }), h('div', { className: 'pad stack' }, h(U.PaymentForm, { value: v, onChange: (x) => { setV(x); setErrors({}); }, errors, idp: 'spp-' }), h('div', { className: 'btn-row' }, h(Btn, { kind: 'outline', onClick: () => setEdit(null) }, 'Cancel'), h(Btn, { onClick: savePay }, 'Save'))));
     return h('div', { className: 'screen' }, h(U.AppBar, { title: 'Shop', right: h(Bell) }), h('div', { className: 'pad stack' },
-      edit === 'shop' ? h(React.Fragment, null, f('name', 'Shop name'), f('handle', 'Shop handle'), h('div', { className: 'grid2' }, f('area', 'Area'), f('city', 'City')), me.type === 'BUSINESS' && f('gstin', 'GSTIN (optional)'), f('bio', 'About', { multiline: true, maxLength: 160 }), h('div', { className: 'btn-row' }, h(Btn, { kind: 'outline', onClick: () => setEdit(null) }, 'Cancel'), h(Btn, { onClick: save }, 'Save changes'))) :
+      edit === 'shop' ? h(React.Fragment, null, f('name', 'Shop name'), f('handle', 'Shop handle'), h('div', { className: 'grid2' }, f('area', 'Area'), f('city', 'City')), me.type === 'BUSINESS' && f('gstin', 'GSTIN (optional)'), f('bio', 'About', { multiline: true, maxLength: 160 }), h(CategoryChips, { v, setV, errors }), h(ReachFields, { v, setV, errors, setErrors, idp: 'spr-' }), h('div', { className: 'btn-row' }, h(Btn, { kind: 'outline', onClick: () => setEdit(null) }, 'Cancel'), h(Btn, { onClick: save }, 'Save changes'))) :
         h(React.Fragment, null,
           h('div', { className: 'row' }, h(Avatar, { name: me.name, lg: true }), h('div', { className: 'grow' }, h('div', { className: 'h3', style: { fontSize: 18 } }, me.name), h('div', { className: 'small muted' }, '@' + me.handle + ' · ' + me.area + ', ' + me.city)), h(Btn, { kind: 'outline', size: 'sm', onClick: start }, 'Edit')),
           me.bio && h('div', null, me.bio),
+          h(U.SellerLinks, { seller: me }),
+          h('div', { className: 'card stack', style: { gap: 4 } }, h('div', { className: 'strong' }, 'What buyers see'), h(U.SlaLines, { sla: me.sla, stats: st }), h(Kv, { k: 'Categories', v: (me.categories || []).join(', ') }), h(Kv, { k: 'Contact for open orders', v: ['In-app chat', me.contact && me.contact.phone ? 'Phone' : null, me.contact && me.contact.whatsapp ? 'WhatsApp' : null].filter(Boolean).join(' · ') })),
           h('div', { className: 'card' }, h('div', { className: 'strong', style: { marginBottom: 2 } }, 'Your public order record'), h('div', { className: 'small' }, h(U.StatsLine, { st })), h('div', { className: 'tiny muted', style: { marginTop: 4 } }, 'Buyers see this on your shop and listings. Confirm orders promptly to keep it strong.')),
           h('div', { className: 'card' }, h('div', { className: 'row between' }, h('div', { className: 'strong' }, 'How buyers pay you'), h(Btn, { kind: 'outline', size: 'sm', onClick: startPay }, 'Edit')),
             pay.upiId && h(Kv, { k: 'UPI ID', v: pay.upiId }), pay.upiQrMediaId && h(Kv, { k: 'UPI QR', v: 'Uploaded' }), pay.bankAccount && h(Kv, { k: 'Bank', v: `${pay.bankName || pay.bankIfsc} ${mask(pay.bankAccount)}` }), pay.paymentLink && h(Kv, { k: 'Payment link', v: 'Added' }), pay.website && h(Kv, { k: 'Website', v: pay.website.replace(/^https:\/\//, '') }),
@@ -2370,15 +2911,55 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
           h(Kv, { k: 'Seller type', v: me.type === 'BUSINESS' ? 'Registered business' : 'Individual seller' }), me.gstin && h(Kv, { k: 'GSTIN', v: me.gstin }), h(Kv, { k: 'Owner', v: u.name + ' · +91 ' + u.phone }), h(Kv, { k: 'Code of Conduct', v: 'Agreed ' + when(me.conductAcceptedAt) }),
           h('div', { className: 'card row', style: { alignItems: 'flex-start' } }, h(Icon, { name: 'shield' }), h('div', null, h('div', { className: 'strong' }, 'Not verified'), h('div', { className: 'small muted' }, 'Seller verification and KYC aren’t part of this prototype. Buyers see “Not verified (prototype)”.'))),
           h('div', { className: 'card' }, h('div', { className: 'strong' }, 'Shopping too?'), h('div', { className: 'small muted' }, 'Sign in to the buyer app with +91 ' + u.phone + '. It’s the same account.')),
+          h('div', null, h('div', { className: 'section-title' }, 'Reviews from buyers'), h(U.ReviewsList, { reviews, stats: st, now })),
           h(Btn, { kind: 'danger', block: true, onClick: () => Store.dispatch({ type: 'auth.signOut', app: 'seller' }) }, 'Sign out'))));
   }
-  function NotificationsScreen() {
-    const { uid, nav } = useApp();
-    return h(U.Notifications, { app: 'seller', userId: uid, onBack: nav.back, onOpen: (ref) => { if (ref.type === 'negotiation') nav.replace('negotiation', { id: ref.id }); if (ref.type === 'order') nav.replace('order', { id: ref.id }); if (ref.type === 'listing') nav.replace('listing', { id: ref.id }); } });
+  // ---------- buyer requests (seller side) ----------
+  function RequestsInbox() {
+    const { uid, nav, openSheet } = useApp(); const now = Store.now(); const all = S.requests(Store.state, uid); const [f, setF] = useState('open');
+    const me = S.me(Store.state, uid);
+    const list = all.filter((r) => (f === 'open' ? r.status === 'OPEN' && !r.mine : !!r.mine));
+    const [view, setView] = useState(null);
+    return h('div', { className: 'screen' }, h(U.AppBar, { title: 'Buyer requests', right: h(Bell) }),
+      h('div', { style: { padding: '12px 16px' } }, h(Seg, { label: 'Requests', value: f, onChange: setF, options: [{ value: 'open', label: `New (${all.filter((r) => r.status === 'OPEN' && !r.mine).length})` }, { value: 'mine', label: `Responded (${all.filter((r) => r.mine).length})` }] }), h('div', { className: 'hint', style: { marginTop: 6 } }, 'Requests in: ' + (me.categories || []).join(', '))),
+      list.length ? h('div', { className: 'pad stack', style: { paddingTop: 0 } }, list.map((r) => h('div', { key: r.id, className: 'card stack', style: { gap: 8 } },
+        h('div', { className: 'row between' }, h('div', null, h('div', { className: 'strong' }, r.title), h('div', { className: 'tiny muted' }, `${r.buyerName} · ${r.category} · ${ago(r.createdAt, now)}${r.size ? ' · size ' + r.size : ''}`)), r.budget && h(Badge, { tone: 'accent' }, 'Budget ' + money(r.budget))),
+        h(U.MediaRow, { media: r.media, onOpen: setView }), r.description && h('div', { className: 'small' }, r.description),
+        !r.mine ? (r.status === 'OPEN' ? h(Btn, { block: true, onClick: () => openSheet('respond', { requestId: r.id }) }, h(Icon, { name: 'image', size: 18 }), 'I have this — send a photo') : h('div', { className: 'small muted' }, 'Closed'))
+          : h('div', { className: 'stack', style: { gap: 6 } }, h('div', { className: 'small' }, 'You replied', r.mine.price ? ' at ' + money(r.mine.price) : '', ' · ', h(Badge, { tone: r.mine.status === 'WANTED' ? 'success' : r.mine.status === 'DECLINED' ? '' : 'info' }, r.mine.status === 'WANTED' ? 'Buyer wants it' : r.mine.status === 'DECLINED' ? 'Buyer passed' : 'Waiting for buyer')),
+            r.mine.status === 'WANTED' && h('div', { className: 'btn-row' }, h(Btn, { kind: 'outline', onClick: () => nav.go('chat', { id: r.mine.threadId }) }, 'Open chat'), r.mine.listingId ? h(Btn, { kind: 'dark', onClick: () => nav.go('listing', { id: r.mine.listingId }) }, 'View listing') : h(Btn, { onClick: () => nav.go('editor', { fromResponseId: r.mine.id }) }, 'Create listing')))))) 
+        : h(Empty, { icon: 'megaphone', title: f === 'open' ? 'No new requests' : 'You haven’t responded yet', body: f === 'open' ? 'When buyers ask for something in your categories, it shows up here.' : null }),
+      view && h(U.MediaViewer, { m: view, onClose: () => setView(null) }));
+  }
+  function RespondSheet({ requestId }) {
+    const { uid, closeSheet, toast } = useApp(); const r = S.requests(Store.state, uid).find((x) => x.id === requestId);
+    const [media, setMedia] = useState([]); const [text, setText] = useState(''); const [price, setPrice] = useState(''); const [errors, setErrors] = useState({});
+    if (!r) return null;
+    const send = () => { const x = Store.dispatch({ type: 'request.respond', userId: uid, requestId, media, text, price }); if (!x.ok) { setErrors(x.fields || {}); if (!x.fields) toast(x.message, true); return; } closeSheet(); toast('Sent to the buyer'); };
+    return h(Sheet, { title: 'Reply to “' + r.title + '”', onClose: closeSheet, footer: h(Btn, { block: true, onClick: send }, 'Send to buyer') }, h('div', { className: 'stack' },
+      h(U.MediaPicker, { value: media, onChange: (m) => { setMedia(m); setErrors({}); }, max: 4, videos: false, label: 'Photo of your item', error: errors.media, sample: () => ({ kind: 'seed', scene: U.SCENE_FOR_CATEGORY[r.category] || 'kurta', palette: U.PALETTE_NAMES[(media.length + 3) % U.PALETTE_NAMES.length] }) }),
+      h(Field, { label: 'Price (optional)', id: 'rp-price', error: errors.price }, h('div', { className: 'input-group' }, h('div', { className: 'prefix' }, '₹'), h(Input, { id: 'rp-price', inputMode: 'numeric', value: price, onChange: (e) => setPrice(e.target.value.replace(/\D/g, '').slice(0, 7)) }))),
+      h(Field, { label: 'Message (optional)', id: 'rp-text', error: errors.text }, h(Input, { id: 'rp-text', multiline: true, maxLength: 500, value: text, onChange: (e) => setText(e.target.value) })),
+      h('div', { className: 'hint' }, 'If the buyer wants it, a chat opens. Add it as a listing from there and the link is shared in the chat.')));
+  }
+  function ThreadsScreenS() { const { uid, nav } = useApp(); return h(U.ThreadsScreen, { app: 'seller', userId: uid, onBack: nav.back, onOpen: (id) => nav.go('chat', { id }) }); }
+  function ChatScreenS({ id }) {
+    const { uid, nav, toast, openSheet } = useApp(); const t = E.common.thread(Store.state, uid, 'seller', id, Store.now());
+    const header = t && t.kind === 'REQUEST' ? h('div', { className: 'card row', style: { gap: 10 } }, h(Thumb, { m: t.responseMedia }), h('div', { className: 'grow' }, h('div', { className: 'tiny muted' }, 'Buyer request · ' + t.category), h('div', { className: 'strong small' }, t.requestTitle)), t.responseListingId ? h(Btn, { kind: 'outline', size: 'sm', onClick: () => nav.go('listing', { id: t.responseListingId }) }, 'Listing') : h(Btn, { size: 'sm', onClick: () => nav.go('editor', { fromResponseId: t.responseId }) }, 'Create listing')) : null;
+    return h(U.ChatScreen, { app: 'seller', userId: uid, threadId: id, onBack: nav.back, toast, header, onOpenListing: (lid) => nav.go('listing', { id: lid }), onShareListing: () => openSheet('shareListing', { threadId: id }) });
+  }
+  function ShareListingSheet({ threadId }) {
+    const { uid, closeSheet, toast } = useApp(); const list = S.listings(Store.state, uid, Store.now()).filter((l) => l.status === 'ACTIVE');
+    return h(Sheet, { title: 'Share a listing', onClose: closeSheet }, list.length ? list.map((l) => h('button', { key: l.id, className: 'listrow', style: { paddingLeft: 0, paddingRight: 0 }, onClick: () => { const r = Store.dispatch({ type: 'chat.send', userId: uid, threadId, listingId: l.id }); closeSheet(); toast(r.ok ? 'Listing shared' : r.message, !r.ok); } }, h(Thumb, { m: l.media }), h('div', { className: 'grow' }, h('div', { className: 'strong ellipsis' }, l.title), h('div', { className: 'small' }, money(l.price) + ` · ${l.available} available`)))) : h('div', { className: 'small muted' }, 'Publish a listing first.'));
   }
 
-  const SCREENS = { editor: ListingEditor, listing: ListingDetail, negotiation: SellerNegotiation, order: SellerOrder, notifications: NotificationsScreen };
-  const SHEETS = {};
+  function NotificationsScreen() {
+    const { uid, nav } = useApp();
+    return h(U.Notifications, { app: 'seller', userId: uid, onBack: nav.back, onOpen: (ref) => { if (ref.type === 'negotiation') nav.replace('negotiation', { id: ref.id }); if (ref.type === 'order') nav.replace('order', { id: ref.id }); if (ref.type === 'listing') nav.replace('listing', { id: ref.id }); if (ref.type === 'chat') nav.replace('chat', { id: ref.id }); if (ref.type === 'request') nav.setTab('requests'); if (ref.type === 'reviews') nav.setTab('profile'); } });
+  }
+
+  const SCREENS = { editor: ListingEditor, listing: ListingDetail, negotiation: SellerNegotiation, order: SellerOrder, notifications: NotificationsScreen, threads: ThreadsScreenS, chat: ChatScreenS };
+  const SHEETS = { respond: RespondSheet, shareListing: ShareListingSheet };
   window.FaydaSellerApp = SellerApp;
 })();
 
@@ -2409,16 +2990,18 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
   function Guide({ onClose }) {
     const steps = [
       ['Seller app', 'Tap Indigo Threads under Demo accounts, send the code and enter 123456. Open Offers to see buyers waiting for a reply.'],
-      ['Buyer app', 'Sign in as Aarav Sharma. Swipe the feed; like, save, follow a shop and post a comment — the seller sees it.'],
-      ['Buyer app', 'On the hand-block printed kurta, tap Make offer and send ₹1,950. After a few seconds the seller counters ₹2,299 — set by the seller’s private rules.'],
-      ['Buyer app', 'Counter ₹2,100. It’s still below the seller’s private minimum, so a few seconds later the seller counters ₹2,299 again.'],
-      ['Buyer app', 'Counter ₹2,200 — at or above the private minimum, so it’s accepted straight away and one unit is reserved. Watch the stock line change in the seller app.'],
-      ['Seller app', 'Answer an offer yourself: in Offers, open Priya’s public ₹4,200 offer on the Chanderi set and counter or accept it.'],
-      ['Buyer app', 'Tap Continue, pick UPI or bank transfer and place the order. The seller’s payment details appear with the order number to use as the payment note.'],
-      ['Seller app', 'Orders → New → Payment received. Optionally add the courier and tracking number, then Mark delivered. The buyer’s timeline updates each time.'],
-      ['Website seller', 'In the buyer app open Offers: Aarav’s saree offer was auto-countered ₹6,199 by Loom & Co., who sell on their own website. Accept it to get the discount link and open the site. Then sign the seller app in as Loom & Co. and confirm the website order.'],
-      ['Seller app', 'Tap New listing: add your own video or photos (or sample artwork), sizes, price, private bargaining rules, and choose Pay me directly or My website (with coupon codes). Publish — it appears in the buyer feed.'],
-      ['Demo clock', 'Offer under ₹500 on the jhumkas: it’s declined automatically after 2 minutes (+1 h skips ahead). +12 h shows offers expiring, agreed prices lapsing, and unconfirmed orders expiring after 48 h.']
+      ['Buyer app', 'Sign in as Aarav Sharma. Swipe the feed: every reel shows the seller’s star rating. Like, save, follow and comment.'],
+      ['Buyer app', 'On the hand-block printed kurta, tap Make offer and send ₹1,950. After a few seconds the seller counters ₹2,299.'],
+      ['Buyer app', 'Counter ₹2,100 — still below the seller’s private minimum, so the seller counters ₹2,299 again. Then counter ₹2,200: it’s accepted straight away.'],
+      ['Buyer app', 'Tap Continue, pick UPI or bank transfer and place the order. You’ll see payment details, how fast this seller usually confirms, and Contact seller: chat, WhatsApp or call.'],
+      ['Both', 'Send a chat message from the order. It appears in the seller app’s Messages (top of Home and Orders). Reply from the seller side.'],
+      ['Seller app', 'Orders → New → Payment received. Optionally add courier and tracking, then Mark delivered.'],
+      ['Buyer app', 'On the order, rate the seller with stars, text and an optional photo or video. It shows on the seller’s profile and rating everywhere. Use Buy again to reorder.'],
+      ['Buyer app', 'Search → “Can’t find it? Ask sellers”: post a request with a photo. Every seller in that category is notified (try Priya’s existing mustard dupatta request too).'],
+      ['Seller app', 'Requests tab: reply with a photo and price. In the buyer app tap “I want this” — a chat opens. Back in the seller app, tap Create listing in that chat; when you publish, the link is shared in the chat for the buyer to buy.'],
+      ['Website seller', 'In the buyer app open Offers: Aarav’s saree offer was countered ₹6,199 by Loom & Co., who sell on their own website. Accept it to get the discount link, then sign the seller app in as Loom & Co. and confirm the website order.'],
+      ['New accounts', 'Sign up with any new number. Buyers accept the user agreement and add a phone or WhatsApp contact. Sellers add categories, a Google Maps shop link, optional Google/Instagram/Facebook links, contact numbers, and how fast they confirm payments and ship.'],
+      ['Demo clock', '+1 h and +12 h move time forward: low offers on the jhumkas are declined after 2 minutes, offers expire, agreed prices lapse, unconfirmed orders expire after 48 h, and requests close after 7 days.']
     ];
     return h('div', { className: 'guide', onClick: (e) => e.target === e.currentTarget && onClose() }, h('div', { role: 'dialog', 'aria-label': 'Demo guide' },
       h('div', { className: 'row between' }, h('div', { className: 'h2' }, 'Demo guide'), h('button', { className: 'iconbtn plain', onClick: onClose, 'aria-label': 'Close' }, h(U.Icon, { name: 'x' }))),
@@ -2430,7 +3013,7 @@ textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: ver
         h('li', null, h('b', null, 'Outside ' + BRAND + ' by design: '), 'payments (buyers pay sellers by UPI, bank transfer or payment link), delivery and refunds. ' + BRAND + ' only records what the seller confirms.'),
         h('li', null, h('b', null, 'Simulated: '), 'sign-in codes (always 123456), seller verification, and the demo clock. Seller websites and payment links in the sample data are fictional and won’t load.'),
         h('li', null, h('b', null, 'Stored in this browser only: '), 'all data and uploaded media. Opening this page on another device starts from the seed data. Open #buyer and #seller in two tabs to use each app full-screen; they stay in sync.'),
-        h('li', null, h('b', null, 'Provisional values: '), 'offer expiry, 6-offer limit, 3 offers per listing per day, 12-hour checkout window, 48-hour order confirmation window, 10% minimum offer and the 2-minute auto-decline delay are placeholders pending your approval.'))));
+        h('li', null, h('b', null, 'Provisional values: '), 'offer expiry, 6-offer limit, 3 offers per listing per day, 12-hour checkout window, 48-hour order confirmation window, 7-day request window, 10% minimum offer and the 2-minute auto-decline delay are placeholders pending your approval. The user agreement and seller Code of Conduct are drafts pending legal review.'))));
   }
 
   function App() {

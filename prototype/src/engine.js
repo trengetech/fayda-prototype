@@ -14,7 +14,10 @@
     AUTO_DECLINE_DELAY_MS: 2 * 60e3,       // PROVISIONAL (R8, §3.6)
     AUTO_COUNTER_DELAY_MS: 5e3,            // founder decision: automatic counters arrive after 5 s and look like the seller's own
     CHECKOUT_WINDOW_HOURS: 12,             // PROVISIONAL (R9)
-    ORDER_CONFIRM_WINDOW_HOURS: 48,        // PROVISIONAL: seller must confirm a placed order or it expires
+    ORDER_CONFIRM_WINDOW_HOURS: 48,
+    REQUEST_OPEN_DAYS: 7,                  // PROVISIONAL: buyer requests close after a week
+    CONFIRM_HOURS_OPTIONS: [1, 2, 4, 6, 12, 24, 48], SHIP_DAYS_OPTIONS: [1, 2, 3, 5, 7],
+    AGREEMENT_VERSION: 'draft-2026-10',        // PROVISIONAL: seller must confirm a placed order or it expires
     MIN_PRICE_PAISE: 50 * 100, MAX_PRICE_PAISE: 1000000 * 100,
     DEV_OTP: '123456'                      // SIMULATED sign-in code
   });
@@ -42,9 +45,9 @@
   }
   function emptyState() {
     return {
-      v: 2, seq: 0, clockOffsetMs: 0, orderSeq: 10000,
+      v: 3, seq: 0, clockOffsetMs: 0, orderSeq: 10000,
       users: {}, buyerProfiles: {}, sellers: {}, listings: {}, privateRules: {},
-      negotiations: {}, reservations: {}, orders: {}, paymentProfiles: {}, dealCodes: {},
+      negotiations: {}, reservations: {}, orders: {}, paymentProfiles: {}, dealCodes: {}, chats: {}, reviews: {}, requests: {}, responses: {},
       likes: {}, saves: {}, follows: {}, comments: [], notifications: [],
       sessions: { buyer: null, seller: null }
     };
@@ -208,6 +211,7 @@
       }
     });
     values(s.reservations).forEach((r) => { if (r.status === 'ACTIVE' && r.expiresAt <= now) { r.status = 'RELEASED'; changed = true; } });
+    values(s.requests).forEach((r) => { if (r.status === 'OPEN' && now >= r.expiresAt) { r.status = 'EXPIRED'; changed = true; } });
     values(s.orders).forEach((o) => {
       if (o.status === 'PLACED' && o.confirmBy && now >= o.confirmBy) {
         o.status = 'EXPIRED'; o.events.push({ status: 'EXPIRED', at: now }); restock(s, o);
@@ -231,6 +235,23 @@
   const CODE_RE = /^[A-Za-z0-9_-]{3,40}$/;
   const isHttps = (u) => { try { const x = new URL(String(u)); return x.protocol === 'https:' && !!x.hostname && x.hostname.includes('.'); } catch (e) { return false; } };
   const channelOf = (l) => (l.checkout && l.checkout.channel) || 'DIRECT';
+  const urlParts = (u) => { try { const x = new URL(String(u).trim()); return x.protocol === 'https:' ? { host: x.hostname.toLowerCase().replace(/^www\./, ''), path: x.pathname } : null; } catch (e) { return null; } };
+  const isGoogleHost = (h) => /^google\.[a-z.]{2,6}$/.test(h) || /^maps\.google\.[a-z.]{2,6}$/.test(h);
+  function isMapsUrl(u) { const p = urlParts(u); if (!p) return false; return p.host === 'maps.app.goo.gl' || (p.host === 'goo.gl' && p.path.startsWith('/maps')) || (isGoogleHost(p.host) && (p.host.startsWith('maps.') || p.path.startsWith('/maps'))); }
+  function isGoogleProfileUrl(u) { const p = urlParts(u); if (!p) return false; return isMapsUrl(u) || ['g.page', 'share.google', 'business.google.com', 'g.co'].includes(p.host) || (isGoogleHost(p.host) && p.path.length > 1); }
+  function isSocialUrl(u) { const p = urlParts(u); if (!p || p.path.replace(/\//g, '').length < 2) return false; return ['instagram.com', 'facebook.com', 'm.facebook.com', 'fb.com'].includes(p.host); }
+  function validateContact(c, label) {
+    const e = {}; c = c || {};
+    const ph = normPhone(c.phone), wa = normPhone(c.whatsapp);
+    if (c.phone && !PHONE_RE.test(ph)) e.contactPhone = 'Enter a valid 10-digit mobile number.';
+    if (c.whatsapp && !PHONE_RE.test(wa)) e.contactWhatsapp = 'Enter a valid 10-digit WhatsApp number.';
+    if (!c.phone && !c.whatsapp) e.contact = label;
+    return { errors: e, clean: { phone: c.phone && PHONE_RE.test(ph) ? ph : null, whatsapp: c.whatsapp && PHONE_RE.test(wa) ? wa : null } };
+  }
+  function cleanMedia(list, max, imagesOnly) {
+    const out = (Array.isArray(list) ? list : []).filter((m) => m && (m.kind === 'seed' || ((m.kind === 'image' || (!imagesOnly && m.kind === 'video')) && typeof m.mediaId === 'string'))).slice(0, max);
+    return out.map((m) => (m.kind === 'seed' ? { kind: 'seed', scene: m.scene, palette: m.palette } : { kind: m.kind, mediaId: m.mediaId }));
+  }
 
   function cleanPayment(p) {
     p = p || {};
@@ -268,6 +289,11 @@
     if (clean.expectedDate && !/^\d{4}-\d{2}-\d{2}$/.test(clean.expectedDate)) f.expectedDate = 'Use a date like 2026-11-04.';
     return Object.keys(f).length ? { fields: f } : { clean };
   }
+  function openThread(s, base, now, systemText) {
+    const t = Object.assign({ id: newId(s, 'th'), messages: [{ id: newId(s, 'msg'), from: 'SYSTEM', type: 'TEXT', text: systemText, at: now }], readAt: { buyer: now, seller: 0 }, createdAt: now, updatedAt: now }, base);
+    s.chats[t.id] = t; return t.id;
+  }
+  function threadTitle(s, t) { return t.kind === 'ORDER' ? 'Order ' + (s.orders[t.orderId] || {}).number : 'Request: ' + (s.requests[t.requestId] || {}).title; }
   function restock(s, o) { const l = s.listings[o.listingId]; const v = l && variantOf(l, o.variantId); if (v && !o.restocked) { v.stock += 1; o.restocked = true; } }
 
   function validateAddress(a) {
@@ -343,10 +369,12 @@
       const name = String(c.name || '').trim();
       const e = validateAddress(c.address);
       if (name.length < 2) e.fullName = 'Enter your name.';
+      const ct = validateContact(c.contact, 'Add a phone or WhatsApp number sellers can use for your orders.'); Object.assign(e, ct.errors);
+      if (!c.agreementAccepted) e.agreement = 'You need to accept the user agreement to continue.';
       if (Object.keys(e).length) return Object.assign(err('VALIDATION', 'Check the highlighted fields.'), { fields: e });
       if (!u.name) u.name = name;
       const addr = cleanAddress(c.address, newId(s, 'ad'));
-      s.buyerProfiles[u.id] = { userId: u.id, addresses: [addr], defaultAddressId: addr.id, createdAt: now };
+      s.buyerProfiles[u.id] = { userId: u.id, addresses: [addr], defaultAddressId: addr.id, contact: ct.clean, agreementAcceptedAt: now, agreementVersion: RULES.AGREEMENT_VERSION, createdAt: now };
       return { ok: true };
     },
     'buyer.saveAddress'(s, c) {
@@ -358,6 +386,12 @@
         p.addresses[i] = cleanAddress(c.address, c.address.id);
       } else { const a = cleanAddress(c.address, newId(s, 'ad')); p.addresses.push(a); if (!p.defaultAddressId) p.defaultAddressId = a.id; return { ok: true, addressId: a.id }; }
       return { ok: true, addressId: c.address.id };
+    },
+    'buyer.updateContact'(s, c) {
+      const p = s.buyerProfiles[c.userId]; if (!p) return err('NO_PROFILE', 'Complete your profile first.');
+      const ct = validateContact(c.contact, 'Add a phone or WhatsApp number sellers can use for your orders.');
+      if (Object.keys(ct.errors).length) return Object.assign(err('VALIDATION', 'Check the highlighted fields.'), { fields: ct.errors });
+      p.contact = ct.clean; return { ok: true };
     },
     'buyer.deleteAddress'(s, c) {
       const p = s.buyerProfiles[c.userId]; if (!p) return err('NO_PROFILE', 'Complete your profile first.');
@@ -443,7 +477,17 @@
       if (oldMode && oldMode !== 'FIXED' && l.bargaining.mode === 'FIXED') invalidateOpen(s, (n) => n.listingId === l.id, 'FIXED_PRICE', now);
       if (oldPrice && price < oldPrice) invalidateOpen(s, (n) => n.listingId === l.id && latest(n).amount >= price, 'PRICE_DROPPED', now);
       l.variants.forEach((v) => invalidateIfSoldOut(s, l, v, now));
-      return { ok: true, listingId: l.id };
+      let shared = false;
+      if (c.fromResponseId && l.status === 'ACTIVE') {
+        const x = s.responses[c.fromResponseId];
+        if (x && x.sellerId === sel.id && x.status === 'WANTED' && s.chats[x.threadId]) {
+          const t = s.chats[x.threadId]; x.listingId = l.id;
+          t.messages.push({ id: newId(s, 'msg'), from: 'SELLER', type: 'LISTING', listingId: l.id, at: now }); t.updatedAt = now; t.readAt.seller = now;
+          notify(s, t.buyerId, 'buyer', `${sel.name} listed the item you asked for: ${l.title}. Tap to view and buy.`, { type: 'chat', id: t.id }, now);
+          shared = true;
+        }
+      }
+      return { ok: true, listingId: l.id, sharedInChat: shared };
     },
     'listing.setStatus'(s, c, now) {
       const sel = sellerOfUser(s, c.userId); const l = s.listings[c.listingId];
@@ -581,6 +625,7 @@
         channel, paymentMethod: method, address: addr ? clone(addr) : null, dealAccess: n && n.agreement.dealAccess ? clone(n.agreement.dealAccess) : null, productUrl: channel === 'WEBSITE' ? l.checkout.productUrl : null,
         status: 'PLACED', confirmBy: now + RULES.ORDER_CONFIRM_WINDOW_HOURS * HOUR, events: [{ status: 'PLACED', at: now }], shipment: null, createdAt: now };
       s.orders[o.id] = o;
+      o.threadId = openThread(s, { kind: 'ORDER', orderId: o.id, buyerId: u.id, sellerId: l.sellerId, sellerUserId: l.ownerUserId }, now, `Order ${o.number} placed. Use this chat for questions about payment and delivery.`);
       notify(s, u.id, 'buyer', channel === 'WEBSITE' ? `Order ${o.number} started on ${s.sellers[l.sellerId].name}’s website. The seller will confirm it here.` : `Order ${o.number} placed: pay ${fmt(price)} to ${s.sellers[l.sellerId].name} by ${PAY_METHODS[method]}. The seller confirms once it arrives.`, { type: 'order', id: o.id }, now);
       notify(s, l.ownerUserId, 'seller', channel === 'WEBSITE' ? `Order ${o.number}: a buyer is using your ${fmt(price)} deal on your website. Confirm it once you see the order.` : `New order ${o.number}: ${l.title} (${v.label}) — ${fmt(price)} by ${PAY_METHODS[method]}. Confirm when you receive the payment.`, { type: 'order', id: o.id }, now);
       invalidateIfSoldOut(s, l, v, now);
@@ -622,6 +667,108 @@
       notify(s, o.buyerId, 'buyer', `Order ${o.number} was cancelled by the seller: ${CANCEL_REASONS[c.reason]}${note ? ' — ' + note : ''}.`, { type: 'order', id: o.id }, now);
       return { ok: true };
     },
+    'chat.send'(s, c, now) {
+      const t = s.chats[c.threadId]; if (!t) return err('NOT_FOUND', 'Chat not found.');
+      const side = c.userId === t.buyerId ? 'BUYER' : c.userId === t.sellerUserId ? 'SELLER' : null;
+      if (!side) return err('FORBIDDEN', 'You’re not part of this chat.');
+      const msg = { id: newId(s, 'msg'), from: side, at: now };
+      if (c.listingId) {
+        const l = s.listings[c.listingId];
+        if (side !== 'SELLER' || !l || l.sellerId !== t.sellerId || l.status !== 'ACTIVE') return err('INVALID_LISTING', 'Share one of your live listings.');
+        msg.type = 'LISTING'; msg.listingId = l.id;
+      } else if (c.media) {
+        const m = cleanMedia([c.media], 1); if (!m.length) return err('INVALID_MEDIA', 'Attach a photo or video.');
+        msg.type = 'MEDIA'; msg.media = m[0]; msg.text = String(c.text || '').trim().slice(0, 500);
+      } else {
+        const text = String(c.text || '').trim(); if (!text) return err('EMPTY', 'Write a message first.'); if (text.length > 1000) return err('TOO_LONG', 'Keep messages under 1,000 characters.');
+        msg.type = 'TEXT'; msg.text = text;
+      }
+      t.messages.push(msg); t.updatedAt = now; t.readAt[side === 'BUYER' ? 'buyer' : 'seller'] = now;
+      const name = side === 'BUYER' ? (s.users[t.buyerId] || {}).name || 'Buyer' : s.sellers[t.sellerId].name;
+      const preview = msg.type === 'LISTING' ? 'shared a listing' : msg.type === 'MEDIA' ? 'sent a photo' : `“${msg.text.slice(0, 60)}”`;
+      if (side === 'BUYER') notify(s, t.sellerUserId, 'seller', `${name} ${msg.type === 'TEXT' ? 'wrote' : ''} ${preview} · ${threadTitle(s, t)}`.replace('  ', ' '), { type: 'chat', id: t.id }, now);
+      else notify(s, t.buyerId, 'buyer', `${name} ${msg.type === 'TEXT' ? 'wrote' : ''} ${preview} · ${threadTitle(s, t)}`.replace('  ', ' '), { type: 'chat', id: t.id }, now);
+      return { ok: true, messageId: msg.id };
+    },
+    'chat.markRead'(s, c, now) {
+      const t = s.chats[c.threadId]; if (!t) return err('NOT_FOUND', 'Chat not found.');
+      if (c.userId === t.buyerId) t.readAt.buyer = now; else if (c.userId === t.sellerUserId) t.readAt.seller = now; else return err('FORBIDDEN', 'You’re not part of this chat.');
+      return { ok: true };
+    },
+
+    'review.save'(s, c, now) {
+      const o = s.orders[c.orderId]; if (!o || o.buyerId !== c.userId) return err('NOT_FOUND', 'Order not found.');
+      const rating = Number(c.rating);
+      const f = {};
+      if (!isInt(rating) || rating < 1 || rating > 5) f.rating = 'Choose 1 to 5 stars.';
+      const text = String(c.text || '').trim(); if (text.length > 1000) f.text = 'Keep it under 1,000 characters.';
+      if (rating && rating <= 2 && text.length < 10) f.text = 'Tell other buyers what went wrong (at least 10 characters).';
+      if (Array.isArray(c.media) && c.media.length > 4) f.media = 'Up to 4 photos or videos.';
+      if (Object.keys(f).length) return Object.assign(err('VALIDATION', 'Check your review.'), { fields: f });
+      const id = 'rv_' + o.id; const prev = s.reviews[id];
+      s.reviews[id] = { id, orderId: o.id, buyerId: o.buyerId, sellerId: o.sellerId, listingId: o.listingId, title: o.title, rating, text, media: c.media === undefined && prev ? prev.media : cleanMedia(c.media, 4), at: prev ? prev.at : now, editedAt: prev ? now : null, orderStatus: o.status };
+      notify(s, o.sellerUserId, 'seller', `${prev ? 'Updated' : 'New'} ${rating}★ review for ${o.title}${text ? ': “' + text.slice(0, 60) + '”' : ''}`, { type: 'reviews', id: o.sellerId }, now);
+      return { ok: true, reviewId: id };
+    },
+
+    'request.create'(s, c, now) {
+      const u = s.users[c.userId]; if (!u || !s.buyerProfiles[u.id]) return err('NO_PROFILE', 'Complete your buyer profile first.');
+      const f = {}; const title = String(c.title || '').trim(); const desc = String(c.description || '').trim();
+      if (!CATEGORIES.includes(c.category)) f.category = 'Choose a category.';
+      if (title.length < 3 || title.length > 80) f.title = 'Describe what you want in 3–80 characters.';
+      if (desc.length > 500) f.description = 'Keep it under 500 characters.';
+      const budget = c.budget === '' || c.budget == null ? null : Number(c.budget);
+      if (budget != null && (!isInt(budget) || budget < 50 || budget > 1000000)) f.budget = 'Enter a whole-rupee budget, or leave it blank.';
+      const media = cleanMedia(c.media, 4, true); if (!media.length) f.media = 'Add at least one photo of what you’re looking for.';
+      if (Object.keys(f).length) return Object.assign(err('VALIDATION', 'Check the highlighted fields.'), { fields: f });
+      const r = { id: newId(s, 'rq'), buyerId: u.id, category: c.category, title, description: desc, size: String(c.size || '').trim().slice(0, 20) || null, budget: budget == null ? null : budget * 100, media, status: 'OPEN', createdAt: now, expiresAt: now + RULES.REQUEST_OPEN_DAYS * DAY };
+      s.requests[r.id] = r;
+      const reached = values(s.sellers).filter((x) => (x.categories || []).includes(r.category) && x.userId !== u.id);
+      reached.forEach((x) => notify(s, x.userId, 'seller', `New buyer request in ${r.category}: “${title}”${r.budget ? ' · budget ' + fmt(r.budget) : ''}. Respond with a photo if you have it.`, { type: 'request', id: r.id }, now));
+      r.reached = reached.length;
+      return { ok: true, requestId: r.id, reached: reached.length };
+    },
+    'request.respond'(s, c, now) {
+      const sel = sellerOfUser(s, c.userId); const r = s.requests[c.requestId];
+      if (!sel) return err('NO_SELLER', 'Register your shop first.');
+      if (!r) return err('NOT_FOUND', 'Request not found.');
+      if (r.status !== 'OPEN') return err('CLOSED', 'This request is closed.');
+      if (r.buyerId === c.userId) return err('OWN_REQUEST', 'You can’t respond to your own request.');
+      if (!(sel.categories || []).includes(r.category)) return err('NOT_IN_CATEGORY', 'This request is for a category you don’t sell.');
+      if (values(s.responses).some((x) => x.requestId === r.id && x.sellerId === sel.id)) return err('ALREADY_RESPONDED', 'You’ve already responded to this request.');
+      const f = {}; const text = String(c.text || '').trim(); if (text.length > 500) f.text = 'Keep it under 500 characters.';
+      const price = c.price === '' || c.price == null ? null : Number(c.price);
+      if (price != null && (!isInt(price) || price < 50 || price > 1000000)) f.price = 'Enter a whole-rupee price, or leave it blank.';
+      const media = cleanMedia(c.media, 4, true); if (!media.length) f.media = 'Add a photo of the item you have.';
+      if (Object.keys(f).length) return Object.assign(err('VALIDATION', 'Check the highlighted fields.'), { fields: f });
+      const x = { id: newId(s, 'rp'), requestId: r.id, sellerId: sel.id, sellerUserId: sel.userId, text, price: price == null ? null : price * 100, media, status: 'SENT', at: now };
+      s.responses[x.id] = x;
+      notify(s, r.buyerId, 'buyer', `${sel.name} has something for your request “${r.title}”${x.price ? ' at ' + fmt(x.price) : ''}.`, { type: 'request', id: r.id }, now);
+      return { ok: true, responseId: x.id };
+    },
+    'request.want'(s, c, now) {
+      const x = s.responses[c.responseId]; const r = x && s.requests[x.requestId];
+      if (!x || !r || r.buyerId !== c.userId) return err('NOT_FOUND', 'Response not found.');
+      if (x.status !== 'SENT') return err('INVALID_STATE', x.status === 'WANTED' ? 'You already said you want this.' : 'You declined this response.');
+      x.status = 'WANTED'; x.wantedAt = now;
+      x.threadId = openThread(s, { kind: 'REQUEST', requestId: r.id, responseId: x.id, buyerId: r.buyerId, sellerId: x.sellerId, sellerUserId: x.sellerUserId }, now, `The buyer wants this item. Seller: add it as a listing and share the link here so they can buy it.`);
+      notify(s, x.sellerUserId, 'seller', `${(s.users[r.buyerId] || {}).name || 'A buyer'} wants your item for “${r.title}”. Add it as a listing and share the link in chat.`, { type: 'chat', id: x.threadId }, now);
+      return { ok: true, threadId: x.threadId };
+    },
+    'request.decline'(s, c, now) {
+      const x = s.responses[c.responseId]; const r = x && s.requests[x.requestId];
+      if (!x || !r || r.buyerId !== c.userId) return err('NOT_FOUND', 'Response not found.');
+      if (x.status !== 'SENT') return err('INVALID_STATE', 'You already answered this response.');
+      x.status = 'DECLINED';
+      notify(s, x.sellerUserId, 'seller', `The buyer passed on your item for “${r.title}”.`, { type: 'request', id: r.id }, now);
+      return { ok: true };
+    },
+    'request.close'(s, c, now) {
+      const r = s.requests[c.requestId]; if (!r || r.buyerId !== c.userId) return err('NOT_FOUND', 'Request not found.');
+      if (r.status !== 'OPEN') return err('CLOSED', 'This request is already closed.');
+      r.status = 'CLOSED'; r.closedAt = now; return { ok: true };
+    },
+
     'notifications.markRead'(s, c) { s.notifications.forEach((x) => { if (x.userId === c.userId && x.app === c.app) x.read = true; }); return { ok: true }; },
     'clock.advance'(s, c) { const ms = Number(c.ms); if (!(ms > 0) || ms > 30 * DAY) return err('INVALID', 'Invalid time skip.'); s.clockOffsetMs += ms; return { ok: true }; },
     'system.sweep'() { return { ok: true }; }
@@ -638,10 +785,22 @@
     const gstin = String(c.gstin || '').trim().toUpperCase();
     if (gstin && !GSTIN_RE.test(gstin)) f.gstin = 'Enter a valid 15-character GSTIN, or leave it blank.';
     if (String(c.bio || '').length > 160) f.bio = 'Keep it under 160 characters.';
+    const cats = Array.isArray(c.categories) ? c.categories.filter((x) => CATEGORIES.includes(x)) : [];
+    if (!cats.length) f.categories = 'Choose at least one category you sell.';
+    if (!isMapsUrl(c.mapsUrl)) f.mapsUrl = 'Paste your shop’s Google Maps link (https://maps.app.goo.gl/… or https://www.google.com/maps/…).';
+    if (c.googleProfileUrl && !isGoogleProfileUrl(c.googleProfileUrl)) f.googleProfileUrl = 'Paste a Google Business Profile link (https://g.page/…, https://maps.app.goo.gl/…).';
+    if (c.socialUrl && !isSocialUrl(c.socialUrl)) f.socialUrl = 'Paste your Instagram or Facebook page link (https://instagram.com/yourshop).';
+    Object.assign(f, validateContact(c.contact, 'Add a phone or WhatsApp number buyers can use for open orders.').errors);
+    const sla = c.sla || {};
+    if (!RULES.CONFIRM_HOURS_OPTIONS.includes(Number(sla.confirmHours))) f.confirmHours = 'Choose how soon you usually confirm payments.';
+    if (!RULES.SHIP_DAYS_OPTIONS.includes(Number(sla.shipDays))) f.shipDays = 'Choose how soon you usually ship.';
     return f;
   }
   function sellerFields(c) {
-    return { type: c.sellerType, name: String(c.name).trim(), handle: String(c.handle).trim().toLowerCase(), area: String(c.area).trim(), city: String(c.city || 'Hyderabad').trim() || 'Hyderabad', gstin: String(c.gstin || '').trim().toUpperCase() || null, bio: String(c.bio || '').trim() };
+    return { type: c.sellerType, name: String(c.name).trim(), handle: String(c.handle).trim().toLowerCase(), area: String(c.area).trim(), city: String(c.city || 'Hyderabad').trim() || 'Hyderabad', gstin: String(c.gstin || '').trim().toUpperCase() || null, bio: String(c.bio || '').trim(),
+      categories: CATEGORIES.filter((x) => (c.categories || []).includes(x)), contact: validateContact(c.contact, '').clean,
+      mapsUrl: String(c.mapsUrl).trim(), googleProfileUrl: String(c.googleProfileUrl || '').trim() || null, socialUrl: String(c.socialUrl || '').trim() || null,
+      sla: { confirmHours: Number(c.sla.confirmHours), shipDays: Number(c.sla.shipDays) } };
   }
   function toggle(s, table, userId, key, target) {
     if (!target) return err('NOT_FOUND', 'Not found.'); if (!s.users[userId]) return err('NO_USER', 'Sign in first.');
@@ -669,11 +828,14 @@
     const os = values(s.orders).filter((o) => o.sellerId === sellerId);
     const times = os.filter((o) => o.confirmedAt).map((o) => o.confirmedAt - o.createdAt).sort((a, b) => a - b);
     const median = times.length ? times[Math.floor((times.length - 1) / 2)] : null;
-    return { orders: os.length, completed: os.filter((o) => o.status === 'DELIVERED').length, confirmed: os.filter((o) => o.confirmedAt).length, cancelled: os.filter((o) => o.status === 'CANCELLED').length, expired: os.filter((o) => o.status === 'EXPIRED').length, medianConfirmMs: median };
+    const rv = values(s.reviews).filter((r) => r.sellerId === sellerId);
+    const rating = rv.length ? Math.round((rv.reduce((t, r) => t + r.rating, 0) / rv.length) * 10) / 10 : null;
+    return { orders: os.length, completed: os.filter((o) => o.status === 'DELIVERED').length, confirmed: os.filter((o) => o.confirmedAt).length, cancelled: os.filter((o) => o.status === 'CANCELLED').length, expired: os.filter((o) => o.status === 'EXPIRED').length, medianConfirmMs: median, rating, reviewCount: rv.length };
   }
   function sellerPublic(s, sellerId, viewerId) {
     const x = s.sellers[sellerId];
-    return { id: x.id, name: x.name, handle: x.handle, type: x.type, area: x.area, city: x.city, verification: x.verification, bio: x.bio, following: !!s.follows[viewerId + '|' + x.id], followers: Object.keys(s.follows).filter((k) => k.endsWith('|' + x.id)).length, isMe: x.userId === viewerId, stats: sellerStats(s, x.id) };
+    return { id: x.id, name: x.name, handle: x.handle, type: x.type, area: x.area, city: x.city, verification: x.verification, bio: x.bio, following: !!s.follows[viewerId + '|' + x.id], followers: Object.keys(s.follows).filter((k) => k.endsWith('|' + x.id)).length, isMe: x.userId === viewerId, stats: sellerStats(s, x.id),
+      categories: x.categories || [], mapsUrl: x.mapsUrl || null, googleProfileUrl: x.googleProfileUrl || null, socialUrl: x.socialUrl || null, sla: x.sla || null };
     // NOTE: payment details are never part of the public seller view.
   }
   function paymentForBuyer(s, sellerId) {
@@ -753,8 +915,11 @@
     },
     negotiations(s, userId, now) { return values(s.negotiations).filter((n) => n.buyerId === userId).sort((a, b) => b.updatedAt - a.updatedAt).map((n) => negBuyerDTO(s, n, userId, now)); },
     negotiation(s, userId, id, now) { const n = s.negotiations[id]; return n && n.buyerId === userId ? negBuyerDTO(s, n, userId, now) : null; },
-    orders(s, userId) { return values(s.orders).filter((o) => o.buyerId === userId).sort((a, b) => b.createdAt - a.createdAt).map((o) => orderDTO(s, o, false)); },
-    order(s, userId, id) { const o = s.orders[id]; return o && o.buyerId === userId ? orderDTO(s, o, o.status === 'PLACED' && o.channel === 'DIRECT') : null; },
+    orders(s, userId, now) { return values(s.orders).filter((o) => o.buyerId === userId).sort((a, b) => b.createdAt - a.createdAt).map((o) => orderDTO(s, o, false, 'buyer', now)); },
+    order(s, userId, id, now) { const o = s.orders[id]; return o && o.buyerId === userId ? orderDTO(s, o, o.status === 'PLACED' && o.channel === 'DIRECT', 'buyer', now) : null; },
+    requests(s, userId) { return values(s.requests).filter((r) => r.buyerId === userId).sort((a, b) => b.createdAt - a.createdAt).map((r) => requestBuyerDTO(s, r)); },
+    request(s, userId, id) { const r = s.requests[id]; return r && r.buyerId === userId ? requestBuyerDTO(s, r) : null; },
+    reachable(s, userId, category) { return values(s.sellers).filter((x) => (x.categories || []).includes(category) && x.userId !== userId).length; },
     profile(s, userId, now) {
       const u = s.users[userId]; const p = s.buyerProfiles[userId]; if (!u) return null;
       const orders = values(s.orders).filter((o) => o.buyerId === userId);
@@ -772,10 +937,47 @@
     }
   };
 
-  function orderDTO(s, o, withPayment) {
-    const d = Object.assign(clone(o), { sellerName: s.sellers[o.sellerId].name, buyerName: (s.users[o.buyerId] || {}).name || 'Buyer', statusLabel: orderStatusLabel(o), cancelText: o.cancelReason ? CANCEL_REASONS[o.cancelReason] : null });
+  const OPEN_ORDER = ['PLACED', 'CONFIRMED', 'SHIPPED'];
+  function orderDTO(s, o, withPayment, audience, now) {
+    const sel = s.sellers[o.sellerId];
+    const d = Object.assign(clone(o), { sellerName: sel.name, buyerName: (s.users[o.buyerId] || {}).name || 'Buyer', statusLabel: orderStatusLabel(o), cancelText: o.cancelReason ? CANCEL_REASONS[o.cancelReason] : null });
     if (withPayment) d.payTo = paymentForBuyer(s, o.sellerId);
+    const open = OPEN_ORDER.includes(o.status);
+    const rv = s.reviews['rv_' + o.id]; d.review = rv ? clone(rv) : null;
+    d.unread = o.threadId ? unreadCount(s, s.chats[o.threadId], audience) : 0;
+    if (audience === 'buyer') {
+      d.seller = { id: sel.id, sla: sel.sla || null, stats: sellerStats(s, sel.id), contact: open ? clone(sel.contact || {}) : null };
+      const l = s.listings[o.listingId]; const v = l && variantOf(l, o.variantId);
+      d.buyAgain = l && l.status === 'ACTIVE' ? { listingId: l.id, variantId: v && available(s, l, v, now || 0) > 0 ? v.id : null, anyAvailable: l.variants.some((x) => available(s, l, x, now || 0) > 0), channel: channelOf(l), productUrl: channelOf(l) === 'WEBSITE' ? l.checkout.productUrl : null } : null;
+    } else {
+      const bp = s.buyerProfiles[o.buyerId] || {}; d.buyerContact = open ? clone(bp.contact || {}) : null;
+    }
     return d;
+  }
+  function unreadCount(s, t, audience) {
+    if (!t) return 0; const since = t.readAt[audience === 'buyer' ? 'buyer' : 'seller'] || 0; const mine = audience === 'buyer' ? 'BUYER' : 'SELLER';
+    return t.messages.filter((m) => m.from !== mine && m.from !== 'SYSTEM' && m.at > since).length;
+  }
+  function threadDTO(s, t, audience, now) {
+    const sel = s.sellers[t.sellerId]; const buyer = s.users[t.buyerId] || {};
+    const o = t.orderId ? s.orders[t.orderId] : null; const r = t.requestId ? s.requests[t.requestId] : null; const x = t.responseId ? s.responses[t.responseId] : null;
+    const counterpart = audience === 'buyer' ? sel.name : buyer.name || 'Buyer';
+    return {
+      id: t.id, kind: t.kind, title: threadTitle(s, t), counterpart, orderId: t.orderId || null, requestId: t.requestId || null, responseId: t.responseId || null,
+      orderStatus: o ? orderStatusLabel(o) : null, requestTitle: r ? r.title : null, responseListingId: x ? x.listingId || null : null, responseMedia: x ? x.media[0] : null, category: r ? r.category : null,
+      messages: t.messages.map((m) => {
+        const base = { id: m.id, side: m.from === 'SYSTEM' ? 'SYSTEM' : (audience === 'buyer' ? (m.from === 'BUYER' ? 'ME' : 'THEM') : (m.from === 'SELLER' ? 'ME' : 'THEM')), type: m.type, text: m.text || '', at: m.at, media: m.media || null };
+        if (m.type === 'LISTING') { const l = s.listings[m.listingId]; base.listing = l ? { id: l.id, title: l.title, price: l.price, media: l.media[0] || null, status: l.status, available: l.variants.some((v) => available(s, l, v, now) > 0), channel: channelOf(l) } : null; }
+        return base;
+      }),
+      unread: unreadCount(s, t, audience), updatedAt: t.updatedAt, last: t.messages[t.messages.length - 1]
+    };
+  }
+  function reviewsFor(s, sellerId) {
+    return values(s.reviews).filter((r) => r.sellerId === sellerId).sort((a, b) => b.at - a.at).map((r) => ({ id: r.id, rating: r.rating, text: r.text, media: clone(r.media), at: r.at, editedAt: r.editedAt, title: r.title, buyerName: ((s.users[r.buyerId] || {}).name || 'Buyer').split(' ')[0], orderStatus: (s.orders[r.orderId] || {}).status }));
+  }
+  function requestBuyerDTO(s, r) {
+    return Object.assign(clone(r), { responses: values(s.responses).filter((x) => x.requestId === r.id).sort((a, b) => a.at - b.at).map((x) => Object.assign(clone(x), { seller: sellerPublic(s, x.sellerId, r.buyerId) })) });
   }
   function orderStatusLabel(o) {
     const web = o.channel === 'WEBSITE';
@@ -788,6 +990,9 @@
       return s.comments.filter((c) => c.listingId === listingId).map((c) => ({ id: c.id, text: c.text, at: c.at, name: (s.users[c.userId] || {}).name || 'Someone', isSeller: l && c.userId === l.ownerUserId, shopName: l && c.userId === l.ownerUserId ? s.sellers[l.sellerId].name : null, userId: c.userId }));
     },
     notifications(s, userId, app) { return s.notifications.filter((n) => n.userId === userId && n.app === app); },
+    threads(s, userId, app, now) { return values(s.chats).filter((t) => (app === 'buyer' ? t.buyerId === userId : t.sellerUserId === userId)).sort((a, b) => b.updatedAt - a.updatedAt).map((t) => threadDTO(s, t, app, now)); },
+    thread(s, userId, app, id, now) { const t = s.chats[id]; if (!t || (app === 'buyer' ? t.buyerId !== userId : t.sellerUserId !== userId)) return null; return threadDTO(s, t, app, now); },
+    reviews(s, sellerId) { return reviewsFor(s, sellerId); },
     unread(s, userId, app) { return s.notifications.filter((n) => n.userId === userId && n.app === app && !n.read).length; },
     user(s, userId) { const u = s.users[userId]; return u ? { id: u.id, name: u.name, phone: u.phone } : null; }
   };
@@ -842,9 +1047,17 @@
     negotiation(s, userId, id, now) { const x = sellerOfUser(s, userId); const n = s.negotiations[id]; return x && n && n.sellerId === x.id ? negSellerDTO(s, n, now) : null; },
     orders(s, userId) {
       const x = sellerOfUser(s, userId); if (!x) return [];
-      return values(s.orders).filter((o) => o.sellerId === x.id).sort((a, b) => b.createdAt - a.createdAt).map((o) => orderDTO(s, o, false));
+      return values(s.orders).filter((o) => o.sellerId === x.id).sort((a, b) => b.createdAt - a.createdAt).map((o) => orderDTO(s, o, false, 'seller'));
     },
-    order(s, userId, id) { const x = sellerOfUser(s, userId); const o = s.orders[id]; return x && o && o.sellerId === x.id ? orderDTO(s, o, false) : null; },
+    order(s, userId, id) { const x = sellerOfUser(s, userId); const o = s.orders[id]; return x && o && o.sellerId === x.id ? orderDTO(s, o, false, 'seller') : null; },
+    requests(s, userId) {
+      const x = sellerOfUser(s, userId); if (!x) return [];
+      return values(s.requests).filter((r) => (x.categories || []).includes(r.category) && r.buyerId !== userId).sort((a, b) => b.createdAt - a.createdAt).map((r) => {
+        const mine = values(s.responses).find((p) => p.requestId === r.id && p.sellerId === x.id);
+        return { id: r.id, category: r.category, title: r.title, description: r.description, size: r.size, budget: r.budget, media: clone(r.media), status: r.status, createdAt: r.createdAt, expiresAt: r.expiresAt, buyerName: ((s.users[r.buyerId] || {}).name || 'Buyer').split(' ')[0], responses: values(s.responses).filter((p) => p.requestId === r.id).length, mine: mine ? clone(mine) : null };
+      });
+    },
+    reviews(s, userId) { const x = sellerOfUser(s, userId); return x ? reviewsFor(s, x.id) : []; },
     payment(s, userId) { const x = sellerOfUser(s, userId); return x ? clone(s.paymentProfiles[x.id] || {}) : null; },
     stats(s, userId) { const x = sellerOfUser(s, userId); return x ? sellerStats(s, x.id) : null; },
     dashboard(s, userId, now) {
@@ -852,6 +1065,8 @@
       return {
         totals: { views: ls.reduce((t, l) => t + l.views, 0), likes: ls.reduce((t, l) => t + l.likes, 0), offers: negs.length, orders: orders.length, revenue: orders.filter((o) => ['CONFIRMED', 'SHIPPED', 'DELIVERED'].includes(o.status)).reduce((t, o) => t + o.price, 0), bargained: orders.filter((o) => o.priceSource === 'NEGOTIATED').length, websiteClicks: ls.reduce((t, l) => t + l.websiteClicks, 0) },
         needsReply: negs.filter((n) => n.statusLabel === 'Needs your reply').length,
+        newRequests: seller.requests(s, userId).filter((r) => r.status === 'OPEN' && !r.mine).length,
+        unreadChats: common.threads(s, userId, 'seller', now).reduce((t, x) => t + x.unread, 0),
         toConfirm: orders.filter((o) => o.status === 'PLACED').length, toShip: orders.filter((o) => o.status === 'CONFIRMED').length,
         active: ls.filter((l) => l.status === 'ACTIVE').length, drafts: ls.filter((l) => l.status === 'DRAFT').length,
         top: ls.filter((l) => l.status === 'ACTIVE').sort((a, b) => (b.views + b.likes * 3 + b.offers * 5) - (a.views + a.likes * 3 + a.offers * 5)).slice(0, 3)
@@ -859,5 +1074,5 @@
     }
   };
 
-  root.FaydaEngine = { RULES, CATEGORIES, MODES, ORDER_FLOW, CANCEL_REASONS, PAY_METHODS, validatePayment, HOUR, DAY, emptyState, exec, runSweep, buyer, seller, common, fmt, validateListingDraft, normPhone };
+  root.FaydaEngine = { RULES, CATEGORIES, MODES, ORDER_FLOW, CANCEL_REASONS, PAY_METHODS, validatePayment, isMapsUrl, isGoogleProfileUrl, isSocialUrl, HOUR, DAY, emptyState, exec, runSweep, buyer, seller, common, fmt, validateListingDraft, normPhone };
 })(typeof window !== 'undefined' ? window : globalThis);

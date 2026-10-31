@@ -11,7 +11,7 @@
   const Store = (() => {
     let storageOk = true; let state;
     function load() {
-      try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && s.v === 2 && s.listings && s.paymentProfiles && s.dealCodes) return s; } } catch (e) { storageOk = false; }
+      try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && s.v === 3 && s.listings && s.paymentProfiles && s.dealCodes && s.chats && s.requests) return s; } } catch (e) { storageOk = false; }
       return Seed.createSeedState(Date.now());
     }
     function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); storageOk = true; } catch (e) { storageOk = false; } }
@@ -22,7 +22,7 @@
     function dispatch(cmd) { const r = E.exec(state, cmd, now()); if (r.result.ok) { state = r.state; save(); emit(); } return r.result; }
     function tick() { const s2 = E.runSweep(state, now()); if (s2) { state = s2; save(); } emit(); }
     function reset() { state = Seed.createSeedState(Date.now()); save(); emit(); }
-    try { window.addEventListener('storage', (e) => { if (e.key === KEY && e.newValue) { try { const x = JSON.parse(e.newValue); if (x && x.v === 2) { state = x; emit(); } } catch (x) { /* ignore */ } } }); } catch (e) { /* ignore */ }
+    try { window.addEventListener('storage', (e) => { if (e.key === KEY && e.newValue) { try { const x = JSON.parse(e.newValue); if (x && x.v === 3) { state = x; emit(); } } catch (x) { /* ignore */ } } }); } catch (e) { /* ignore */ }
     setInterval(tick, 1000);
     return { get state() { return state; }, now, dispatch, reset, subscribe(f) { subs.add(f); return () => subs.delete(f); }, get storageOk() { return storageOk; } };
   })();
@@ -112,6 +112,13 @@
     pause: '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>',
     image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
     video: '<path d="m16 13 5.2 3.1a.5.5 0 0 0 .8-.4V8.3a.5.5 0 0 0-.8-.4L16 11"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
+    star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
+    msg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    megaphone: '<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+    external: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/>',
+    clip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+    repeat: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
     shield: '<path d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/>'
   };
   function Icon({ name, size = 22, fill = 'none', sw = 2, style }) {

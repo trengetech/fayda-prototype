@@ -12,14 +12,47 @@
     return h(SellerMain, { uid });
   }
 
+  // Shop location, links, contact and declared timings (onboarding step 2 + shop settings)
+  function ReachFields({ v, setV, errors, setErrors, idp }) {
+    const set = (k) => (e) => { setV(Object.assign({}, v, { [k]: e.target.value.trim() })); setErrors(Object.assign({}, errors, { [k]: null })); };
+    const f = (k, label, ph, hint) => h(Field, { label, id: idp + k, error: errors[k], hint }, h(Input, { id: idp + k, inputMode: 'url', autoCapitalize: 'none', placeholder: ph, value: v[k] || '', invalid: !!errors[k], onChange: set(k) }));
+    const sla = v.sla || {};
+    return h('div', { className: 'stack', style: { gap: 14 } },
+      f('mapsUrl', 'Google Maps location of your shop', 'https://maps.app.goo.gl/…', 'In Google Maps, open your shop, tap Share and copy the link.'),
+      f('googleProfileUrl', 'Google Business Profile (optional)', 'https://g.page/…'),
+      f('socialUrl', 'Instagram or Facebook page (optional)', 'https://instagram.com/yourshop'),
+      h(U.ContactFields, { value: v.contact || {}, onChange: (c) => { setV(Object.assign({}, v, { contact: c })); setErrors(Object.assign({}, errors, { contact: null, contactPhone: null, contactWhatsapp: null })); }, errors, idp: idp + 'c', who: 'Buyers' }),
+      h('div', null, h('div', { className: 'label', style: { marginBottom: 6 } }, 'You usually confirm a payment'), h('div', { className: 'chips' }, E.RULES.CONFIRM_HOURS_OPTIONS.map((x) => h(Chip, { key: x, on: Number(sla.confirmHours) === x, onClick: () => { setV(Object.assign({}, v, { sla: Object.assign({}, sla, { confirmHours: x }) })); setErrors(Object.assign({}, errors, { confirmHours: null })); } }, U.confirmText(x).replace('within ', '')))), errors.confirmHours && h('div', { className: 'error' }, errors.confirmHours)),
+      h('div', null, h('div', { className: 'label', style: { marginBottom: 6 } }, 'You usually ship within'), h('div', { className: 'chips' }, E.RULES.SHIP_DAYS_OPTIONS.map((x) => h(Chip, { key: x, on: Number(sla.shipDays) === x, onClick: () => { setV(Object.assign({}, v, { sla: Object.assign({}, sla, { shipDays: x }) })); setErrors(Object.assign({}, errors, { shipDays: null })); } }, x + (x === 1 ? ' day' : ' days')))), errors.shipDays && h('div', { className: 'error' }, errors.shipDays)),
+      h('div', { className: 'hint' }, 'Buyers see your declared times next to how fast you actually confirm on ' + BRAND + '.'));
+  }
+  function CategoryChips({ v, setV, errors }) {
+    const cats = v.categories || [];
+    return h('div', null, h('div', { className: 'label', style: { marginBottom: 6 } }, 'Categories you sell'), h('div', { className: 'chips' }, E.CATEGORIES.map((c) => h(Chip, { key: c, on: cats.includes(c), onClick: () => setV(Object.assign({}, v, { categories: cats.includes(c) ? cats.filter((x) => x !== c) : cats.concat([c]) })) }, c))), errors.categories ? h('div', { className: 'error' }, errors.categories) : h('div', { className: 'hint', style: { marginTop: 4 } }, 'You’ll get buyer requests for these categories.'));
+  }
+  function checkReach(v) {
+    const e = {};
+    if (!E.isMapsUrl(v.mapsUrl)) e.mapsUrl = 'Paste your shop’s Google Maps link (https://maps.app.goo.gl/… or https://www.google.com/maps/…).';
+    if (v.googleProfileUrl && !E.isGoogleProfileUrl(v.googleProfileUrl)) e.googleProfileUrl = 'Paste a Google Business Profile link (https://g.page/…).';
+    if (v.socialUrl && !E.isSocialUrl(v.socialUrl)) e.socialUrl = 'Paste your Instagram or Facebook page link.';
+    const c = v.contact || {}; const ok = (x) => /^[6-9]\d{9}$/.test(x || '');
+    if (c.phone && !ok(c.phone)) e.contactPhone = 'Enter a valid 10-digit mobile number.';
+    if (c.whatsapp && !ok(c.whatsapp)) e.contactWhatsapp = 'Enter a valid 10-digit WhatsApp number.';
+    if (!c.phone && !c.whatsapp) e.contact = 'Add a phone or WhatsApp number buyers can use for open orders.';
+    if (!v.sla || !v.sla.confirmHours) e.confirmHours = 'Choose how soon you usually confirm payments.';
+    if (!v.sla || !v.sla.shipDays) e.shipDays = 'Choose how soon you usually ship.';
+    return e;
+  }
+
   // ---------- onboarding ----------
   function SellerOnboarding({ uid }) {
     const u = Store.state.users[uid];
     const [step, setStep] = useState('shop');
-    const [v, setV] = useState({ sellerType: null, name: '', handle: '', area: '', city: 'Hyderabad', gstin: '', bio: '', ownerName: u.name || '' });
+    const [v, setV] = useState({ sellerType: null, name: '', handle: '', area: '', city: 'Hyderabad', gstin: '', bio: '', ownerName: u.name || '', categories: [], mapsUrl: '', googleProfileUrl: '', socialUrl: '', contact: { phone: u.phone, whatsapp: '' }, sla: { confirmHours: null, shipDays: null } });
     const [pay, setPay] = useState({ upiId: '', upiQrMediaId: null, bankHolder: '', bankAccount: '', bankIfsc: '', bankName: '', paymentLink: '', website: '' });
     const [errors, setErrors] = useState({}); const [conduct, setConduct] = useState(false); const [toast, toastNode] = useToast(); const [touchedHandle, setTouchedHandle] = useState(false);
-    const SHOP_FIELDS = ['sellerType', 'name', 'handle', 'area', 'city', 'gstin', 'bio', 'ownerName'];
+    const SHOP_FIELDS = ['sellerType', 'name', 'handle', 'area', 'city', 'gstin', 'bio', 'ownerName', 'categories'];
+    const REACH_FIELDS = ['mapsUrl', 'googleProfileUrl', 'socialUrl', 'contact', 'contactPhone', 'contactWhatsapp', 'confirmHours', 'shipDays'];
     const set = (k) => (e) => { const val = e.target.value; const next = Object.assign({}, v, { [k]: k === 'gstin' ? val.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 15) : val }); if (k === 'name' && !touchedHandle) next.handle = val.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 24); if (k === 'handle') setTouchedHandle(true); setV(next); setErrors(Object.assign({}, errors, { [k]: null })); };
     const nextFromShop = () => {
       const e = {};
@@ -28,20 +61,23 @@
       if (v.name.trim().length < 2) e.name = 'Enter your shop name (2–60 characters).';
       if (!/^[a-z0-9_.]{3,24}$/.test(v.handle)) e.handle = 'Use 3–24 lowercase letters, numbers, dots or underscores.';
       if (!v.area.trim()) e.area = 'Enter your area or locality.';
+      if (!v.categories.length) e.categories = 'Choose at least one category you sell.';
       if (Object.keys(e).length) { setErrors(e); return; }
-      setErrors({}); setStep('pay');
+      setErrors({}); setStep('reach');
     };
+    const nextFromReach = () => { const e = checkReach(v); if (Object.keys(e).length) { setErrors(e); return; } setErrors({}); setStep('pay'); };
     const nextFromPay = () => { const r = E.validatePayment(pay); if (Object.keys(r.errors).length) { setErrors(r.errors); return; } setErrors({}); setConduct(true); };
     const register = () => {
       setConduct(false);
       if (!u.name) Store.dispatch({ type: 'user.updateName', userId: uid, name: v.ownerName });
       const r = Store.dispatch(Object.assign({ type: 'seller.register', userId: uid, conductAccepted: true, payment: pay }, v));
-      if (!r.ok) { const f = r.fields || {}; setErrors(f); if (Object.keys(f).some((k) => SHOP_FIELDS.includes(k))) setStep('shop'); toast(r.message, true); }
+      if (!r.ok) { const f = r.fields || {}; setErrors(f); const ks = Object.keys(f); if (ks.some((k) => SHOP_FIELDS.includes(k))) setStep('shop'); else if (ks.some((k) => REACH_FIELDS.includes(k))) setStep('reach'); toast(r.message, true); }
     };
     const f = (k, label, extra, hint) => h(Field, { label, id: 'so-' + k, error: errors[k], hint }, h(Input, Object.assign({ id: 'so-' + k, value: v[k], invalid: !!errors[k], onChange: set(k) }, extra || {})));
+    const back = (to) => h('button', { className: 'iconbtn', onClick: () => { setStep(to); setErrors({}); }, 'aria-label': 'Back' }, h(Icon, { name: 'back' }));
     return h('div', { className: 'body' }, h('div', { className: 'screen' }, h('div', { className: 'pad stack', style: { gap: 16 } },
       step === 'shop' ? h(React.Fragment, null,
-        h('div', null, h('div', { className: 'small muted strong' }, 'Step 1 of 2 · Your shop'), h('div', { className: 'h2' }, 'Tell buyers who you are')),
+        h('div', null, h('div', { className: 'small muted strong' }, 'Step 1 of 3 · Your shop'), h('div', { className: 'h2' }, 'Tell buyers who you are')),
         h('div', { className: 'stack', style: { gap: 10 } },
           [['BUSINESS', 'Registered business', 'Boutiques, brands and retailers. Add your GSTIN if you have one.', 'store'], ['INDIVIDUAL', 'Individual seller', 'Home sellers and small resellers. No business registration needed.', 'user']].map(([k, t, d, ic]) => h('button', { key: k, className: 'choice', 'aria-pressed': v.sellerType === k, onClick: () => { setV(Object.assign({}, v, { sellerType: k })); setErrors(Object.assign({}, errors, { sellerType: null })); } }, h('div', { className: 'ic' }, h(Icon, { name: ic })), h('div', null, h('div', { className: 'strong', style: { fontSize: 16 } }, t), h('div', { className: 'small muted' }, d)))),
           errors.sellerType && h('div', { className: 'error' }, errors.sellerType)),
@@ -49,17 +85,19 @@
         f('name', 'Shop name', { autoComplete: 'organization' }),
         f('handle', 'Shop handle', { autoCapitalize: 'none' }, 'Buyers see this as @' + (v.handle || 'yourshop')),
         h('div', { className: 'grid2' }, f('area', 'Area', { placeholder: 'e.g. Kondapur' }), f('city', 'City')),
+        h(CategoryChips, { v, setV: (x) => { setV(x); setErrors(Object.assign({}, errors, { categories: null })); }, errors }),
         v.sellerType === 'BUSINESS' && f('gstin', 'GSTIN (optional)', { placeholder: '15 characters', autoCapitalize: 'characters' }, 'Stored only. GST verification isn’t part of this prototype.'),
         h(Field, { label: 'About your shop (optional)', id: 'so-bio', error: errors.bio }, h(Input, { id: 'so-bio', multiline: true, maxLength: 160, value: v.bio, onChange: set('bio') })))
-      : h(React.Fragment, null,
-        h('button', { className: 'iconbtn', onClick: () => { setStep('shop'); setErrors({}); }, 'aria-label': 'Back' }, h(Icon, { name: 'back' })),
-        h('div', null, h('div', { className: 'small muted strong' }, 'Step 2 of 2 · Getting paid'), h('div', { className: 'h2' }, 'How will buyers pay you?'), h('div', { className: 'small muted', style: { marginTop: 4 } }, 'Add any that you use. You can change these later.')),
+      : step === 'reach' ? h(React.Fragment, null, back('shop'),
+        h('div', null, h('div', { className: 'small muted strong' }, 'Step 2 of 3 · Location and contact'), h('div', { className: 'h2' }, 'Where buyers can find you')),
+        h(ReachFields, { v, setV, errors, setErrors, idp: 'sor-' }))
+      : h(React.Fragment, null, back('reach'),
+        h('div', null, h('div', { className: 'small muted strong' }, 'Step 3 of 3 · Getting paid'), h('div', { className: 'h2' }, 'How will buyers pay you?'), h('div', { className: 'small muted', style: { marginTop: 4 } }, 'Add any that you use. You can change these later.')),
         h(U.PaymentForm, { value: pay, onChange: (x) => { setPay(x); setErrors({}); }, errors, idp: 'sop-' })))),
-      h('div', { className: 'actionbar' }, h(Btn, { size: 'lg', block: true, onClick: step === 'shop' ? nextFromShop : nextFromPay }, 'Continue'), step === 'shop' && h('button', { className: 'btn ghost sm', onClick: () => Store.dispatch({ type: 'auth.signOut', app: 'seller' }) }, 'Use a different number')),
+      h('div', { className: 'actionbar' }, h(Btn, { size: 'lg', block: true, onClick: step === 'shop' ? nextFromShop : step === 'reach' ? nextFromReach : nextFromPay }, 'Continue'), step === 'shop' && h('button', { className: 'btn ghost sm', onClick: () => Store.dispatch({ type: 'auth.signOut', app: 'seller' }) }, 'Use a different number')),
       conduct && h('div', { className: 'dialog', role: 'dialog', 'aria-label': 'Seller Code of Conduct' }, h('div', { style: { maxHeight: '90%', overflow: 'auto' } },
         h('div', { className: 'h3', style: { fontSize: 18 } }, 'Seller Code of Conduct'), h(Badge, { tone: 'accent' }, 'Draft — pending legal review'),
-        h('ol', { className: 'small', style: { paddingLeft: 18, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 } }, h('li', null, 'List genuine products with accurate photos, videos and descriptions.'), h('li', null, 'Honour prices you agree with buyers, including coupon codes and discount links you give them.'), h('li', null, 'Confirm payments and orders promptly and keep stock accurate.'), h('li', null, 'Payment details you add must be your own. Deliver what buyers paid for, and refund them yourself if you can’t.'), h('li', null, 'Respond to buyers respectfully and resolve genuine complaints.')),
-        h('div', { className: 'hint' }, `${BRAND} doesn’t handle payments, delivery or refunds. Enforcement and appeals are open policy decisions and aren’t part of this prototype.`),
+        h('ol', { className: 'small', style: { paddingLeft: 18, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 } }, h('li', null, 'List genuine products with accurate photos, videos and descriptions.'), h('li', null, 'Honour prices you agree with buyers, including coupon codes and discount links you give them.'), h('li', null, 'Confirm payments and ship within the times you declare, and keep stock accurate.'), h('li', null, 'Payment details, shop location and links you add must be your own. Deliver what buyers paid for, and refund them yourself if you can’t.'), h('li', null, `Resolve disputes directly with buyers — ${BRAND} doesn’t mediate.`), h('li', null, `If listings, details or behaviour are found to be misleading, ${BRAND} may ban the account from the platform.`)),
         h('div', { className: 'btn-row' }, h(Btn, { kind: 'outline', onClick: () => { setConduct(false); toast('Registration cancelled. Nothing was saved.'); } }, 'Disagree'), h(Btn, { onClick: register }, 'Agree and register')))), toastNode);
   }
 
@@ -68,8 +106,8 @@
     const nav = useNav('home'); const [toast, toastNode] = useToast(); const [sheet, setSheet] = useState(null);
     const s = Store.state; const now = Store.now(); const dash = S.dashboard(s, uid, now); const unread = E.common.unread(s, uid, 'seller');
     const ctx = { app: 'seller', uid, nav, toast, unread, openSheet: (type, params) => setSheet({ type, params: params || {} }), closeSheet: () => setSheet(null) };
-    const tabs = [['home', 'Home', 'chart'], ['listings', 'Listings', 'list'], ['offers', 'Offers', 'tag', dash.needsReply], ['orders', 'Orders', 'box', dash.toConfirm + dash.toShip], ['profile', 'Shop', 'store']];
-    const Tab = { home: Dashboard, listings: ListingsScreen, offers: OffersInbox, orders: SellerOrders, profile: ShopProfile }[nav.tab];
+    const tabs = [['home', 'Home', 'chart'], ['listings', 'Listings', 'list'], ['offers', 'Offers', 'tag', dash.needsReply], ['requests', 'Requests', 'megaphone', dash.newRequests], ['orders', 'Orders', 'box', dash.toConfirm + dash.toShip], ['profile', 'Shop', 'store']];
+    const Tab = { home: Dashboard, listings: ListingsScreen, offers: OffersInbox, requests: RequestsInbox, orders: SellerOrders, profile: ShopProfile }[nav.tab];
     const Sh = sheet ? SHEETS[sheet.type] : null;
     return h(AppCtx.Provider, { value: ctx }, h('div', { className: 'body' },
       h(Tab, null),
@@ -84,8 +122,8 @@
 
   function Dashboard() {
     const { uid, nav } = useApp(); const s = Store.state; const now = Store.now(); const me = S.me(s, uid); const d = S.dashboard(s, uid, now);
-    const actions = [[d.needsReply, d.needsReply === 1 ? 'offer needs your reply' : 'offers need your reply', () => nav.setTab('offers')], [d.toConfirm, d.toConfirm === 1 ? 'order waiting for your confirmation' : 'orders waiting for your confirmation', () => nav.setTab('orders')], [d.toShip, `order${d.toShip === 1 ? '' : 's'} to ship`, () => nav.setTab('orders')], [d.drafts, d.drafts === 1 ? 'draft isn’t published' : 'drafts aren’t published', () => nav.setTab('listings')]].filter((x) => x[0] > 0);
-    return h('div', { className: 'screen' }, h(U.AppBar, { title: me.name, right: h(Bell) }), h('div', { className: 'pad stack' },
+    const actions = [[d.unreadChats, d.unreadChats === 1 ? 'unread message from a buyer' : 'unread messages from buyers', () => nav.go('threads')], [d.newRequests, d.newRequests === 1 ? 'new buyer request in your categories' : 'new buyer requests in your categories', () => nav.setTab('requests')], [d.needsReply, d.needsReply === 1 ? 'offer needs your reply' : 'offers need your reply', () => nav.setTab('offers')], [d.toConfirm, d.toConfirm === 1 ? 'order waiting for your confirmation' : 'orders waiting for your confirmation', () => nav.setTab('orders')], [d.toShip, `order${d.toShip === 1 ? '' : 's'} to ship`, () => nav.setTab('orders')], [d.drafts, d.drafts === 1 ? 'draft isn’t published' : 'drafts aren’t published', () => nav.setTab('listings')]].filter((x) => x[0] > 0);
+    return h('div', { className: 'screen' }, h(U.AppBar, { title: me.name, right: h('div', { className: 'row', style: { gap: 8 } }, h(U.MsgButton, { app: 'seller', userId: uid, onClick: () => nav.go('threads') }), h(Bell)) }), h('div', { className: 'pad stack' },
       h('div', { className: 'row between' }, h('div', null, h('div', { className: 'small muted' }, 'Hello, ' + (Store.state.users[uid].name || 'there').split(' ')[0]), h('div', { className: 'h2' }, actions.length ? 'Here’s what needs you' : 'You’re up to date')), h(Btn, { size: 'sm', onClick: () => nav.go('editor', {}) }, h(Icon, { name: 'plus', size: 18 }), 'New listing')),
       actions.length ? h('div', { className: 'stack', style: { gap: 8 } }, actions.map(([n, t, go], i) => h('button', { key: i, className: 'card tint row', style: { textAlign: 'left', color: 'var(--ink)' }, onClick: go }, h('span', { style: { fontSize: 22, fontWeight: 800, color: 'var(--accent)', minWidth: 28 } }, n), h('span', { className: 'grow strong' }, t), h(Icon, { name: 'back', size: 18, style: { transform: 'rotate(180deg)' } })))) : h('div', { className: 'small muted' }, 'New offers and orders will appear here.'),
       h('div', { className: 'section-title' }, 'All-time activity'),
@@ -144,8 +182,9 @@
 
   // ---------- listing editor (publish flow) ----------
   const toStr = (p) => (p == null ? '' : String(Math.round(p / 100)));
-  function ListingEditor({ id }) {
+  function ListingEditor({ id, fromResponseId }) {
     const { uid, nav, toast } = useApp(); const s = Store.state;
+    const resp = fromResponseId ? s.responses[fromResponseId] : null; const req = resp ? s.requests[resp.requestId] : null;
     const pay = S.payment(s, uid) || {}; const hasDirect = !!(pay.upiId || pay.upiQrMediaId || pay.bankAccount || pay.paymentLink);
     const existing = id ? S.listing(s, uid, id) : null; const summary = existing ? S.listingSummary(s, s.listings[id], Store.now()) : null;
     const [d, setD] = useState(() => existing ? {
@@ -153,7 +192,7 @@
       variants: existing.variants.map((v) => ({ id: v.id, label: v.label, stock: String(v.stock) })), bargaining: Object.assign({}, existing.bargaining),
       rules: { autoAcceptAt: toStr(existing.rules.autoAcceptAt), autoDeclineBelow: toStr(existing.rules.autoDeclineBelow), autoCounterAt: toStr(existing.rules.autoCounterAt) },
       checkout: Object.assign({ productUrl: '' }, existing.checkout), dealCodes: { accept: existing.dealCodes.accept || null, counter: existing.dealCodes.counter || null }
-    } : { title: '', description: '', category: 'Ethnic wear', price: '', media: [], variants: [{ label: 'S', stock: '' }, { label: 'M', stock: '' }, { label: 'L', stock: '' }], bargaining: { mode: 'BOTH', expiryHours: 24 }, rules: { autoAcceptAt: '', autoDeclineBelow: '', autoCounterAt: '' }, checkout: { channel: hasDirect ? 'DIRECT' : 'WEBSITE', productUrl: pay.website ? pay.website.replace(/\/$/, '') + '/' : '' }, dealCodes: { accept: null, counter: null } });
+    } : resp && req ? { title: req.title.slice(0, 80), description: req.description || '', category: req.category, price: resp.price ? toStr(resp.price) : '', media: resp.media.slice(), variants: [{ label: req.size || 'One size', stock: '1' }], bargaining: { mode: 'FIXED', expiryHours: 24 }, rules: { autoAcceptAt: '', autoDeclineBelow: '', autoCounterAt: '' }, checkout: { channel: hasDirect ? 'DIRECT' : 'WEBSITE', productUrl: pay.website ? pay.website.replace(/\/$/, '') + '/' : '' }, dealCodes: { accept: null, counter: null } } : { title: '', description: '', category: 'Ethnic wear', price: '', media: [], variants: [{ label: 'S', stock: '' }, { label: 'M', stock: '' }, { label: 'L', stock: '' }], bargaining: { mode: 'BOTH', expiryHours: 24 }, rules: { autoAcceptAt: '', autoDeclineBelow: '', autoCounterAt: '' }, checkout: { channel: hasDirect ? 'DIRECT' : 'WEBSITE', productUrl: pay.website ? pay.website.replace(/\/$/, '') + '/' : '' }, dealCodes: { accept: null, counter: null } });
     const [errors, setErrors] = useState({}); const [busy, setBusy] = useState(false); const [mediaMsg, setMediaMsg] = useState(null); const [advanced, setAdvanced] = useState(!!(existing && (existing.rules.autoDeclineBelow != null || existing.rules.autoCounterAt != null)));
     const fileRef = useRef(null);
     const set = (patch) => { setD(Object.assign({}, d, patch)); };
@@ -180,8 +219,9 @@
 
     const save = (publish) => {
       const draft = Object.assign({}, d, { price: d.price === '' ? NaN : Number(d.price), variants: d.variants.map((v) => ({ id: v.id, label: v.label, stock: v.stock === '' ? 0 : Number(v.stock) })), rules: advanced ? d.rules : Object.assign({}, d.rules, { autoDeclineBelow: '', autoCounterAt: '' }) });
-      const r = Store.dispatch({ type: 'listing.save', userId: uid, listingId: id || null, draft, publish });
+      const r = Store.dispatch({ type: 'listing.save', userId: uid, listingId: id || null, draft, publish, fromResponseId: fromResponseId || null });
       if (!r.ok) { setErrors(r.fields || {}); toast(r.message, true); return; }
+      if (r.sharedInChat) { nav.replace('chat', { id: resp.threadId }); toast('Published and shared in the chat with the buyer'); return; }
       nav.replace('listing', { id: r.listingId });
       toast(publish ? (existing && existing.status === 'ACTIVE' ? 'Changes saved' : 'Published — it’s in the buyer feed now') : existing && existing.status !== 'DRAFT' ? 'Changes saved' : 'Draft saved');
     };
@@ -189,8 +229,9 @@
     const P = Number(d.price) || 0; const A = d.rules.autoAcceptAt === '' ? null : Number(d.rules.autoAcceptAt);
     const footer = h('div', { className: live ? '' : 'btn-row' }, !live && h(Btn, { kind: 'outline', onClick: () => save(false), disabled: busy }, 'Save draft'), h(Btn, { block: live, onClick: () => save(!existing || existing.status === 'DRAFT'), disabled: busy }, busy ? 'Uploading…' : live ? 'Save changes' : 'Publish'));
     const presets = [['S–XL', ['S', 'M', 'L', 'XL']], ['One size', ['One size']], ['UK 6–9', ['6', '7', '8', '9']]];
-    return h(Page, { title: existing ? 'Edit listing' : 'New listing', onBack: nav.back, footer },
+    return h(Page, { title: existing ? 'Edit listing' : resp ? 'List item for buyer' : 'New listing', onBack: nav.back, footer },
       h('div', { className: 'pad stack', style: { gap: 18 } },
+        resp && h('div', { className: 'card info small' }, `Listing the item for “${req.title}”. When you publish, the link is shared in your chat with the buyer.`),
         h('div', null, h('div', { className: 'label', style: { marginBottom: 8 } }, 'Video and photos'),
           h('div', { className: 'upload-grid' },
             d.media.map((m, i) => h('div', { key: (m.mediaId || m.scene) + i, className: 'upload-cell' }, h(MediaView, { m, small: true }), h('button', { className: 'x', 'aria-label': 'Remove', onClick: () => set({ media: d.media.filter((_, j) => j !== i) }) }, h(Icon, { name: 'x', size: 14 })), h('span', { className: 'kind' }, h(Badge, { tone: 'dark' }, i === 0 ? 'Cover' : m.kind === 'seed' ? 'Sample' : m.kind === 'video' ? 'Video' : 'Photo')), i > 0 && h('button', { className: 'x', style: { right: 'auto', left: 4 }, 'aria-label': 'Make cover', onClick: () => move(i, -i) }, h(Icon, { name: 'back', size: 14, style: { transform: 'rotate(90deg)' } })))),
@@ -275,7 +316,7 @@
     const { uid, nav } = useApp(); const all = S.orders(Store.state, uid); const now = Store.now(); const [f, setF] = useState('PLACED');
     const groups = { PLACED: all.filter((o) => o.status === 'PLACED'), CONFIRMED: all.filter((o) => o.status === 'CONFIRMED'), SHIPPED: all.filter((o) => o.status === 'SHIPPED'), DONE: all.filter((o) => ['DELIVERED', 'CANCELLED', 'EXPIRED'].includes(o.status)) };
     const list = groups[f];
-    return h('div', { className: 'screen' }, h(U.AppBar, { title: 'Orders', right: h(Bell) }),
+    return h('div', { className: 'screen' }, h(U.AppBar, { title: 'Orders', right: h('div', { className: 'row', style: { gap: 8 } }, h(U.MsgButton, { app: 'seller', userId: uid, onClick: () => nav.go('threads') }), h(Bell)) }),
       h('div', { style: { padding: '12px 16px' } }, h(Seg, { label: 'Order status', value: f, onChange: setF, options: [{ value: 'PLACED', label: `New (${groups.PLACED.length})` }, { value: 'CONFIRMED', label: `To ship (${groups.CONFIRMED.length})` }, { value: 'SHIPPED', label: 'Shipped' }, { value: 'DONE', label: 'Closed' }] })),
       list.length ? list.map((o) => h('button', { key: o.id, className: 'listrow', onClick: () => nav.go('order', { id: o.id }) }, h(Thumb, { m: o.media }), h('div', { className: 'grow' }, h('div', { className: 'strong ellipsis' }, o.title), h('div', { className: 'tiny muted' }, `${o.number} · ${o.buyerName} · ${U.sizeText(o.variantLabel).toLowerCase()} · ${ago(o.createdAt, now)}`), h('div', { className: 'small' }, h('b', null, money(o.price)), ' · ', o.channel === 'WEBSITE' ? 'website' : E.PAY_METHODS[o.paymentMethod], o.priceSource === 'NEGOTIATED' ? ' · bargained' : '', o.status === 'PLACED' ? ` · ${left(o.confirmBy - now)} to confirm` : '')), h(Badge, { tone: U.ORDER_TONE[o.status] }, { PLACED: 'To confirm', CONFIRMED: 'Confirmed', SHIPPED: 'Shipped', DELIVERED: 'Delivered', CANCELLED: 'Cancelled', EXPIRED: 'Expired' }[o.status])))
         : h(Empty, { icon: 'box', title: { PLACED: 'No new orders', CONFIRMED: 'Nothing waiting to ship', SHIPPED: 'Nothing in transit', DONE: 'No closed orders yet' }[f], body: f === 'PLACED' ? 'When a buyer places an order, confirm it here once you see the payment or the website order.' : null }));
@@ -297,6 +338,8 @@
       h('div', { className: 'pad stack' },
         h('div', { className: 'row' }, h(Thumb, { m: o.media, lg: true }), h('div', { className: 'grow' }, h('div', { className: 'strong' }, o.title), h('div', { className: 'small muted' }, `${U.sizeText(o.variantLabel)} · Qty 1 · ${o.buyerName}`), h('div', { style: { marginTop: 4 } }, h(Badge, { tone: U.ORDER_TONE[o.status] }, o.statusLabel)))),
         h(U.OrderSteps, { order: o }),
+        h('div', { className: 'card stack', style: { gap: 8 } }, h('div', { className: 'strong' }, 'Contact buyer'), h(U.ContactButtons, { contact: o.buyerContact, unread: o.unread, onChat: () => nav.go('chat', { id: o.threadId }), note: `Hi ${o.buyerName.split(' ')[0]}, about your ${BRAND} order ${o.number} (${o.title}).` }), !o.buyerContact && h('div', { className: 'tiny muted' }, 'Phone and WhatsApp are shown while the order is open. Chat stays available.')),
+        o.review && h('div', null, h('div', { className: 'section-title' }, 'Buyer’s review'), h(U.ReviewCard, { r: Object.assign({ buyerName: o.buyerName.split(' ')[0], title: o.title }, o.review), now })),
         o.status === 'CONFIRMED' && !o.shipment && h('div', { className: 'hint' }, 'Shipment details are optional. Add them if you use a courier, or mark the order delivered when the buyer has it.'),
         h(U.ShipmentCard, { sh: o.shipment }),
         h('div', null, h('div', { className: 'section-title' }, 'Sale'), h(Kv, { k: 'Listed price', v: money(o.listPrice) }), h(Kv, { k: o.priceSource === 'NEGOTIATED' ? 'Agreed price' : 'Sold at', v: money(o.price), strong: true }), h(Kv, { k: 'Buyer pays via', v: web ? 'Your website' : E.PAY_METHODS[o.paymentMethod] }), web && o.dealAccess && h(Kv, { k: o.dealAccess.type === 'CODE' ? 'Coupon used' : 'Discount link', v: o.dealAccess.type === 'CODE' ? o.dealAccess.value : 'Given to buyer' }), h(Kv, { k: 'Payment reference', v: o.number })),
@@ -314,11 +357,11 @@
   }
 
   // ---------- shop profile ----------
-  // ---------- shop profile ----------
   function ShopProfile() {
     const { uid, toast } = useApp(); const me = S.me(Store.state, uid); const u = Store.state.users[uid]; const pay = S.payment(Store.state, uid); const st = S.stats(Store.state, uid);
     const [edit, setEdit] = useState(null); const [v, setV] = useState(null); const [errors, setErrors] = useState({});
-    const start = () => { setV({ name: me.name, handle: me.handle, area: me.area, city: me.city, gstin: me.gstin || '', bio: me.bio || '' }); setErrors({}); setEdit('shop'); };
+    const start = () => { setV({ name: me.name, handle: me.handle, area: me.area, city: me.city, gstin: me.gstin || '', bio: me.bio || '', categories: (me.categories || []).slice(), mapsUrl: me.mapsUrl || '', googleProfileUrl: me.googleProfileUrl || '', socialUrl: me.socialUrl || '', contact: Object.assign({ phone: '', whatsapp: '' }, me.contact || {}), sla: Object.assign({}, me.sla || {}) }); setErrors({}); setEdit('shop'); };
+    const reviews = S.reviews(Store.state, uid); const now = Store.now();
     const startPay = () => { setV(Object.assign({ upiId: '', upiQrMediaId: null, bankHolder: '', bankAccount: '', bankIfsc: '', bankName: '', paymentLink: '', website: '' }, Object.fromEntries(Object.entries(pay).filter(([, x]) => x != null)))); setErrors({}); setEdit('pay'); };
     const save = () => { const r = Store.dispatch(Object.assign({ type: 'seller.updateProfile', userId: uid }, v)); if (!r.ok) { setErrors(r.fields || {}); return; } setEdit(null); toast('Shop details saved'); };
     const savePay = () => { const r = Store.dispatch({ type: 'seller.updatePayment', userId: uid, payment: v }); if (!r.ok) { setErrors(r.fields || {}); toast(r.message, true); return; } setEdit(null); toast('Payment details saved'); };
@@ -326,10 +369,12 @@
     const mask = (x) => (x ? '•••• ' + x.slice(-4) : '');
     if (edit === 'pay') return h('div', { className: 'screen' }, h(U.AppBar, { title: 'Payment details', onBack: () => setEdit(null) }), h('div', { className: 'pad stack' }, h(U.PaymentForm, { value: v, onChange: (x) => { setV(x); setErrors({}); }, errors, idp: 'spp-' }), h('div', { className: 'btn-row' }, h(Btn, { kind: 'outline', onClick: () => setEdit(null) }, 'Cancel'), h(Btn, { onClick: savePay }, 'Save'))));
     return h('div', { className: 'screen' }, h(U.AppBar, { title: 'Shop', right: h(Bell) }), h('div', { className: 'pad stack' },
-      edit === 'shop' ? h(React.Fragment, null, f('name', 'Shop name'), f('handle', 'Shop handle'), h('div', { className: 'grid2' }, f('area', 'Area'), f('city', 'City')), me.type === 'BUSINESS' && f('gstin', 'GSTIN (optional)'), f('bio', 'About', { multiline: true, maxLength: 160 }), h('div', { className: 'btn-row' }, h(Btn, { kind: 'outline', onClick: () => setEdit(null) }, 'Cancel'), h(Btn, { onClick: save }, 'Save changes'))) :
+      edit === 'shop' ? h(React.Fragment, null, f('name', 'Shop name'), f('handle', 'Shop handle'), h('div', { className: 'grid2' }, f('area', 'Area'), f('city', 'City')), me.type === 'BUSINESS' && f('gstin', 'GSTIN (optional)'), f('bio', 'About', { multiline: true, maxLength: 160 }), h(CategoryChips, { v, setV, errors }), h(ReachFields, { v, setV, errors, setErrors, idp: 'spr-' }), h('div', { className: 'btn-row' }, h(Btn, { kind: 'outline', onClick: () => setEdit(null) }, 'Cancel'), h(Btn, { onClick: save }, 'Save changes'))) :
         h(React.Fragment, null,
           h('div', { className: 'row' }, h(Avatar, { name: me.name, lg: true }), h('div', { className: 'grow' }, h('div', { className: 'h3', style: { fontSize: 18 } }, me.name), h('div', { className: 'small muted' }, '@' + me.handle + ' · ' + me.area + ', ' + me.city)), h(Btn, { kind: 'outline', size: 'sm', onClick: start }, 'Edit')),
           me.bio && h('div', null, me.bio),
+          h(U.SellerLinks, { seller: me }),
+          h('div', { className: 'card stack', style: { gap: 4 } }, h('div', { className: 'strong' }, 'What buyers see'), h(U.SlaLines, { sla: me.sla, stats: st }), h(Kv, { k: 'Categories', v: (me.categories || []).join(', ') }), h(Kv, { k: 'Contact for open orders', v: ['In-app chat', me.contact && me.contact.phone ? 'Phone' : null, me.contact && me.contact.whatsapp ? 'WhatsApp' : null].filter(Boolean).join(' · ') })),
           h('div', { className: 'card' }, h('div', { className: 'strong', style: { marginBottom: 2 } }, 'Your public order record'), h('div', { className: 'small' }, h(U.StatsLine, { st })), h('div', { className: 'tiny muted', style: { marginTop: 4 } }, 'Buyers see this on your shop and listings. Confirm orders promptly to keep it strong.')),
           h('div', { className: 'card' }, h('div', { className: 'row between' }, h('div', { className: 'strong' }, 'How buyers pay you'), h(Btn, { kind: 'outline', size: 'sm', onClick: startPay }, 'Edit')),
             pay.upiId && h(Kv, { k: 'UPI ID', v: pay.upiId }), pay.upiQrMediaId && h(Kv, { k: 'UPI QR', v: 'Uploaded' }), pay.bankAccount && h(Kv, { k: 'Bank', v: `${pay.bankName || pay.bankIfsc} ${mask(pay.bankAccount)}` }), pay.paymentLink && h(Kv, { k: 'Payment link', v: 'Added' }), pay.website && h(Kv, { k: 'Website', v: pay.website.replace(/^https:\/\//, '') }),
@@ -337,14 +382,54 @@
           h(Kv, { k: 'Seller type', v: me.type === 'BUSINESS' ? 'Registered business' : 'Individual seller' }), me.gstin && h(Kv, { k: 'GSTIN', v: me.gstin }), h(Kv, { k: 'Owner', v: u.name + ' · +91 ' + u.phone }), h(Kv, { k: 'Code of Conduct', v: 'Agreed ' + when(me.conductAcceptedAt) }),
           h('div', { className: 'card row', style: { alignItems: 'flex-start' } }, h(Icon, { name: 'shield' }), h('div', null, h('div', { className: 'strong' }, 'Not verified'), h('div', { className: 'small muted' }, 'Seller verification and KYC aren’t part of this prototype. Buyers see “Not verified (prototype)”.'))),
           h('div', { className: 'card' }, h('div', { className: 'strong' }, 'Shopping too?'), h('div', { className: 'small muted' }, 'Sign in to the buyer app with +91 ' + u.phone + '. It’s the same account.')),
+          h('div', null, h('div', { className: 'section-title' }, 'Reviews from buyers'), h(U.ReviewsList, { reviews, stats: st, now })),
           h(Btn, { kind: 'danger', block: true, onClick: () => Store.dispatch({ type: 'auth.signOut', app: 'seller' }) }, 'Sign out'))));
   }
-  function NotificationsScreen() {
-    const { uid, nav } = useApp();
-    return h(U.Notifications, { app: 'seller', userId: uid, onBack: nav.back, onOpen: (ref) => { if (ref.type === 'negotiation') nav.replace('negotiation', { id: ref.id }); if (ref.type === 'order') nav.replace('order', { id: ref.id }); if (ref.type === 'listing') nav.replace('listing', { id: ref.id }); } });
+  // ---------- buyer requests (seller side) ----------
+  function RequestsInbox() {
+    const { uid, nav, openSheet } = useApp(); const now = Store.now(); const all = S.requests(Store.state, uid); const [f, setF] = useState('open');
+    const me = S.me(Store.state, uid);
+    const list = all.filter((r) => (f === 'open' ? r.status === 'OPEN' && !r.mine : !!r.mine));
+    const [view, setView] = useState(null);
+    return h('div', { className: 'screen' }, h(U.AppBar, { title: 'Buyer requests', right: h(Bell) }),
+      h('div', { style: { padding: '12px 16px' } }, h(Seg, { label: 'Requests', value: f, onChange: setF, options: [{ value: 'open', label: `New (${all.filter((r) => r.status === 'OPEN' && !r.mine).length})` }, { value: 'mine', label: `Responded (${all.filter((r) => r.mine).length})` }] }), h('div', { className: 'hint', style: { marginTop: 6 } }, 'Requests in: ' + (me.categories || []).join(', '))),
+      list.length ? h('div', { className: 'pad stack', style: { paddingTop: 0 } }, list.map((r) => h('div', { key: r.id, className: 'card stack', style: { gap: 8 } },
+        h('div', { className: 'row between' }, h('div', null, h('div', { className: 'strong' }, r.title), h('div', { className: 'tiny muted' }, `${r.buyerName} · ${r.category} · ${ago(r.createdAt, now)}${r.size ? ' · size ' + r.size : ''}`)), r.budget && h(Badge, { tone: 'accent' }, 'Budget ' + money(r.budget))),
+        h(U.MediaRow, { media: r.media, onOpen: setView }), r.description && h('div', { className: 'small' }, r.description),
+        !r.mine ? (r.status === 'OPEN' ? h(Btn, { block: true, onClick: () => openSheet('respond', { requestId: r.id }) }, h(Icon, { name: 'image', size: 18 }), 'I have this — send a photo') : h('div', { className: 'small muted' }, 'Closed'))
+          : h('div', { className: 'stack', style: { gap: 6 } }, h('div', { className: 'small' }, 'You replied', r.mine.price ? ' at ' + money(r.mine.price) : '', ' · ', h(Badge, { tone: r.mine.status === 'WANTED' ? 'success' : r.mine.status === 'DECLINED' ? '' : 'info' }, r.mine.status === 'WANTED' ? 'Buyer wants it' : r.mine.status === 'DECLINED' ? 'Buyer passed' : 'Waiting for buyer')),
+            r.mine.status === 'WANTED' && h('div', { className: 'btn-row' }, h(Btn, { kind: 'outline', onClick: () => nav.go('chat', { id: r.mine.threadId }) }, 'Open chat'), r.mine.listingId ? h(Btn, { kind: 'dark', onClick: () => nav.go('listing', { id: r.mine.listingId }) }, 'View listing') : h(Btn, { onClick: () => nav.go('editor', { fromResponseId: r.mine.id }) }, 'Create listing')))))) 
+        : h(Empty, { icon: 'megaphone', title: f === 'open' ? 'No new requests' : 'You haven’t responded yet', body: f === 'open' ? 'When buyers ask for something in your categories, it shows up here.' : null }),
+      view && h(U.MediaViewer, { m: view, onClose: () => setView(null) }));
+  }
+  function RespondSheet({ requestId }) {
+    const { uid, closeSheet, toast } = useApp(); const r = S.requests(Store.state, uid).find((x) => x.id === requestId);
+    const [media, setMedia] = useState([]); const [text, setText] = useState(''); const [price, setPrice] = useState(''); const [errors, setErrors] = useState({});
+    if (!r) return null;
+    const send = () => { const x = Store.dispatch({ type: 'request.respond', userId: uid, requestId, media, text, price }); if (!x.ok) { setErrors(x.fields || {}); if (!x.fields) toast(x.message, true); return; } closeSheet(); toast('Sent to the buyer'); };
+    return h(Sheet, { title: 'Reply to “' + r.title + '”', onClose: closeSheet, footer: h(Btn, { block: true, onClick: send }, 'Send to buyer') }, h('div', { className: 'stack' },
+      h(U.MediaPicker, { value: media, onChange: (m) => { setMedia(m); setErrors({}); }, max: 4, videos: false, label: 'Photo of your item', error: errors.media, sample: () => ({ kind: 'seed', scene: U.SCENE_FOR_CATEGORY[r.category] || 'kurta', palette: U.PALETTE_NAMES[(media.length + 3) % U.PALETTE_NAMES.length] }) }),
+      h(Field, { label: 'Price (optional)', id: 'rp-price', error: errors.price }, h('div', { className: 'input-group' }, h('div', { className: 'prefix' }, '₹'), h(Input, { id: 'rp-price', inputMode: 'numeric', value: price, onChange: (e) => setPrice(e.target.value.replace(/\D/g, '').slice(0, 7)) }))),
+      h(Field, { label: 'Message (optional)', id: 'rp-text', error: errors.text }, h(Input, { id: 'rp-text', multiline: true, maxLength: 500, value: text, onChange: (e) => setText(e.target.value) })),
+      h('div', { className: 'hint' }, 'If the buyer wants it, a chat opens. Add it as a listing from there and the link is shared in the chat.')));
+  }
+  function ThreadsScreenS() { const { uid, nav } = useApp(); return h(U.ThreadsScreen, { app: 'seller', userId: uid, onBack: nav.back, onOpen: (id) => nav.go('chat', { id }) }); }
+  function ChatScreenS({ id }) {
+    const { uid, nav, toast, openSheet } = useApp(); const t = E.common.thread(Store.state, uid, 'seller', id, Store.now());
+    const header = t && t.kind === 'REQUEST' ? h('div', { className: 'card row', style: { gap: 10 } }, h(Thumb, { m: t.responseMedia }), h('div', { className: 'grow' }, h('div', { className: 'tiny muted' }, 'Buyer request · ' + t.category), h('div', { className: 'strong small' }, t.requestTitle)), t.responseListingId ? h(Btn, { kind: 'outline', size: 'sm', onClick: () => nav.go('listing', { id: t.responseListingId }) }, 'Listing') : h(Btn, { size: 'sm', onClick: () => nav.go('editor', { fromResponseId: t.responseId }) }, 'Create listing')) : null;
+    return h(U.ChatScreen, { app: 'seller', userId: uid, threadId: id, onBack: nav.back, toast, header, onOpenListing: (lid) => nav.go('listing', { id: lid }), onShareListing: () => openSheet('shareListing', { threadId: id }) });
+  }
+  function ShareListingSheet({ threadId }) {
+    const { uid, closeSheet, toast } = useApp(); const list = S.listings(Store.state, uid, Store.now()).filter((l) => l.status === 'ACTIVE');
+    return h(Sheet, { title: 'Share a listing', onClose: closeSheet }, list.length ? list.map((l) => h('button', { key: l.id, className: 'listrow', style: { paddingLeft: 0, paddingRight: 0 }, onClick: () => { const r = Store.dispatch({ type: 'chat.send', userId: uid, threadId, listingId: l.id }); closeSheet(); toast(r.ok ? 'Listing shared' : r.message, !r.ok); } }, h(Thumb, { m: l.media }), h('div', { className: 'grow' }, h('div', { className: 'strong ellipsis' }, l.title), h('div', { className: 'small' }, money(l.price) + ` · ${l.available} available`)))) : h('div', { className: 'small muted' }, 'Publish a listing first.'));
   }
 
-  const SCREENS = { editor: ListingEditor, listing: ListingDetail, negotiation: SellerNegotiation, order: SellerOrder, notifications: NotificationsScreen };
-  const SHEETS = {};
+  function NotificationsScreen() {
+    const { uid, nav } = useApp();
+    return h(U.Notifications, { app: 'seller', userId: uid, onBack: nav.back, onOpen: (ref) => { if (ref.type === 'negotiation') nav.replace('negotiation', { id: ref.id }); if (ref.type === 'order') nav.replace('order', { id: ref.id }); if (ref.type === 'listing') nav.replace('listing', { id: ref.id }); if (ref.type === 'chat') nav.replace('chat', { id: ref.id }); if (ref.type === 'request') nav.setTab('requests'); if (ref.type === 'reviews') nav.setTab('profile'); } });
+  }
+
+  const SCREENS = { editor: ListingEditor, listing: ListingDetail, negotiation: SellerNegotiation, order: SellerOrder, notifications: NotificationsScreen, threads: ThreadsScreenS, chat: ChatScreenS };
+  const SHEETS = { respond: RespondSheet, shareListing: ShareListingSheet };
   window.FaydaSellerApp = SellerApp;
 })();

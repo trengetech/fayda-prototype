@@ -25,16 +25,18 @@
   function Guide({ onClose }) {
     const steps = [
       ['Seller app', 'Tap Indigo Threads under Demo accounts, send the code and enter 123456. Open Offers to see buyers waiting for a reply.'],
-      ['Buyer app', 'Sign in as Aarav Sharma. Swipe the feed; like, save, follow a shop and post a comment — the seller sees it.'],
-      ['Buyer app', 'On the hand-block printed kurta, tap Make offer and send ₹1,950. After a few seconds the seller counters ₹2,299 — set by the seller’s private rules.'],
-      ['Buyer app', 'Counter ₹2,100. It’s still below the seller’s private minimum, so a few seconds later the seller counters ₹2,299 again.'],
-      ['Buyer app', 'Counter ₹2,200 — at or above the private minimum, so it’s accepted straight away and one unit is reserved. Watch the stock line change in the seller app.'],
-      ['Seller app', 'Answer an offer yourself: in Offers, open Priya’s public ₹4,200 offer on the Chanderi set and counter or accept it.'],
-      ['Buyer app', 'Tap Continue, pick UPI or bank transfer and place the order. The seller’s payment details appear with the order number to use as the payment note.'],
-      ['Seller app', 'Orders → New → Payment received. Optionally add the courier and tracking number, then Mark delivered. The buyer’s timeline updates each time.'],
-      ['Website seller', 'In the buyer app open Offers: Aarav’s saree offer was auto-countered ₹6,199 by Loom & Co., who sell on their own website. Accept it to get the discount link and open the site. Then sign the seller app in as Loom & Co. and confirm the website order.'],
-      ['Seller app', 'Tap New listing: add your own video or photos (or sample artwork), sizes, price, private bargaining rules, and choose Pay me directly or My website (with coupon codes). Publish — it appears in the buyer feed.'],
-      ['Demo clock', 'Offer under ₹500 on the jhumkas: it’s declined automatically after 2 minutes (+1 h skips ahead). +12 h shows offers expiring, agreed prices lapsing, and unconfirmed orders expiring after 48 h.']
+      ['Buyer app', 'Sign in as Aarav Sharma. Swipe the feed: every reel shows the seller’s star rating. Like, save, follow and comment.'],
+      ['Buyer app', 'On the hand-block printed kurta, tap Make offer and send ₹1,950. After a few seconds the seller counters ₹2,299.'],
+      ['Buyer app', 'Counter ₹2,100 — still below the seller’s private minimum, so the seller counters ₹2,299 again. Then counter ₹2,200: it’s accepted straight away.'],
+      ['Buyer app', 'Tap Continue, pick UPI or bank transfer and place the order. You’ll see payment details, how fast this seller usually confirms, and Contact seller: chat, WhatsApp or call.'],
+      ['Both', 'Send a chat message from the order. It appears in the seller app’s Messages (top of Home and Orders). Reply from the seller side.'],
+      ['Seller app', 'Orders → New → Payment received. Optionally add courier and tracking, then Mark delivered.'],
+      ['Buyer app', 'On the order, rate the seller with stars, text and an optional photo or video. It shows on the seller’s profile and rating everywhere. Use Buy again to reorder.'],
+      ['Buyer app', 'Search → “Can’t find it? Ask sellers”: post a request with a photo. Every seller in that category is notified (try Priya’s existing mustard dupatta request too).'],
+      ['Seller app', 'Requests tab: reply with a photo and price. In the buyer app tap “I want this” — a chat opens. Back in the seller app, tap Create listing in that chat; when you publish, the link is shared in the chat for the buyer to buy.'],
+      ['Website seller', 'In the buyer app open Offers: Aarav’s saree offer was countered ₹6,199 by Loom & Co., who sell on their own website. Accept it to get the discount link, then sign the seller app in as Loom & Co. and confirm the website order.'],
+      ['New accounts', 'Sign up with any new number. Buyers accept the user agreement and add a phone or WhatsApp contact. Sellers add categories, a Google Maps shop link, optional Google/Instagram/Facebook links, contact numbers, and how fast they confirm payments and ship.'],
+      ['Demo clock', '+1 h and +12 h move time forward: low offers on the jhumkas are declined after 2 minutes, offers expire, agreed prices lapse, unconfirmed orders expire after 48 h, and requests close after 7 days.']
     ];
     return h('div', { className: 'guide', onClick: (e) => e.target === e.currentTarget && onClose() }, h('div', { role: 'dialog', 'aria-label': 'Demo guide' },
       h('div', { className: 'row between' }, h('div', { className: 'h2' }, 'Demo guide'), h('button', { className: 'iconbtn plain', onClick: onClose, 'aria-label': 'Close' }, h(U.Icon, { name: 'x' }))),
@@ -46,7 +48,7 @@
         h('li', null, h('b', null, 'Outside ' + BRAND + ' by design: '), 'payments (buyers pay sellers by UPI, bank transfer or payment link), delivery and refunds. ' + BRAND + ' only records what the seller confirms.'),
         h('li', null, h('b', null, 'Simulated: '), 'sign-in codes (always 123456), seller verification, and the demo clock. Seller websites and payment links in the sample data are fictional and won’t load.'),
         h('li', null, h('b', null, 'Stored in this browser only: '), 'all data and uploaded media. Opening this page on another device starts from the seed data. Open #buyer and #seller in two tabs to use each app full-screen; they stay in sync.'),
-        h('li', null, h('b', null, 'Provisional values: '), 'offer expiry, 6-offer limit, 3 offers per listing per day, 12-hour checkout window, 48-hour order confirmation window, 10% minimum offer and the 2-minute auto-decline delay are placeholders pending your approval.'))));
+        h('li', null, h('b', null, 'Provisional values: '), 'offer expiry, 6-offer limit, 3 offers per listing per day, 12-hour checkout window, 48-hour order confirmation window, 7-day request window, 10% minimum offer and the 2-minute auto-decline delay are placeholders pending your approval. The user agreement and seller Code of Conduct are drafts pending legal review.'))));
   }
 
   function App() {

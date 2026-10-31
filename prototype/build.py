@@ -2,7 +2,7 @@ import sys, pathlib
 root = pathlib.Path(__file__).parent
 src = root/'src'
 css = (src/'styles.css').read_text()
-js = '\n'.join((src/f).read_text() for f in ['engine.js','seed.js','ui-core.js','ui-shared.js','buyer-app.js','seller-app.js','shell.js'])
+js = '\n'.join((src/f).read_text() for f in ['engine.js','seed.js','ui-core.js','ui-shared.js','ui-social.js','buyer-app.js','seller-app.js','shell.js'])
 def page(react_tags):
     return f'''<!doctype html>
 <html lang="en">

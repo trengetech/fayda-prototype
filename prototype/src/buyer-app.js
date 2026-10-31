@@ -15,15 +15,32 @@
   function BuyerOnboarding({ uid }) {
     const u = Store.state.users[uid];
     const [name, setName] = useState(u.name || ''); const [addr, setAddr] = useState(Object.assign({}, U.EMPTY_ADDR, { name: u.name || '' })); const [errors, setErrors] = useState({});
-    const save = () => { const r = Store.dispatch({ type: 'buyer.completeProfile', userId: uid, name, address: Object.assign({}, addr, { name: addr.name || name }) }); if (!r.ok) setErrors(r.fields || { form: r.message }); };
+    const [contact, setContact] = useState({ phone: u.phone, whatsapp: u.phone }); const [agree, setAgree] = useState(false); const [showTerms, setShowTerms] = useState(false);
+    const save = () => { const r = Store.dispatch({ type: 'buyer.completeProfile', userId: uid, name, address: Object.assign({}, addr, { name: addr.name || name }), contact, agreementAccepted: agree }); if (!r.ok) setErrors(r.fields || { form: r.message }); };
     return h('div', { className: 'body' }, h('div', { className: 'screen' }, h('div', { className: 'pad stack', style: { gap: 16 } },
       h('div', null, h('div', { className: 'small muted strong' }, 'One last step'), h('div', { className: 'h2' }, 'Where should we deliver?')),
       h(Field, { label: 'Your name', id: 'ob-fullname', error: errors.fullName }, h(Input, { id: 'ob-fullname', value: name, autoComplete: 'name', invalid: !!errors.fullName, onChange: (e) => setName(e.target.value) })),
       h(U.AddressForm, { value: addr, onChange: setAddr, errors, idp: 'ob-' }),
-      h('div', { className: 'hint' }, 'Location detection and map pins come with the production app.'))),
-      h('div', { className: 'actionbar' }, h(Btn, { size: 'lg', block: true, onClick: save }, 'Save address and start shopping'),
-        h('button', { className: 'btn ghost sm', onClick: () => Store.dispatch({ type: 'auth.signOut', app: 'buyer' }) }, 'Use a different number')));
+      h(ContactFields, { value: contact, onChange: (c) => { setContact(c); setErrors({}); }, errors, idp: 'obc-', who: 'Sellers' }),
+      h('div', { className: 'card stack', style: { gap: 8 } }, h('div', { className: 'strong' }, 'User agreement'),
+        h('div', { className: 'small' }, `Disputes are between you and the seller — ${BRAND} doesn’t resolve them. Check seller reviews before you buy, and keep your own feedback honest.`),
+        h('button', { className: 'btn ghost sm', style: { padding: 0, alignSelf: 'flex-start' }, onClick: () => setShowTerms(true) }, 'Read the full agreement'),
+        h('label', { className: 'row', style: { gap: 8, fontWeight: 700, alignItems: 'flex-start' } }, h('input', { type: 'checkbox', checked: agree, onChange: (e) => { setAgree(e.target.checked); setErrors({}); }, style: { marginTop: 3 } }), 'I have read and agree to the user agreement'),
+        errors.agreement && h('div', { className: 'error' }, errors.agreement)))),
+      h('div', { className: 'actionbar' }, h(Btn, { size: 'lg', block: true, onClick: save }, 'Agree and start shopping'),
+        h('button', { className: 'btn ghost sm', onClick: () => Store.dispatch({ type: 'auth.signOut', app: 'buyer' }) }, 'Use a different number')),
+      showTerms && h('div', { className: 'dialog', role: 'dialog', 'aria-label': 'User agreement' }, h('div', { style: { maxHeight: '90%', overflow: 'auto' } }, h('div', { className: 'h3', style: { fontSize: 18 } }, BRAND + ' user agreement'), h(U.AgreementText), h(Btn, { block: true, onClick: () => { setAgree(true); setShowTerms(false); setErrors({}); } }, 'I agree'), h(Btn, { kind: 'outline', block: true, onClick: () => setShowTerms(false) }, 'Close'))));
   }
+  function ContactFields({ value, onChange, errors, idp, who }) {
+    const set = (k) => (e) => onChange(Object.assign({}, value, { [k]: e.target.value.replace(/\D/g, '').slice(0, 10) }));
+    return h('div', { className: 'stack', style: { gap: 10 } },
+      h('div', null, h('div', { className: 'label' }, `How can ${who.toLowerCase()} reach you about open orders?`), h('div', { className: 'hint' }, 'In-app chat is always on. Add at least one more: phone or WhatsApp.')),
+      h('div', { className: 'grid2' },
+        h(Field, { label: 'Phone', id: idp + 'p', error: errors.contactPhone }, h(Input, { id: idp + 'p', inputMode: 'numeric', placeholder: '10 digits', value: value.phone || '', invalid: !!errors.contactPhone, onChange: set('phone') })),
+        h(Field, { label: 'WhatsApp', id: idp + 'w', error: errors.contactWhatsapp }, h(Input, { id: idp + 'w', inputMode: 'numeric', placeholder: '10 digits', value: value.whatsapp || '', invalid: !!errors.contactWhatsapp, onChange: set('whatsapp') }))),
+      errors.contact && h('div', { className: 'error' }, errors.contact));
+  }
+  U.ContactFields = ContactFields;
 
   function BuyerMain({ uid }) {
     const nav = useNav('home'); const [toast, toastNode] = useToast(); const [sheet, setSheet] = useState(null);
@@ -32,7 +49,8 @@
     const actionable = negs.filter((n) => n.canRespond || n.status === 'AGREED').length;
     const unread = E.common.unread(s, uid, 'buyer');
     const ctx = { app: 'buyer', uid, nav, toast, openSheet: (type, params) => setSheet({ type, params: params || {} }), closeSheet: () => setSheet(null), unread };
-    const tabs = [['home', 'Home', 'home'], ['search', 'Search', 'search'], ['offers', 'Offers', 'tag', actionable], ['orders', 'Orders', 'box'], ['profile', 'Profile', 'user']];
+    const unreadChats = E.common.threads(s, uid, 'buyer', now).reduce((t, x) => t + x.unread, 0);
+    const tabs = [['home', 'Home', 'home'], ['search', 'Search', 'search'], ['offers', 'Offers', 'tag', actionable], ['orders', 'Orders', 'box', unreadChats], ['profile', 'Profile', 'user']];
     const Tab = { home: HomeFeed, search: SearchScreen, offers: OffersScreen, orders: OrdersScreen, profile: ProfileScreen }[nav.tab];
     const top = nav.top; const Screen = top ? SCREENS[top.screen] : null;
     const Sh = sheet ? SHEETS[sheet.type] : null;
@@ -87,7 +105,7 @@
         h('button', { onClick: () => { toggle('social.toggleSave'); if (!it.saved) toast('Saved to your profile'); }, 'aria-pressed': it.saved, 'aria-label': 'Save' }, h('span', { className: 'rail-ic' }, h(Icon, { name: 'bookmark', size: 22, fill: it.saved ? '#fff' : 'none' })), it.saved ? 'Saved' : 'Save'),
         h('button', { onClick: () => shareListing(it, toast), 'aria-label': 'Share' }, h('span', { className: 'rail-ic' }, h(Icon, { name: 'send', size: 22 })), 'Share')),
       h('div', { className: 'reel-info' },
-        h('div', { className: 'seller' }, h('button', { style: { background: 'none', border: 0, padding: 0, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }, onClick: () => nav.go('shop', { sellerId: it.seller.id }) }, h(Avatar, { name: it.seller.name }), h('span', { className: 'strong' }, it.seller.name)),
+        h('div', { className: 'seller' }, h('button', { style: { background: 'none', border: 0, padding: 0, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }, onClick: () => nav.go('shop', { sellerId: it.seller.id }) }, h(Avatar, { name: it.seller.name }), h('span', { style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 } }, h('span', { className: 'strong' }, it.seller.name), h(U.RatingChip, { stats: it.seller.stats, light: true }))),
           !it.seller.isMe && h('button', { className: 'follow', 'aria-pressed': it.seller.following, onClick: () => { const r = Store.dispatch({ type: 'social.toggleFollow', userId: uid, sellerId: it.seller.id }); if (!r.ok) toast(r.message, true); } }, it.seller.following ? 'Following' : 'Follow')),
         h('div', { className: 'title' }, it.title),
         h('div', { className: 'reel-badges', style: { alignItems: 'center' } }, h('span', { style: { fontSize: 20, fontWeight: 800, letterSpacing: -0.3, marginRight: 4, textShadow: '0 1px 4px rgba(0,0,0,.45)' } }, money(it.price)), it.soldOut ? h(Badge, null, 'Sold out') : it.bargaining.acceptsOffers ? h(Badge, { tone: 'accent' }, 'Accepts offers') : h(Badge, null, 'Fixed price'), h(Badge, null, it.category)),
@@ -138,7 +156,7 @@
         h('div', { className: 'card small' }, h('b', null, d.checkout.channel === 'WEBSITE' ? 'Bought on the seller’s website. ' : 'Pay the seller directly. '), d.checkout.channel === 'WEBSITE' ? 'Checkout, payment and delivery happen on their site. If your offer is accepted you get a coupon code or link for that price.' : `By ${d.checkout.methods.map((m) => E.PAY_METHODS[m]).join(', ')}. The seller confirms your payment and handles delivery — ${BRAND} doesn’t process payments or ship orders.`),
         d.bargaining.acceptsOffers && h('div', { className: 'card tint small' }, h('b', null, 'How offers work here: '), `${d.bargaining.mode === 'PUBLIC' ? 'offers are public — other buyers see the amount, never your name' : d.bargaining.mode === 'BOTH' ? 'choose a private or public offer' : 'offers are private between you and the seller'}. The seller has ${d.bargaining.expiryHours} hours to respond. If they accept, one unit is held for you for ${E.RULES.CHECKOUT_WINDOW_HOURS} hours.`),
         d.publicOffers && d.publicOffers.length > 0 && h('div', null, h('div', { className: 'section-title' }, 'Public offers'), d.publicOffers.map((o) => h('div', { key: o.id, className: 'kv' }, h('span', null, h('b', null, o.who), h('span', { className: 'muted small' }, ' · ' + o.variant + ' · ' + ago(o.at, now))), h('span', null, h('b', null, money(o.amount)), ' ', h(Badge, null, o.status))))),
-        h('button', { className: 'card row', style: { textAlign: 'left', color: 'var(--ink)' }, onClick: () => nav.go('shop', { sellerId: d.seller.id }) }, h(Avatar, { name: d.seller.name }), h('div', { className: 'grow' }, h('div', { className: 'strong' }, d.seller.name), h('div', { className: 'tiny muted' }, (d.seller.type === 'BUSINESS' ? 'Business' : 'Individual seller') + ' · ' + d.seller.area + ' · Not verified (prototype)'), h('div', { className: 'tiny', style: { marginTop: 2 } }, h(U.StatsLine, { st: d.seller.stats }))), h(Icon, { name: 'back', size: 18, style: { transform: 'rotate(180deg)' } })),
+        h('button', { className: 'card row', style: { textAlign: 'left', color: 'var(--ink)' }, onClick: () => nav.go('shop', { sellerId: d.seller.id }) }, h(Avatar, { name: d.seller.name }), h('div', { className: 'grow' }, h('div', { className: 'strong' }, d.seller.name), h('div', { className: 'tiny muted' }, (d.seller.type === 'BUSINESS' ? 'Business' : 'Individual seller') + ' · ' + d.seller.area + ' · Not verified (prototype)'), h('div', { className: 'tiny', style: { marginTop: 2 } }, h(U.RatingChip, { stats: d.seller.stats }), ' · ', h(U.StatsLine, { st: d.seller.stats })), d.seller.sla && h('div', { className: 'tiny muted' }, `Confirms payment ${U.confirmText(d.seller.sla.confirmHours)} · ships ${U.shipText(d.seller.sla.shipDays)}`)), h(Icon, { name: 'back', size: 18, style: { transform: 'rotate(180deg)' } })),
         h('div', null, h('div', { className: 'section-title' }, `Comments (${d.comments})`), h(U.CommentsPanel, { listingId: id, userId: uid, compact: true }))));
   }
 
@@ -177,7 +195,7 @@
     if (!d) return h(Page, { title: 'Offer', onBack: nav.back }, h(Empty, { title: 'Negotiation not found' }));
     const act = (action, amount) => { const r = Store.dispatch({ type: 'offer.respond', userId: uid, negotiationId: id, action, amount }); if (r.ok) { setCountering(false); toast(action === 'ACCEPT' ? 'Price agreed — checkout is open' : action === 'COUNTER' ? 'Counter sent' : 'Offer declined'); } else toast(r.message, true); return r; };
     const last = d.offers[d.offers.length - 1];
-    const order = d.status === 'PURCHASED' ? B.orders(Store.state, uid).find((o) => o.negotiationId === id) : null;
+    const order = d.status === 'PURCHASED' ? B.orders(Store.state, uid, now).find((o) => o.negotiationId === id) : null;
     let footer;
     if (d.status === 'AGREED' && d.channel === 'WEBSITE') footer = h(WebsiteDeal, { d, now });
     else if (d.status === 'AGREED') footer = h(React.Fragment, null, h('div', { className: 'card success' }, h('div', { className: 'strong' }, 'Price agreed: ' + money(d.agreement.price)), h('div', { className: 'small' }, `One unit is held for you until ${when(d.agreement.deadline)} (${left(d.agreement.deadline - now)} left).`)), h(Btn, { size: 'lg', block: true, onClick: () => nav.go('checkout', { negotiationId: id }) }, 'Continue · ' + money(d.agreement.price)));
@@ -246,15 +264,24 @@
 
   // ---------- Orders ----------
   const SHORT = { PLACED: 'Awaiting seller', CONFIRMED: 'Confirmed', SHIPPED: 'Shipped', DELIVERED: 'Delivered', CANCELLED: 'Cancelled', EXPIRED: 'Expired' };
+  function buyAgainAction(o, nav) {
+    const b = o.buyAgain; if (!b || !b.anyAvailable) return null;
+    if (b.channel === 'WEBSITE') return () => nav.go('product', { id: b.listingId });
+    return () => (b.variantId ? nav.go('checkout', { listingId: b.listingId, variantId: b.variantId }) : nav.go('product', { id: b.listingId, needSize: true }));
+  }
   function OrdersScreen() {
-    const { uid, nav } = useApp(); const orders = B.orders(Store.state, uid); const now = Store.now();
-    return h('div', { className: 'screen' }, h(U.AppBar, { title: 'Orders', right: h(Bell) }),
-      orders.length ? orders.map((o) => h('button', { key: o.id, className: 'listrow', onClick: () => nav.go('order', { id: o.id }) }, h(Thumb, { m: o.media }), h('div', { className: 'grow' }, h('div', { className: 'strong ellipsis' }, o.title), h('div', { className: 'tiny muted' }, `${o.number} · ${o.sellerName} · ${ago(o.createdAt, now)}`), h('div', { className: 'small' }, h('b', null, money(o.price)), o.listPrice > o.price ? h('span', { style: { color: 'var(--success)', fontWeight: 700 } }, ' · saved ' + money(o.listPrice - o.price)) : null)), h(Badge, { tone: U.ORDER_TONE[o.status] }, SHORT[o.status])))
+    const { uid, nav } = useApp(); const now = Store.now(); const orders = B.orders(Store.state, uid, now);
+    return h('div', { className: 'screen' }, h(U.AppBar, { title: 'Orders', right: h('div', { className: 'row', style: { gap: 8 } }, h(U.MsgButton, { app: 'buyer', userId: uid, onClick: () => nav.go('threads') }), h(Bell)) }),
+      orders.length ? orders.map((o) => { const again = buyAgainAction(o, nav); return h('div', { key: o.id, style: { borderBottom: '1px solid var(--divider)' } },
+        h('button', { className: 'listrow', style: { borderBottom: 0 }, onClick: () => nav.go('order', { id: o.id }) }, h(Thumb, { m: o.media }), h('div', { className: 'grow' }, h('div', { className: 'strong ellipsis' }, o.title), h('div', { className: 'tiny muted' }, `${o.number} · ${o.sellerName} · ${ago(o.createdAt, now)}`), h('div', { className: 'small' }, h('b', null, money(o.price)), o.listPrice > o.price ? h('span', { style: { color: 'var(--success)', fontWeight: 700 } }, ' · saved ' + money(o.listPrice - o.price)) : null, o.unread ? h('span', { className: 'badge accent', style: { marginLeft: 6 } }, o.unread + ' new message' + (o.unread === 1 ? '' : 's')) : null)), h(Badge, { tone: U.ORDER_TONE[o.status] }, SHORT[o.status])),
+        (again || !o.review) && h('div', { className: 'row', style: { padding: '0 16px 10px 84px', gap: 8 } }, again && h(Btn, { kind: 'outline', size: 'sm', onClick: again }, h(Icon, { name: 'repeat', size: 15 }), 'Buy again'), !o.review && h(Btn, { kind: 'ghost', size: 'sm', onClick: () => nav.go('order', { id: o.id, review: true }) }, h(Icon, { name: 'star', size: 15 }), 'Rate seller'))); })
         : h(Empty, { icon: 'box', title: 'No orders yet', body: 'Place an order or use an accepted offer and it will appear here.', action: h(Btn, { kind: 'dark', onClick: () => nav.setTab('home') }, 'Browse the feed') }));
   }
-  function OrderScreen({ id }) {
-    const { uid, nav, toast } = useApp(); const now = Store.now(); const o = B.order(Store.state, uid, id);
+  function OrderScreen({ id, review }) {
+    const { uid, nav, toast } = useApp(); const now = Store.now(); const o = B.order(Store.state, uid, id, now);
+    const [editing, setEditing] = useState(false);
     if (!o) return h(Page, { title: 'Order', onBack: nav.back }, h(Empty, { title: 'Order not found' }));
+    const buyAgain = buyAgainAction(o, nav);
     const p = o.payTo; const note = o.number;
     const copyRow = (k, v, label) => h('div', { className: 'kv' }, h('span', { className: 'muted', style: { whiteSpace: 'nowrap' } }, k), h('span', { className: 'row', style: { gap: 6, minWidth: 0 } }, h('b', { style: { userSelect: 'all', wordBreak: 'break-all', textAlign: 'right' } }, v), h('button', { className: 'btn ghost sm', style: { height: 26, padding: '0 4px' }, onClick: () => U.copyText(v, toast, label || k) }, 'Copy')));
     return h(Page, { title: 'Order ' + o.number, onBack: nav.back }, h('div', { className: 'pad stack' },
@@ -269,6 +296,14 @@
       o.status === 'PLACED' && o.channel === 'WEBSITE' && h('div', { className: 'card tint stack', style: { gap: 6 } }, h('div', { className: 'strong' }, 'Finish your order on the seller’s website'), o.dealAccess && o.dealAccess.type === 'CODE' && copyRow('Coupon code', o.dealAccess.value, 'Code'), h('a', { className: 'btn outline block', style: { textDecoration: 'none' }, href: o.dealAccess && o.dealAccess.type === 'LINK' ? o.dealAccess.value : o.productUrl, target: '_blank', rel: 'noopener noreferrer' }, 'Open website', h(Icon, { name: 'send', size: 16 })), h('div', { className: 'tiny muted' }, `The seller confirms the order here within ${left(o.confirmBy - now)}, otherwise it expires.`)),
       h(U.OrderSteps, { order: o }),
       h(U.ShipmentCard, { sh: o.shipment }),
+      h('div', { className: 'card stack', style: { gap: 10 } }, h('div', { className: 'row between' }, h('div', { className: 'strong' }, 'Contact seller'), h(U.RatingChip, { stats: o.seller.stats })),
+        h(U.SlaLines, { sla: o.seller.sla, stats: o.seller.stats }),
+        h(U.ContactButtons, { contact: o.seller.contact, unread: o.unread, onChat: () => nav.go('chat', { id: o.threadId }), note: `Hi, about my ${BRAND} order ${o.number} (${o.title}).` }),
+        !o.seller.contact && h('div', { className: 'tiny muted' }, 'Phone and WhatsApp are shown while an order is open. Chat stays available.')),
+      buyAgain && h(Btn, { kind: 'outline', block: true, onClick: buyAgain }, h(Icon, { name: 'repeat', size: 16 }), 'Buy again'),
+      h('div', null, h('div', { className: 'section-title' }, 'Your review of ' + o.sellerName),
+        o.review && !editing ? h('div', { className: 'stack', style: { gap: 8 } }, h(U.ReviewCard, { r: Object.assign({ buyerName: 'You', title: o.title }, o.review), now }), h(Btn, { kind: 'outline', size: 'sm', onClick: () => setEditing(true) }, 'Edit review'))
+          : h('div', { className: 'card' }, h(U.ReviewForm, { order: o, toast, onDone: () => setEditing(false) }))),
       h('div', null, h('div', { className: 'section-title' }, 'Price'), h(Kv, { k: 'Listed price', v: money(o.listPrice) }), h(Kv, { k: o.priceSource === 'NEGOTIATED' ? 'Agreed price' : 'Price', v: money(o.price) }), o.listPrice > o.price && h(Kv, { k: 'You saved', v: money(o.listPrice - o.price), tone: 'success', strong: true }), h(Kv, { k: 'Paid via', v: o.channel === 'WEBSITE' ? 'Seller’s website' : E.PAY_METHODS[o.paymentMethod] + ' (direct to seller)' })),
       o.address && h('div', null, h('div', { className: 'section-title' }, 'Delivery address'), h('div', { className: 'small' }, o.address.name + ', ' + U.addrLine(o.address))),
       h('div', { className: 'hint' }, `Only the seller updates this order. ${BRAND} doesn’t handle payments, delivery or refunds.`)));
@@ -296,12 +331,13 @@
       h('div', { className: 'chips scroll' }, ['All'].concat(E.CATEGORIES).map((c) => h(Chip, { key: c, on: q.category === c, onClick: () => set('category', c) }, c))),
       h('div', { className: 'chips scroll' }, h(Chip, { accent: true, on: q.offersOnly, onClick: () => set('offersOnly', !q.offersOnly) }, 'Accepts offers'), [100000, 200000, 500000].map((p) => h(Chip, { key: p, accent: true, on: q.maxPrice === p, onClick: () => set('maxPrice', q.maxPrice === p ? null : p) }, 'Under ' + money(p))), h(Chip, { accent: true, on: q.sellerType === 'BUSINESS', onClick: () => set('sellerType', q.sellerType === 'BUSINESS' ? null : 'BUSINESS') }, 'Business sellers'), h(Chip, { accent: true, on: q.sellerType === 'INDIVIDUAL', onClick: () => set('sellerType', q.sellerType === 'INDIVIDUAL' ? null : 'INDIVIDUAL') }, 'Individual sellers')),
       h('div', { className: 'chips scroll' }, h('span', { className: 'small muted strong', style: { alignSelf: 'center' } }, 'Size'), sizes.map((z) => h(Chip, { key: z, accent: true, on: q.size === z, onClick: () => set('size', q.size === z ? null : z) }, z))),
+      h('button', { className: 'card tint row', style: { textAlign: 'left', color: 'var(--ink)' }, onClick: () => nav.go('requestNew', { category: q.category !== 'All' ? q.category : undefined }) }, h(Icon, { name: 'megaphone' }), h('div', { className: 'grow' }, h('div', { className: 'strong' }, 'Can’t find it? Ask sellers'), h('div', { className: 'tiny muted' }, 'Post a photo and every seller in the category can reply.')), h(Icon, { name: 'back', size: 18, style: { transform: 'rotate(180deg)' } })),
       h('div', { className: 'row between' }, h('span', { className: 'small muted' }, `${res.length} result${res.length === 1 ? '' : 's'}`), h('button', { className: 'btn ghost sm', style: { padding: 0 }, onClick: reset }, 'Clear filters')),
       res.length ? h('div', { className: 'grid2' }, res.map((it) => h(Tile, { key: it.id, it, onClick: () => nav.go('product', { id: it.id }) }))) : h(Empty, { icon: 'search', title: 'No matches', body: 'Try fewer filters or a different word.', action: h(Btn, { kind: 'dark', onClick: reset }, 'Clear filters') })));
   }
   function Tile({ it, onClick }) {
     return h('button', { className: 'tile', onClick }, h('div', { className: 'media' }, h(MediaView, { m: it.media[0], small: true }), it.soldOut && h('div', { className: 'seed-tag', style: { top: 8 } }, 'Sold out')),
-      h('div', { className: 'strong small ellipsis', style: { width: '100%' } }, it.title), h('div', { className: 'row', style: { gap: 6 } }, h('b', null, money(it.price)), it.bargaining.acceptsOffers && h(Badge, { tone: 'accent' }, 'Offers')), h('div', { className: 'tiny muted ellipsis', style: { width: '100%' } }, it.seller.name));
+      h('div', { className: 'strong small ellipsis', style: { width: '100%' } }, it.title), h('div', { className: 'row', style: { gap: 6 } }, h('b', null, money(it.price)), it.bargaining.acceptsOffers && h(Badge, { tone: 'accent' }, 'Offers')), h('div', { className: 'tiny muted ellipsis', style: { width: '100%' } }, it.seller.name), h(U.RatingChip, { stats: it.seller.stats }));
   }
 
   // ---------- Profile & shop ----------
@@ -314,21 +350,76 @@
       h('div', null, h('div', { className: 'section-title' }, `Saved items (${p.saved.length})`), p.saved.length ? h('div', { className: 'grid2' }, p.saved.map((it) => h(Tile, { key: it.id, it, onClick: () => nav.go('product', { id: it.id }) }))) : h('div', { className: 'small muted' }, 'Tap Save on a reel to keep it here.')),
       h('div', null, h('div', { className: 'section-title' }, `Following (${p.following.length})`), p.following.length ? p.following.map((x) => h('button', { key: x.id, className: 'listrow', style: { padding: '10px 0' }, onClick: () => nav.go('shop', { sellerId: x.id }) }, h(Avatar, { name: x.name }), h('div', { className: 'grow' }, h('div', { className: 'strong' }, x.name), h('div', { className: 'tiny muted' }, '@' + x.handle + ' · ' + x.area)))) : h('div', { className: 'small muted' }, 'Follow shops to see their posts in your Following feed.')),
       h('div', null, h('div', { className: 'section-title' }, 'Addresses'), p.profile.addresses.map((a) => h('div', { key: a.id, className: 'card', style: { marginBottom: 8 } }, h('div', { className: 'row between' }, h('div', { className: 'strong' }, a.label + ' · ' + a.name), h('div', { className: 'row', style: { gap: 4 } }, h('button', { className: 'iconbtn plain', 'aria-label': 'Edit address', onClick: () => openSheet('address', { address: a }) }, h(Icon, { name: 'edit', size: 18 })), p.profile.addresses.length > 1 && h('button', { className: 'iconbtn plain', 'aria-label': 'Delete address', onClick: () => setConfirmDel(a) }, h(Icon, { name: 'trash', size: 18 })))), h('div', { className: 'small muted' }, U.addrLine(a)))), h(Btn, { kind: 'outline', size: 'sm', onClick: () => openSheet('address') }, '+ Add address')),
+      h('div', null, h('div', { className: 'section-title' }, 'Contact for orders'), h('div', { className: 'card row between' }, h('div', { className: 'small' }, h('div', null, 'In-app chat'), p.profile.contact && p.profile.contact.phone && h('div', null, 'Phone +91 ' + p.profile.contact.phone), p.profile.contact && p.profile.contact.whatsapp && h('div', null, 'WhatsApp +91 ' + p.profile.contact.whatsapp)), h(Btn, { kind: 'outline', size: 'sm', onClick: () => openSheet('contact') }, 'Edit')), h('div', { className: 'hint', style: { marginTop: 4 } }, 'Sellers see these only while you have an open order with them.')),
+      h('div', { className: 'stack', style: { gap: 0 } }, [['Your requests', 'megaphone', () => nav.go('requests')], ['Messages', 'msg', () => nav.go('threads')], ['User agreement', 'shield', () => openSheet('agreement')]].map(([t, ic, fn]) => h('button', { key: t, className: 'listrow', style: { padding: '12px 0' }, onClick: fn }, h(Icon, { name: ic }), h('span', { className: 'grow strong' }, t), h(Icon, { name: 'back', size: 18, style: { transform: 'rotate(180deg)' } })))),
       h('div', { className: 'card' }, h('div', { className: 'strong' }, p.hasShop ? 'You also have a shop' : 'Want to sell?'), h('div', { className: 'small muted' }, p.hasShop ? 'Manage it in the seller app with this same number.' : 'Open the seller app and sign in with this number. Your account works in both apps.')),
       h(Btn, { kind: 'danger', block: true, onClick: () => Store.dispatch({ type: 'auth.signOut', app: 'buyer' }) }, 'Sign out')),
       confirmDel && h(Confirm, { title: 'Delete this address?', body: U.addrLine(confirmDel), confirmLabel: 'Delete', danger: true, onCancel: () => setConfirmDel(null), onConfirm: () => { const r = Store.dispatch({ type: 'buyer.deleteAddress', userId: uid, addressId: confirmDel.id }); setConfirmDel(null); toast(r.ok ? 'Address deleted' : r.message, !r.ok); } }));
   }
   function ShopScreen({ sellerId }) {
-    const { uid, nav, toast } = useApp(); const d = B.shop(Store.state, uid, sellerId, Store.now());
+    const { uid, nav, toast } = useApp(); const now = Store.now(); const d = B.shop(Store.state, uid, sellerId, now);
+    const [tab, setTab] = useState('listings');
     if (!d) return h(Page, { title: 'Shop', onBack: nav.back }, h(Empty, { title: 'Shop not found' }));
-    const x = d.seller;
+    const x = d.seller; const reviews = E.common.reviews(Store.state, sellerId);
     return h(Page, { title: x.name, onBack: nav.back }, h('div', { className: 'pad stack' },
-      h('div', { className: 'row' }, h(Avatar, { name: x.name, lg: true }), h('div', { className: 'grow' }, h('div', { className: 'h3', style: { fontSize: 18 } }, x.name), h('div', { className: 'small muted' }, '@' + x.handle + ' · ' + x.area + ', ' + x.city), h('div', { className: 'row', style: { gap: 6, marginTop: 4 } }, h(Badge, null, x.type === 'BUSINESS' ? 'Business' : 'Individual'), h(Badge, null, 'Not verified (prototype)')))),
+      h('div', { className: 'row' }, h(Avatar, { name: x.name, lg: true }), h('div', { className: 'grow' }, h('div', { className: 'h3', style: { fontSize: 18 } }, x.name), h('div', { className: 'small muted' }, '@' + x.handle + ' · ' + x.area + ', ' + x.city), h('div', { className: 'row', style: { gap: 6, marginTop: 4 } }, h(U.RatingChip, { stats: x.stats }), h(Badge, null, x.type === 'BUSINESS' ? 'Business' : 'Individual'), h(Badge, null, 'Not verified (prototype)')))),
       x.bio && h('div', null, x.bio),
-      h('div', { className: 'card small' }, h('div', { className: 'strong', style: { marginBottom: 2 } }, 'Order record'), h(U.StatsLine, { st: x.stats }), h('div', { className: 'tiny muted', style: { marginTop: 4 } }, 'Based on what the seller confirmed in the app. Buyers pay sellers directly.')),
+      h(U.SellerLinks, { seller: x }),
+      h('div', { className: 'card small stack', style: { gap: 6 } }, h(U.SlaLines, { sla: x.sla, stats: x.stats }), h('div', null, h('b', null, 'Order record: '), h(U.StatsLine, { st: x.stats })), h('div', { className: 'tiny muted' }, 'Based on what the seller confirmed in the app. Buyers pay sellers directly.')),
       h('div', { className: 'row' }, h('span', { className: 'small muted' }, `${x.followers} follower${x.followers === 1 ? '' : 's'} · ${d.listings.length} listing${d.listings.length === 1 ? '' : 's'}`), h('div', { className: 'grow' }), !x.isMe && h(Btn, { kind: x.following ? 'outline' : 'dark', size: 'sm', onClick: () => { const r = Store.dispatch({ type: 'social.toggleFollow', userId: uid, sellerId }); if (!r.ok) toast(r.message, true); } }, x.following ? 'Following' : 'Follow')),
-      d.listings.length ? h('div', { className: 'grid2' }, d.listings.map((it) => h(Tile, { key: it.id, it, onClick: () => nav.go('product', { id: it.id }) }))) : h(Empty, { title: 'No listings right now' })));
+      h(Seg, { label: 'Shop sections', value: tab, onChange: setTab, options: [{ value: 'listings', label: `Listings (${d.listings.length})` }, { value: 'reviews', label: `Reviews (${reviews.length})` }] }),
+      tab === 'listings' ? (d.listings.length ? h('div', { className: 'grid2' }, d.listings.map((it) => h(Tile, { key: it.id, it, onClick: () => nav.go('product', { id: it.id }) }))) : h(Empty, { title: 'No listings right now' })) : h(U.ReviewsList, { reviews, stats: x.stats, now })));
   }
+
+  // ---------- Requests (buyer) ----------
+  function RequestNewScreen({ category }) {
+    const { uid, nav, toast } = useApp();
+    const [v, setV] = useState({ category: category || 'Ethnic wear', title: '', description: '', size: '', budget: '' }); const [media, setMedia] = useState([]); const [errors, setErrors] = useState({});
+    const reach = B.reachable(Store.state, uid, v.category);
+    const set = (k) => (e) => { setV(Object.assign({}, v, { [k]: k === 'budget' ? e.target.value.replace(/\D/g, '').slice(0, 7) : e.target.value })); setErrors({}); };
+    const post = () => { const r = Store.dispatch(Object.assign({ type: 'request.create', userId: uid, media }, v)); if (!r.ok) { setErrors(r.fields || {}); return; } nav.replace('request', { id: r.requestId }); toast(`Sent to ${r.reached} seller${r.reached === 1 ? '' : 's'} in ${v.category}`); };
+    return h(Page, { title: 'Ask sellers', onBack: nav.back, footer: h(Btn, { size: 'lg', block: true, onClick: post }, `Send to ${reach} seller${reach === 1 ? '' : 's'}`) }, h('div', { className: 'pad stack' },
+      h('div', { className: 'small muted' }, 'Describe what you’re looking for and add a photo. Every seller in the category gets it and can reply with a photo of what they have.'),
+      h('div', null, h('div', { className: 'label', style: { marginBottom: 6 } }, 'Category'), h('div', { className: 'chips' }, E.CATEGORIES.map((c) => h(Chip, { key: c, on: v.category === c, onClick: () => setV(Object.assign({}, v, { category: c })) }, c))), errors.category && h('div', { className: 'error' }, errors.category)),
+      h(Field, { label: 'What do you want?', id: 'rq-title', error: errors.title }, h(Input, { id: 'rq-title', maxLength: 80, placeholder: 'e.g. Mustard Kota doria dupatta', value: v.title, invalid: !!errors.title, onChange: set('title') })),
+      h(Field, { label: 'Details (optional)', id: 'rq-desc', error: errors.description }, h(Input, { id: 'rq-desc', multiline: true, maxLength: 500, placeholder: 'Colour, fabric, occasion, when you need it…', value: v.description, onChange: set('description') })),
+      h('div', { className: 'grid2' }, h(Field, { label: 'Size (optional)', id: 'rq-size' }, h(Input, { id: 'rq-size', maxLength: 20, value: v.size, onChange: set('size') })), h(Field, { label: 'Budget (optional)', id: 'rq-budget', error: errors.budget }, h('div', { className: 'input-group' }, h('div', { className: 'prefix' }, '₹'), h(Input, { id: 'rq-budget', inputMode: 'numeric', value: v.budget, onChange: set('budget') })))),
+      h(U.MediaPicker, { value: media, onChange: (m) => { setMedia(m); setErrors({}); }, max: 4, videos: false, label: 'Photo of what you want', error: errors.media, sample: () => ({ kind: 'seed', scene: U.SCENE_FOR_CATEGORY[v.category] || 'kurta', palette: U.PALETTE_NAMES[media.length % U.PALETTE_NAMES.length] }) }),
+      h('div', { className: 'hint' }, `Requests stay open for ${E.RULES.REQUEST_OPEN_DAYS} days.`)));
+  }
+  const RQ_TONE = { OPEN: 'success', CLOSED: '', EXPIRED: '' };
+  function RequestsScreen() {
+    const { uid, nav } = useApp(); const now = Store.now(); const list = B.requests(Store.state, uid);
+    return h(Page, { title: 'Your requests', onBack: nav.back, right: h('button', { className: 'iconbtn', onClick: () => nav.go('requestNew'), 'aria-label': 'New request' }, h(Icon, { name: 'plus', size: 20 })) },
+      list.length ? list.map((r) => h('button', { key: r.id, className: 'listrow', onClick: () => nav.go('request', { id: r.id }) }, h(Thumb, { m: r.media[0] }), h('div', { className: 'grow' }, h('div', { className: 'strong ellipsis' }, r.title), h('div', { className: 'tiny muted' }, `${r.category} · ${ago(r.createdAt, now)} · sent to ${r.reached || 0} seller${r.reached === 1 ? '' : 's'}`), h('div', { className: 'small' }, `${r.responses.length} response${r.responses.length === 1 ? '' : 's'}`)), h(Badge, { tone: RQ_TONE[r.status] }, r.status === 'OPEN' ? 'Open' : r.status === 'CLOSED' ? 'Closed' : 'Expired')))
+        : h(Empty, { icon: 'megaphone', title: 'No requests yet', body: 'Can’t find something? Ask every seller in a category at once.', action: h(Btn, { onClick: () => nav.go('requestNew') }, 'Ask sellers') }));
+  }
+  function RequestScreen({ id }) {
+    const { uid, nav, toast } = useApp(); const now = Store.now(); const r = B.request(Store.state, uid, id); const [view, setView] = useState(null);
+    if (!r) return h(Page, { title: 'Request', onBack: nav.back }, h(Empty, { title: 'Request not found' }));
+    const act = (type, responseId, ok) => { const x = Store.dispatch({ type, userId: uid, responseId }); if (!x.ok) toast(x.message, true); else { toast(ok); if (x.threadId) nav.go('chat', { id: x.threadId }); } };
+    return h(Page, { title: r.title, onBack: nav.back, footer: r.status === 'OPEN' ? h(Btn, { kind: 'outline', block: true, onClick: () => { const x = Store.dispatch({ type: 'request.close', userId: uid, requestId: id }); toast(x.ok ? 'Request closed' : x.message, !x.ok); } }, 'Close request') : null },
+      h('div', { className: 'pad stack' },
+        h('div', { className: 'row' }, h(Thumb, { m: r.media[0], lg: true }), h('div', { className: 'grow' }, h('div', { className: 'small muted' }, r.category + (r.size ? ' · size ' + r.size : '') + (r.budget ? ' · budget ' + money(r.budget) : '')), r.description && h('div', { className: 'small' }, r.description), h('div', { className: 'tiny muted' }, r.status === 'OPEN' ? `Open · closes in ${left(r.expiresAt - now)}` : r.status === 'CLOSED' ? 'Closed' : 'Expired'))),
+        h('div', { className: 'section-title' }, `Responses (${r.responses.length})`),
+        r.responses.length ? r.responses.map((x) => h('div', { key: x.id, className: 'card stack', style: { gap: 8 } },
+          h('button', { className: 'row', style: { background: 'none', border: 0, padding: 0, color: 'var(--ink)', textAlign: 'left' }, onClick: () => nav.go('shop', { sellerId: x.seller.id }) }, h(Avatar, { name: x.seller.name }), h('div', { className: 'grow' }, h('div', { className: 'strong' }, x.seller.name), h('div', { className: 'tiny' }, h(U.RatingChip, { stats: x.seller.stats }), ' · ', x.seller.area)), x.price && h('b', null, money(x.price))),
+          h(U.MediaRow, { media: x.media, onOpen: setView }), x.text && h('div', null, x.text),
+          x.status === 'SENT' ? h('div', { className: 'btn-row' }, h(Btn, { kind: 'outline', onClick: () => act('request.decline', x.id, 'Seller told you passed') }, 'Not for me'), h(Btn, { onClick: () => act('request.want', x.id, 'Seller notified — they’ll share a listing in chat') }, 'I want this'))
+            : x.status === 'WANTED' ? h(Btn, { kind: 'dark', block: true, onClick: () => nav.go('chat', { id: x.threadId }) }, h(Icon, { name: 'msg', size: 18 }), x.listingId ? 'Open chat · listing shared' : 'Open chat with seller')
+              : h('div', { className: 'small muted' }, 'You passed on this.')))
+          : h(Empty, { icon: 'megaphone', title: 'No responses yet', body: 'Sellers in this category have been notified. Replies with photos appear here.' })),
+      view && h(U.MediaViewer, { m: view, onClose: () => setView(null) }));
+  }
+  function ThreadsScreenB() { const { uid, nav } = useApp(); return h(U.ThreadsScreen, { app: 'buyer', userId: uid, onBack: nav.back, onOpen: (id) => nav.go('chat', { id }) }); }
+  function ChatScreenB({ id }) { const { uid, nav, toast } = useApp(); return h(U.ChatScreen, { app: 'buyer', userId: uid, threadId: id, onBack: nav.back, toast, onOpenListing: (lid) => nav.go('product', { id: lid }) }); }
+  function ContactSheet() {
+    const { uid, closeSheet, toast } = useApp(); const p = Store.state.buyerProfiles[uid];
+    const [v, setV] = useState(Object.assign({ phone: '', whatsapp: '' }, p.contact || {})); const [errors, setErrors] = useState({});
+    const save = () => { const r = Store.dispatch({ type: 'buyer.updateContact', userId: uid, contact: v }); if (!r.ok) { setErrors(r.fields || {}); return; } closeSheet(); toast('Contact details saved'); };
+    return h(Sheet, { title: 'Contact for orders', onClose: closeSheet, footer: h(Btn, { block: true, onClick: save }, 'Save') }, h(ContactFields, { value: v, onChange: (x) => { setV(x); setErrors({}); }, errors, idp: 'cs-', who: 'Sellers' }));
+  }
+  function AgreementSheet() { const { closeSheet } = useApp(); return h(Sheet, { title: BRAND + ' user agreement', onClose: closeSheet }, h(U.AgreementText), h('div', { className: 'tiny muted', style: { marginTop: 8 } }, 'You accepted this when you signed up.')); }
 
   // ---------- sheets ----------
   function CommentsSheet({ listingId }) { const { uid, closeSheet } = useApp(); return h(Sheet, { title: 'Comments', onClose: closeSheet }, h(U.CommentsPanel, { listingId, userId: uid })); }
@@ -349,10 +440,10 @@
   }
   function NotificationsScreen() {
     const { uid, nav } = useApp();
-    return h(U.Notifications, { app: 'buyer', userId: uid, onBack: nav.back, onOpen: (ref) => { if (ref.type === 'negotiation') nav.replace('negotiation', { id: ref.id }); if (ref.type === 'order') nav.replace('order', { id: ref.id }); if (ref.type === 'listing') nav.replace('product', { id: ref.id }); } });
+    return h(U.Notifications, { app: 'buyer', userId: uid, onBack: nav.back, onOpen: (ref) => { if (ref.type === 'negotiation') nav.replace('negotiation', { id: ref.id }); if (ref.type === 'order') nav.replace('order', { id: ref.id }); if (ref.type === 'listing') nav.replace('product', { id: ref.id }); if (ref.type === 'chat') nav.replace('chat', { id: ref.id }); if (ref.type === 'request') nav.replace('request', { id: ref.id }); } });
   }
 
-  const SCREENS = { product: ProductScreen, negotiation: NegotiationScreen, checkout: CheckoutScreen, order: OrderScreen, shop: ShopScreen, notifications: NotificationsScreen };
-  const SHEETS = { offer: OfferSheet, comments: CommentsSheet, category: CategorySheet, address: AddressSheet, name: NameSheet };
+  const SCREENS = { product: ProductScreen, negotiation: NegotiationScreen, checkout: CheckoutScreen, order: OrderScreen, shop: ShopScreen, notifications: NotificationsScreen, threads: ThreadsScreenB, chat: ChatScreenB, requestNew: RequestNewScreen, requests: RequestsScreen, request: RequestScreen };
+  const SHEETS = { offer: OfferSheet, comments: CommentsSheet, category: CategorySheet, address: AddressSheet, name: NameSheet, contact: ContactSheet, agreement: AgreementSheet };
   window.FaydaBuyerApp = BuyerApp;
 })();

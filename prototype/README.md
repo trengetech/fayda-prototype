@@ -24,6 +24,7 @@ python3 -m http.server 8790
 | `src/seed.js` | Seed data (3 Hyderabad sellers, 9 listings, 2 buyers, live negotiations), built through engine commands. |
 | `src/ui-core.js` | Store (localStorage), media (IndexedDB), formatting, icons, primitives. |
 | `src/ui-shared.js` | Sign-in, address form, timeline, counter box, payment form, shipment fields, order steps. |
+| `src/ui-social.js` | Stars, media picker/viewer, reviews, chat, contact buttons, seller links, user agreement. |
 | `src/buyer-app.js` | Buyer app screens. |
 | `src/seller-app.js` | Seller app screens. |
 | `src/shell.js` | Two-phone page shell, guide, reset, error boundary. |
@@ -33,9 +34,10 @@ python3 -m http.server 8790
 ## Tests
 
 ```bash
-node --test test/engine.test.js        # 26 rule tests (port these to Vitest)
+node --test test/engine.test.js        # 33 rule tests (port these to Vitest)
 # Browser journeys (Python Playwright + Chromium; server must be running on :8790):
-python3 test/e2e2.py        # 33 two-phone checks: onboarding, direct pay, website deals, shipment, expiry
+python3 test/e2e2.py        # 36 two-phone checks: onboarding, direct pay, website deals, shipment, expiry
+python3 test/e2e3.py        # 34 checks: ratings everywhere, contact seller, chat, reviews with photos, buy again, requests → listing in chat
 python3 test/media_mobile.py  # video/photo upload, autoplay, narrow layout, dark mode
 python3 test/signup.py      # new buyer signup with a non-demo number
 python3 test/guide.py       # walks the changed guide steps

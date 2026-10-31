@@ -14,15 +14,15 @@
 
     // Sellers
     const sellers = [
-      { phone: '9000011111', owner: 'Ravi Kumar', type: 'BUSINESS', name: 'Indigo Threads', handle: 'indigothreads', area: 'Banjara Hills', gstin: '36AABCI1234F1Z5', bio: 'Hand-block printed cotton, made in small batches.', payment: { upiId: 'indigothreads@okhdfcbank', bankHolder: 'Indigo Threads LLP', bankAccount: '50200012345678', bankIfsc: 'HDFC0001234', bankName: 'HDFC Bank' } },
-      { phone: '9000033333', owner: 'Farah Siddiqui', type: 'BUSINESS', name: 'Loom & Co.', handle: 'loomandco', area: 'Jubilee Hills', gstin: '', bio: 'Handloom linens and Pochampally ikat. We ship from our own store.', payment: { website: 'https://loomandco.example.com' } },
-      { phone: '9000022222', owner: 'Meher Reddy', type: 'INDIVIDUAL', name: 'Meher’s Closet', handle: 'meherscloset', area: 'Kondapur', gstin: '', bio: 'Jewellery and accessories I source from Laad Bazaar.', payment: { upiId: 'meher.closet@okaxis', paymentLink: 'https://pay.example.com/meherscloset' } }
+      { phone: '9000011111', owner: 'Ravi Kumar', type: 'BUSINESS', name: 'Indigo Threads', handle: 'indigothreads', area: 'Banjara Hills', gstin: '36AABCI1234F1Z5', bio: 'Hand-block printed cotton, made in small batches.', payment: { upiId: 'indigothreads@okhdfcbank', bankHolder: 'Indigo Threads LLP', bankAccount: '50200012345678', bankIfsc: 'HDFC0001234', bankName: 'HDFC Bank' }, categories: ['Ethnic wear', 'Western wear'], contact: { phone: '9000011111', whatsapp: '9000011111' }, mapsUrl: 'https://maps.app.goo.gl/indigoThreadsBH', googleProfileUrl: 'https://g.page/indigothreads-hyd', socialUrl: 'https://instagram.com/indigothreads.hyd', sla: { confirmHours: 4, shipDays: 2 } },
+      { phone: '9000033333', owner: 'Farah Siddiqui', type: 'BUSINESS', name: 'Loom & Co.', handle: 'loomandco', area: 'Jubilee Hills', gstin: '', bio: 'Handloom linens and Pochampally ikat. We ship from our own store.', payment: { website: 'https://loomandco.example.com' }, categories: ['Ethnic wear', 'Western wear', 'Menswear'], contact: { phone: '9000033333' }, mapsUrl: 'https://www.google.com/maps/place/Jubilee+Hills,+Hyderabad', googleProfileUrl: null, socialUrl: 'https://facebook.com/loomandco.hyd', sla: { confirmHours: 12, shipDays: 3 } },
+      { phone: '9000022222', owner: 'Meher Reddy', type: 'INDIVIDUAL', name: 'Meher’s Closet', handle: 'meherscloset', area: 'Kondapur', gstin: '', bio: 'Jewellery and accessories I source from Laad Bazaar.', payment: { upiId: 'meher.closet@okaxis', paymentLink: 'https://pay.example.com/meherscloset' }, categories: ['Accessories', 'Footwear'], contact: { whatsapp: '9000022222' }, mapsUrl: 'https://maps.app.goo.gl/mehersClosetKdp', googleProfileUrl: null, socialUrl: 'https://instagram.com/meherscloset', sla: { confirmHours: 2, shipDays: 3 } }
     ];
     const sellerUser = {};
     sellers.forEach((x, i) => {
       const uid = login(x.phone, 'seller', t0 + i * 1000);
       run({ type: 'user.updateName', userId: uid, name: x.owner }, t0);
-      run({ type: 'seller.register', userId: uid, sellerType: x.type, name: x.name, handle: x.handle, area: x.area, city: 'Hyderabad', gstin: x.gstin, bio: x.bio, payment: x.payment, conductAccepted: true }, t0 + i * 1000);
+      run({ type: 'seller.register', userId: uid, sellerType: x.type, name: x.name, handle: x.handle, area: x.area, city: 'Hyderabad', gstin: x.gstin, bio: x.bio, payment: x.payment, categories: x.categories, contact: x.contact, mapsUrl: x.mapsUrl, googleProfileUrl: x.googleProfileUrl, socialUrl: x.socialUrl, sla: x.sla, conductAccepted: true }, t0 + i * 1000);
       sellerUser[x.handle] = uid;
     });
 
@@ -65,7 +65,7 @@
     const B = {};
     buyers.forEach((b, i) => {
       const uid = login(b.phone, 'buyer', t0 + 3 * E.DAY + i);
-      run({ type: 'buyer.completeProfile', userId: uid, name: b.name, address: b.addr }, t0 + 3 * E.DAY + i);
+      run({ type: 'buyer.completeProfile', userId: uid, name: b.name, address: b.addr, contact: { phone: b.phone, whatsapp: b.phone }, agreementAccepted: true }, t0 + 3 * E.DAY + i);
       B[b.name.split(' ')[0]] = uid;
     });
     const addrOf = (uid) => s.buyerProfiles[uid].defaultAddressId;
@@ -76,6 +76,16 @@
     const o = run({ type: 'order.place', userId: B.Aarav, negotiationId: ng, addressId: addrOf(B.Aarav), paymentMethod: 'UPI' }, at + 600e3).orderId;
     run({ type: 'order.confirm', userId: sellerUser.indigothreads, orderId: o, shipment: { carrier: 'DTDC', trackingId: 'D1234567890', expectedDate: new Date(at + 3 * E.DAY).toISOString().slice(0, 10) } }, at + 3 * E.HOUR);
     run({ type: 'order.deliver', userId: sellerUser.indigothreads, orderId: o }, at + 2 * E.DAY);
+    const th = s.orders[o].threadId;
+    run({ type: 'chat.send', userId: B.Aarav, threadId: th, text: 'Paid ₹1,150 by UPI with note ' + s.orders[o].number + '.' }, at + 20 * 60e3);
+    run({ type: 'chat.send', userId: sellerUser.indigothreads, threadId: th, text: 'Got it, thank you! Shipping today by DTDC.' }, at + 3 * E.HOUR);
+    run({ type: 'review.save', userId: B.Aarav, orderId: o, rating: 5, text: 'Colours exactly like the video and the mul is very soft. Packed neatly.', media: [] }, at + 2 * E.DAY + E.HOUR);
+    const jh = Object.values(s.listings).find((l) => l.title.startsWith('Oxidised'));
+    const o2 = run({ type: 'order.place', userId: B.Priya, listingId: jh.id, variantId: jh.variants[0].id, addressId: addrOf(B.Priya), paymentMethod: 'UPI' }, at + E.DAY).orderId;
+    run({ type: 'order.confirm', userId: sellerUser.meherscloset, orderId: o2 }, at + E.DAY + 90 * 60e3);
+    run({ type: 'order.ship', userId: sellerUser.meherscloset, orderId: o2, shipment: { note: 'Sent with a local courier' } }, at + 2 * E.DAY);
+    run({ type: 'order.deliver', userId: sellerUser.meherscloset, orderId: o2 }, at + 3 * E.DAY);
+    run({ type: 'review.save', userId: B.Priya, orderId: o2, rating: 4, text: 'Lovely and light. Took a little longer to arrive than I expected.', media: [] }, at + 3 * E.DAY + E.HOUR);
 
     // Social graph
     run({ type: 'social.toggleFollow', userId: B.Aarav, sellerId: s.listings[kurta].sellerId }, now - 3 * E.DAY);
@@ -95,6 +105,8 @@
     run({ type: 'system.sweep' }, now - 30 * 60e3 + 6e3);
     // Saree auto-countered at 6,199 for Aarav (rule). Leave it for the demo.
 
+    const rq = run({ type: 'request.create', userId: B.Priya, category: 'Ethnic wear', title: 'Mustard Kota doria dupatta', description: 'Looking for a mustard or haldi-yellow Kota doria dupatta with a thin gold border, for a haldi function next week.', size: '', budget: 1500, media: [{ kind: 'seed', scene: 'dupatta', palette: 'clay' }] }, now - 5 * E.HOUR).requestId;
+    run({ type: 'request.respond', userId: sellerUser.indigothreads, requestId: rq, text: 'We have this in haldi yellow with a zari border. Can list it today.', price: 1399, media: [{ kind: 'seed', scene: 'dupatta', palette: 'sand' }] }, now - 3 * E.HOUR);
     s.sessions = { buyer: null, seller: null };
     s.notifications.forEach((n) => { n.read = n.at < now - E.DAY; });
     s.seededAt = now;

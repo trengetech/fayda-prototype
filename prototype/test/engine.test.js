@@ -11,10 +11,10 @@ function setup(rules, opts = {}) {
   const run = (cmd, at = NOW) => { const r = E.exec(s, cmd, at); if (r.result.ok) s = r.state; return r.result; };
   const login = (phone, app) => run({ type: 'auth.verifyOtp', phone, code: '123456', app }).userId;
   const seller = login('9000011111', 'seller');
-  run({ type: 'seller.register', userId: seller, sellerType: 'BUSINESS', name: 'Shop', handle: 'shop', area: 'Banjara Hills', conductAccepted: true, payment: { upiId: 'shop@okicici', bankHolder: 'Shop', bankAccount: '123456789012', bankIfsc: 'ICIC0001234' } });
+  run({ type: 'seller.register', userId: seller, sellerType: 'BUSINESS', name: 'Shop', handle: 'shop', area: 'Banjara Hills', conductAccepted: true, payment: { upiId: 'shop@okicici', bankHolder: 'Shop', bankAccount: '123456789012', bankIfsc: 'ICIC0001234' }, categories: ['Ethnic wear', 'Accessories'], mapsUrl: 'https://maps.app.goo.gl/AbCdEf123', contact: { phone: '9000011111' }, sla: { confirmHours: 6, shipDays: 2 } });
   const addr = { name: 'A B', line1: '1', line2: 'Street', pin: '500034', city: 'Hyderabad', state: 'Telangana' };
-  const b1 = login('9876543210', 'buyer'); run({ type: 'buyer.completeProfile', userId: b1, name: 'Buyer One', address: addr });
-  const b2 = login('9123456789', 'buyer'); run({ type: 'buyer.completeProfile', userId: b2, name: 'Buyer Two', address: addr });
+  const b1 = login('9876543210', 'buyer'); run({ type: 'buyer.completeProfile', userId: b1, name: 'Buyer One', address: addr, contact: { phone: '9876543210' }, agreementAccepted: true });
+  const b2 = login('9123456789', 'buyer'); run({ type: 'buyer.completeProfile', userId: b2, name: 'Buyer Two', address: addr, contact: { whatsapp: '9123456789' }, agreementAccepted: true });
   const r = run({ type: 'listing.save', userId: seller, publish: true, draft: { title: 'Kurta', description: '', category: 'Ethnic wear', price: 2500, media: [{ kind: 'seed', scene: 'kurta', palette: 'indigo' }], variants: [{ label: 'M', stock: opts.stock ?? 1 }], bargaining: { mode: opts.mode || 'BOTH', expiryHours: 24 }, rules: rules || {}, checkout: opts.checkout, dealCodes: opts.dealCodes } });
   assert.ok(r.ok, JSON.stringify(r));
   const L = () => s.listings[r.listingId];
@@ -264,7 +264,7 @@ test('Payment profile validation and privacy: details never in public listing, f
 test('Direct-pay listing requires a direct payment method on the seller profile', () => {
   let s = E.emptyState(); const run = (c) => { const r = E.exec(s, c, NOW); if (r.result.ok) s = r.state; return r.result; };
   const u = run({ type: 'auth.verifyOtp', phone: '9000099999', code: '123456', app: 'seller' }).userId;
-  assert.ok(run({ type: 'seller.register', userId: u, sellerType: 'INDIVIDUAL', name: 'Web only', handle: 'webonly', area: 'Kukatpally', conductAccepted: true, payment: { website: 'https://web.example.com' } }).ok);
+  assert.ok(run({ type: 'seller.register', userId: u, sellerType: 'INDIVIDUAL', name: 'Web only', handle: 'webonly', area: 'Kukatpally', conductAccepted: true, payment: { website: 'https://web.example.com' }, categories: ['Ethnic wear', 'Accessories'], mapsUrl: 'https://maps.app.goo.gl/AbCdEf123', contact: { phone: '9000011111' }, sla: { confirmHours: 6, shipDays: 2 } }).ok);
   const d = { title: 'Kurta', category: 'Ethnic wear', price: 2500, media: [{ kind: 'seed' }], variants: [{ label: 'M', stock: 1 }], bargaining: { mode: 'BOTH', expiryHours: 24 }, rules: {} };
   assert.ok(run({ type: 'listing.save', userId: u, publish: true, draft: Object.assign({}, d, { checkout: { channel: 'DIRECT' } }) }).fields.channel);
   assert.ok(run({ type: 'listing.save', userId: u, publish: true, draft: Object.assign({}, d, { checkout: { channel: 'WEBSITE', productUrl: 'web.example.com/x' } }) }).fields.productUrl);
@@ -306,6 +306,108 @@ test('Website listing: seller must supply a code or link to accept or counter ma
   assert.equal(E.buyer.negotiation(t.s, t.b1, id, NOW).agreement.dealAccess.type, 'LINK');
 });
 
+test('Seller onboarding validates categories, Google Maps link, social links, contact and declared timings', () => {
+  let s = E.emptyState(); const run = (c) => { const r = E.exec(s, c, NOW); if (r.result.ok) s = r.state; return r.result; };
+  const u = run({ type: 'auth.verifyOtp', phone: '9000099998', code: '123456', app: 'seller' }).userId;
+  const base = { type: 'seller.register', userId: u, sellerType: 'INDIVIDUAL', name: 'Sana Studio', handle: 'sanastudio', area: 'Tolichowki', conductAccepted: true, payment: { upiId: 'sana@okaxis' } };
+  const f = run(base).fields;
+  ['categories', 'mapsUrl', 'contact', 'confirmHours', 'shipDays'].forEach((k) => assert.ok(f[k], 'requires ' + k));
+  const bad = run(Object.assign({}, base, { categories: ['Ethnic wear'], mapsUrl: 'https://example.com/map', googleProfileUrl: 'https://example.com', socialUrl: 'https://twitter.com/x', contact: { phone: '123' }, sla: { confirmHours: 6, shipDays: 2 } })).fields;
+  ['mapsUrl', 'googleProfileUrl', 'socialUrl', 'contactPhone'].forEach((k) => assert.ok(bad[k], 'rejects bad ' + k));
+  ['https://maps.app.goo.gl/abc', 'https://www.google.com/maps/place/X', 'https://maps.google.co.in/?q=1', 'https://goo.gl/maps/xyz'].forEach((m) => assert.ok(E.isMapsUrl(m), m));
+  assert.ok(E.isSocialUrl('https://www.instagram.com/sana.studio') && E.isSocialUrl('https://facebook.com/sana') && !E.isSocialUrl('https://instagram.com/'));
+  assert.ok(run(Object.assign({}, base, { categories: ['Ethnic wear'], mapsUrl: 'https://maps.app.goo.gl/abc', socialUrl: 'https://instagram.com/sana.studio', contact: { whatsapp: '9000099998' }, sla: { confirmHours: 6, shipDays: 2 } })).ok);
+});
+
+test('Buyer onboarding requires the user agreement and a phone or WhatsApp contact', () => {
+  let s = E.emptyState(); const run = (c) => { const r = E.exec(s, c, NOW); if (r.result.ok) s = r.state; return r.result; };
+  const u = run({ type: 'auth.verifyOtp', phone: '9700012345', code: '123456', app: 'buyer' }).userId;
+  const addr = { name: 'K R', line1: '7', line2: 'Miyapur', pin: '500049', city: 'Hyderabad', state: 'Telangana' };
+  const f = run({ type: 'buyer.completeProfile', userId: u, name: 'Kiran', address: addr }).fields;
+  assert.ok(f.agreement && f.contact);
+  assert.ok(run({ type: 'buyer.completeProfile', userId: u, name: 'Kiran', address: addr, contact: { phone: '9700012345' }, agreementAccepted: true }).ok);
+  assert.equal(s.buyerProfiles[u].agreementVersion, E.RULES.AGREEMENT_VERSION);
+});
+
+test('Order chat: created with the order, only the two parties can write, unread counts, listing cards by seller only', () => {
+  const t = setup({}, { stock: 3 });
+  const id = t.run({ type: 'order.place', userId: t.b1, listingId: t.listingId, variantId: t.v(), addressId: t.addrOf(t.b1), paymentMethod: 'UPI' }).orderId;
+  const th = t.s.orders[id].threadId; assert.ok(th);
+  assert.equal(t.run({ type: 'chat.send', userId: t.b2, threadId: th, text: 'hi' }).code, 'FORBIDDEN');
+  assert.ok(t.run({ type: 'chat.send', userId: t.b1, threadId: th, text: 'Paid with note ' + t.s.orders[id].number }).ok);
+  assert.equal(E.seller.order(t.s, t.seller, id).unread, 1);
+  assert.ok(t.run({ type: 'chat.markRead', userId: t.seller, threadId: th }, NOW + 1).ok);
+  assert.equal(E.seller.order(t.s, t.seller, id).unread, 0);
+  assert.equal(t.run({ type: 'chat.send', userId: t.b1, threadId: th, listingId: t.listingId }).code, 'INVALID_LISTING');
+  assert.ok(t.run({ type: 'chat.send', userId: t.seller, threadId: th, listingId: t.listingId }, NOW + 2).ok);
+  const dto = E.common.thread(t.s, t.b1, 'buyer', th, NOW + 2);
+  assert.equal(dto.messages[dto.messages.length - 1].listing.id, t.listingId); assert.equal(dto.unread, 1);
+});
+
+test('Contact details: seller phone/WhatsApp and buyer contact only on open orders, never public', () => {
+  const t = setup({}, { stock: 3 });
+  const id = t.run({ type: 'order.place', userId: t.b1, listingId: t.listingId, variantId: t.v(), addressId: t.addrOf(t.b1), paymentMethod: 'UPI' }).orderId;
+  assert.equal(E.buyer.order(t.s, t.b1, id, NOW).seller.contact.phone, '9000011111');
+  assert.equal(E.seller.order(t.s, t.seller, id).buyerContact.phone, '9876543210');
+  const pub = JSON.stringify([E.buyer.feed(t.s, t.b2, NOW), E.buyer.listing(t.s, t.b2, t.listingId, NOW), E.buyer.shop(t.s, t.b2, t.L().sellerId, NOW)]);
+  assert.ok(!pub.includes('9000011111'), 'seller phone not public');
+  assert.ok(t.run({ type: 'order.confirm', userId: t.seller, orderId: id }).ok); assert.ok(t.run({ type: 'order.deliver', userId: t.seller, orderId: id }).ok);
+  assert.equal(E.buyer.order(t.s, t.b1, id, NOW).seller.contact, null, 'hidden after delivery');
+  assert.equal(E.seller.order(t.s, t.seller, id).buyerContact, null);
+  assert.equal(E.buyer.order(t.s, t.b1, id, NOW).seller.sla.confirmHours, 6);
+});
+
+test('Reviews: buyer of the order only, 1–5 stars, low ratings need a reason, editable, rating shown on every listing', () => {
+  const t = setup({}, { stock: 3 });
+  const a = t.run({ type: 'order.place', userId: t.b1, listingId: t.listingId, variantId: t.v(), addressId: t.addrOf(t.b1), paymentMethod: 'UPI' }).orderId;
+  const b = t.run({ type: 'order.place', userId: t.b2, listingId: t.listingId, variantId: t.v(), addressId: t.addrOf(t.b2), paymentMethod: 'UPI' }).orderId;
+  assert.equal(t.run({ type: 'review.save', userId: t.b2, orderId: a, rating: 5 }).code, 'NOT_FOUND');
+  assert.ok(t.run({ type: 'review.save', userId: t.b1, orderId: a, rating: 6 }).fields.rating);
+  assert.ok(t.run({ type: 'review.save', userId: t.b1, orderId: a, rating: 1, text: 'bad' }).fields.text);
+  assert.ok(t.run({ type: 'review.save', userId: t.b1, orderId: a, rating: 5, text: 'Great', media: [{ kind: 'image', mediaId: 'm1' }, { kind: 'video', mediaId: 'm2' }] }).ok);
+  assert.ok(t.run({ type: 'review.save', userId: t.b2, orderId: b, rating: 4 }).ok);
+  assert.ok(t.run({ type: 'review.save', userId: t.b1, orderId: a, rating: 2, text: 'Changed my mind: colour faded' }, NOW + 1000).ok);
+  assert.equal(Object.keys(t.s.reviews).length, 2, 'one review per order');
+  const st = E.buyer.feed(t.s, t.b2, NOW)[0].seller.stats; assert.equal(st.rating, 3); assert.equal(st.reviewCount, 2);
+  const rv = E.common.reviews(t.s, t.L().sellerId); assert.equal(rv.length, 2); assert.ok(rv.find((r) => r.editedAt));
+  assert.equal(rv.find((r) => r.rating === 2).media.length, 2);
+});
+
+test('Buy again: offered when the listing is live and the size is in stock', () => {
+  const t = setup({}, { stock: 1 });
+  const id = t.run({ type: 'order.place', userId: t.b1, listingId: t.listingId, variantId: t.v(), addressId: t.addrOf(t.b1), paymentMethod: 'UPI' }).orderId;
+  let ba = E.buyer.order(t.s, t.b1, id, NOW).buyAgain; assert.equal(ba.variantId, null); assert.equal(ba.anyAvailable, false);
+  assert.ok(t.run({ type: 'order.cancel', userId: t.seller, orderId: id, reason: 'BUYER_REQUEST' }).ok);
+  ba = E.buyer.order(t.s, t.b1, id, NOW).buyAgain; assert.equal(ba.variantId, t.v());
+  assert.ok(t.run({ type: 'listing.setStatus', userId: t.seller, listingId: t.listingId, status: 'PAUSED' }).ok);
+  assert.equal(E.buyer.order(t.s, t.b1, id, NOW).buyAgain, null);
+});
+
+test('Requests: reach sellers in the category, need photos, response → want → chat → listing shared automatically', () => {
+  const t = setup({}, { stock: 3 });
+  let s2 = t.s; const run = (c, at = NOW) => t.run(c, at);
+  assert.ok(run({ type: 'request.create', userId: t.b1, category: 'Footwear', title: 'Kolhapuris size 8', media: [] }).fields.media);
+  const r = run({ type: 'request.create', userId: t.b1, category: 'Ethnic wear', title: 'Mustard dupatta', budget: 1500, media: [{ kind: 'image', mediaId: 'img1' }] });
+  assert.ok(r.ok); assert.equal(r.reached, 1);
+  assert.ok(t.s.notifications.find((n) => n.userId === t.seller && n.ref && n.ref.type === 'request'));
+  assert.equal(E.seller.requests(t.s, t.seller).length, 1);
+  assert.ok(run({ type: 'request.respond', userId: t.seller, requestId: r.requestId, text: 'Have it', media: [] }).fields.media);
+  const x = run({ type: 'request.respond', userId: t.seller, requestId: r.requestId, text: 'Have it', price: 1399, media: [{ kind: 'image', mediaId: 'img2' }] });
+  assert.ok(x.ok); assert.equal(run({ type: 'request.respond', userId: t.seller, requestId: r.requestId, media: [{ kind: 'image', mediaId: 'x' }] }).code, 'ALREADY_RESPONDED');
+  assert.equal(E.buyer.request(t.s, t.b1, r.requestId).responses[0].price, 139900);
+  assert.equal(run({ type: 'request.want', userId: t.b2, responseId: x.responseId }).code, 'NOT_FOUND');
+  const w = run({ type: 'request.want', userId: t.b1, responseId: x.responseId }); assert.ok(w.ok);
+  const draft = { title: 'Mustard Kota dupatta', description: '', category: 'Ethnic wear', price: 1399, media: [{ kind: 'image', mediaId: 'img2' }], variants: [{ label: 'One size', stock: 1 }], bargaining: { mode: 'FIXED', expiryHours: 24 }, rules: {} };
+  const l = run({ type: 'listing.save', userId: t.seller, publish: true, fromResponseId: x.responseId, draft });
+  assert.ok(l.ok && l.sharedInChat);
+  const th = E.common.thread(t.s, t.b1, 'buyer', w.threadId, NOW);
+  assert.equal(th.messages[th.messages.length - 1].listing.id, l.listingId);
+  assert.ok(run({ type: 'request.close', userId: t.b1, requestId: r.requestId }).ok);
+  const r2 = run({ type: 'request.create', userId: t.b1, category: 'Ethnic wear', title: 'Another one', media: [{ kind: 'image', mediaId: 'i' }] });
+  run({ type: 'system.sweep' }, NOW + 7 * DAY);
+  assert.equal(t.s.requests[r2.requestId].status, 'EXPIRED');
+});
+
 test('Seed state builds through the engine and contains the demo negotiations', () => {
   const s = globalThis.FaydaSeed.createSeedState(NOW);
   assert.equal(Object.keys(s.listings).length, 9);
@@ -313,4 +415,6 @@ test('Seed state builds through the engine and contains the demo negotiations', 
   assert.ok(negs.some((n) => n.status === 'PURCHASED'));
   assert.ok(negs.filter((n) => n.status === 'OPEN').length >= 3);
   assert.ok(negs.some((n) => n.offers.some((o) => o.by === 'SYSTEM')));
+  assert.equal(Object.keys(s.reviews).length, 2); assert.equal(Object.keys(s.requests).length, 1); assert.equal(Object.keys(s.responses).length, 1);
+  assert.ok(Object.values(s.chats).some((c) => c.messages.length >= 3));
 });
