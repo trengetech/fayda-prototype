@@ -44,13 +44,12 @@ export async function pickFiles(opts: { video: boolean; max: number }): Promise<
   const out: PickedFile[] = [];
   for (const a of res.assets.slice(0, opts.max)) {
     const kind = a.type === 'video' ? 'video' : 'image';
-    const ext = (a.fileName ?? a.uri).split('.').pop()?.toLowerCase() ?? '';
-    const mime = a.mimeType ?? MIMES[ext] ?? (kind === 'video' ? 'video/mp4' : 'image/jpeg');
-    let size = a.fileSize ?? 0;
-    if (!size) {
-      const info = await FileSystem.getInfoAsync(a.uri);
-      size = info.exists && typeof info.size === 'number' ? info.size : 0;
-    }
+    // The picker re-encodes photos (quality < 1) into a cache file, and `fileSize` / `mimeType` can describe the original instead.
+    // The API checks the declared size against the bytes it receives, so measure and name the file we will actually send.
+    const ext = a.uri.split('?')[0]?.split('.').pop()?.toLowerCase() ?? '';
+    const mime = MIMES[ext] ?? a.mimeType ?? (kind === 'video' ? 'video/mp4' : 'image/jpeg');
+    const info = await FileSystem.getInfoAsync(a.uri);
+    const size = info.exists && typeof info.size === 'number' && info.size > 0 ? info.size : (a.fileSize ?? 0);
     out.push({ uri: a.uri, kind, mime, size, durationSec: a.duration != null ? a.duration / 1000 : null });
   }
   return out;

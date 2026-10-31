@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { Linking, StyleSheet } from 'react-native';
+import { pickFiles } from '../src/upload';
 import AgreementScreen from '../app/agreement';
 import ChatScreen from '../app/chat/[id]';
 import CheckoutScreen from '../app/checkout';
@@ -449,6 +450,7 @@ describe('asking sellers', () => {
     fakeApi({ ...mediaRoutes(MID), 'GET /v1/buyer/requests/reach?category=Ethnic%20wear': () => json({ count: 3 }), 'POST /v1/buyer/requests': ({ body, headers }) => (sent.push({ body, headers }), json(buyerRequest(), 201)) }, fetchMock);
     mockPick.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///p.jpg', type: 'image', mimeType: 'image/jpeg', fileSize: 1000, fileName: 'p.jpg' }] });
     mockUpload.mockResolvedValue({ status: 200 });
+    mockInfo.mockResolvedValue({ exists: true, size: 1000 });
     await renderWith(signedIn(), <NewRequestScreen />);
     await pressLabel('Ethnic wear');
     expect(await screen.findByText('Send to 3 sellers')).toBeOnTheScreen();
@@ -530,5 +532,22 @@ describe('contact for orders and the agreement', () => {
     await renderWith(signedIn(), <AgreementScreen />);
     expect(screen.getAllByText(/draft/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/has not been reviewed by a lawyer/)).toBeOnTheScreen();
+  });
+});
+
+describe('picking photos', () => {
+  beforeEach(() => [mockPick, mockInfo].forEach((m) => m.mockReset()));
+  it('declares the size of the file it will upload, not the size the picker reports for the original', async () => {
+    // quality < 1 makes the picker write a re-encoded copy: the asset still says 1000 bytes, the copy on disk is 640.
+    mockPick.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///cache/ImagePicker/x.jpg', type: 'image', mimeType: 'image/png', fileSize: 1000, fileName: 'orig.png' }] });
+    mockInfo.mockResolvedValueOnce({ exists: true, size: 640 });
+    const [file] = await pickFiles({ video: false, max: 1 });
+    expect(file).toMatchObject({ size: 640, mime: 'image/jpeg' });
+    expect(mockInfo).toHaveBeenCalledWith('file:///cache/ImagePicker/x.jpg');
+  });
+  it('falls back to the picker size if the file cannot be measured', async () => {
+    mockPick.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///p.jpg', type: 'image', mimeType: 'image/jpeg', fileSize: 1000 }] });
+    mockInfo.mockResolvedValueOnce({ exists: false });
+    expect((await pickFiles({ video: false, max: 1 }))[0]?.size).toBe(1000);
   });
 });
