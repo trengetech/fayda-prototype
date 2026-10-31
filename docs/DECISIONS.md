@@ -21,7 +21,7 @@ Status as of 30 Oct 2026. **Approved** = founder decided. **Implemented, awaitin
 
 | # | Decision | Status |
 |---|---|---|
-| B-1 | Listing modes: Fixed, Private, Public, Both. In Public offers other buyers see amounts, never names. | Approved |
+| B-1 | Listing modes are **two**: **Buy now only** (`BUY_NOW`, fixed price) and **Buy now + offers** (`BOTH`). Bargaining is always private: there is no public bargaining and no "bargaining only" mode. Supersedes the earlier Fixed / Private / Public / Both. | Approved (founder, 31 Oct 2026) |
 | B-2 | Private rules per listing: **lowest price accepted automatically** (A), optional **auto-counter price** (C ≥ A), optional **auto-decline below** (D < A). | Approved |
 | B-3 | **Auto-counter fires 5 s after every buyer offer below A.** The buyer sees it as the seller's own counter (no "automatic" label). It never goes higher than the seller's last counter. It stops at the 6-offer limit. | Approved |
 | B-4 | Auto-decline is delayed by 2 minutes, to stop buyers probing the seller's floor. | Provisional |
@@ -60,7 +60,7 @@ Status as of 30 Oct 2026. **Approved** = founder decided. **Implemented, awaitin
 
 | Value | Setting |
 |---|---|
-| Offer expiry | 24 h (seller can choose 6–72 h) |
+| Offer expiry | The seller chooses per listing, for bargaining offers only: **30 min, 1 h, 3 h, 6 h or 24 h** (default 24 h; the default is provisional) |
 | Offers per negotiation | 6 |
 | New negotiations per buyer per listing | 3 per 24 h |
 | Minimum offer | 10% of the list price |
@@ -88,6 +88,7 @@ Status as of 30 Oct 2026. **Approved** = founder decided. **Implemented, awaitin
 | I-11 | Limits of the disk adapter: dev and demo only. VM had 40 GB free and 954 MB RAM on 31 Oct 2026; no backup; no video transcoding. Uploads must live outside any folder that `infra/deploy-api.sh` replaces or rolls back; the M3.2 plan confirms the path. | Approved 31 Oct 2026 |
 | I-12 | Seller UPI QR upload and check is built in M3.2 (it shares the upload-intent flow). Decoder: `expo-camera` (`Camera.scanFromURLAsync` on the picked image; first-party, bundled with SDK 58, latest 58.0.14 on 31 Oct 2026), so no third-party decoding library. The `pa=` value must match the UPI ID the seller entered. **Spike first:** the Expo docs do not say whether it accepts a local file URI or needs camera permission, so M3.2 proves it on the emulator and a physical phone before building on it. Fallback if it fails: `jsQR` (pure JS, unmaintained) plus an image-pixel decoder, which needs a new approval. | Approved 31 Oct 2026 |
 | I-13 | Video upload cap is **80 MB** per file (provisional). The phone enforces the 60 s reel length; the server enforces size only, since the disk adapter does not probe duration. | Approved 31 Oct 2026 (provisional value) |
+| I-15 | Negotiations are stored as the domain aggregate: one row per negotiation, with `offers`, `events` and `agreement` as JSON (at most 6 offers, always read and written whole). `next_due_at` holds the earliest due time (auto-counter, auto-decline, offer expiry, agreement lapse) and drives the 1 s sweep and a lazy check on read. Lock order is always size row, then negotiation. Real-time uses Socket.IO with one room per person per app; events carry ids only and are sent after commit. | Proposed |
 | I-14 | Extra Expo SDK 58 modules approved for M3.2: `expo-file-system` (streamed uploads, so a video is never loaded into memory), `expo-video-thumbnails` (the seller's phone makes a poster image when a video is picked, so feed cards have a picture and R2/Stream later need no change). `expo-image-picker`, `expo-camera` and `expo-video` are already approved (D18, I-12, stack table). Exact versions are recorded in `docs/TECH_STACK.md` when installed. | Approved 31 Oct 2026 |
 
 ## Still open (business)
