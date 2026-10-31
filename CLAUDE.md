@@ -119,8 +119,17 @@ docs/            DECISIONS, TECH_STACK, ARCHITECTURE, PROGRESS
 - Plan before significant changes. Show the plan and wait for approval at each milestone gate.
 - Work in small, demonstrable milestones. Run typecheck, lint and tests before saying something works. **Never claim untested behaviour works.**
 - Use the prototype's screens, copy and flows as the reference. Port them; don't redesign without asking.
-- **Git and pull requests:** work on a branch per milestone (`m3.x-name`) and open the pull request into `dev` yourself with the **GitHub MCP** (`mcp__github__*`: `create_pull_request`, then `pull_request_read` to check CI). Do not use `gh` or `curl`. Report the CI result; if CI is red, fix it before asking for review. Merging is the founder's call unless they say otherwise.
-- **Break-it check:** after writing race, lock or privacy tests, break the rule on purpose (remove the lock, leak the field) and confirm a test fails. Rebuild `packages/domain` before running API tests, because the API loads its `dist`, not its source. Record misses in `docs/PROGRESS.md`.
+- **Git and pull requests:** work on a branch per milestone (`m3.x-name`) and open the pull request into `dev` yourself with the **`github-com` GitHub MCP** (`mcp__github-com__*`: `create_pull_request`, then `pull_request_read` for CI). The plain `github` MCP points at the internal `code.devsnc.com` host and returns 404 for this repo. Do not use `gh` or `curl`. First list PRs for the branch: if the earlier PR is already merged, open a new one. Report the CI result; if CI is red, fix it before asking for review. Merging is the founder's call unless they say otherwise.
+- **Break-it check** (break a rule on purpose and confirm a test fails). Follow this recipe so it stays fast:
+  1. Run the unmutated baseline first, and note how long it takes. If the database is slow, say so before starting.
+  2. Run only the tests that cover the rule (`vitest -t "<name>"`), never the whole file or suite per mutation.
+  3. Before running, check each pattern to change matches exactly once; otherwise stop and fix the pattern.
+  4. Rebuild `packages/domain` after every change to it. The API loads its `dist`, not its source. Restore and rebuild after each mutation.
+  5. Run each test in its own process group and kill the whole group on timeout. A killed `pnpm` leaves `vitest` running against the shared test database and corrupts the next run.
+  6. Use generous timeouts (the remote test DB can take 6 to 15 s per test). A timeout is "inconclusive", not "caught", until the baseline run shows the same test passing in the same time.
+  7. Confirm `git status` shows the mutated files restored. Record misses and equivalent changes in `docs/PROGRESS.md`.
+- **Time budget:** if a verification step is taking more than about 15 minutes or has needed a rerun, stop, say what is wrong and what it has cost so far, and propose a cheaper plan instead of continuing. Prefer one targeted run over several full ones.
+- **Background work and progress:** anything that will run longer than a minute (test suites, migrations, builds, mutation runs) goes in the background, with its output written to a file. Watch it with the **Monitor** tool, which streams progress lines, instead of `sleep` or polling loops (loops that pass the command limit become orphan background tasks). While anything runs in the background, post a one-line status to the founder about every 2 minutes: what is running, what has finished, what is next. Before ending a task, stop any background task that is no longer needed and confirm no stray `vitest`, `pnpm` or script processes are left running.
 - No secrets in the repo. Keep `.env.example` complete.
 - Update `docs/PROGRESS.md` at the end of every milestone: what's built, what's tested, known limits.
 - Record any new decision in `docs/DECISIONS.md` as **proposed** until the founder approves it.
