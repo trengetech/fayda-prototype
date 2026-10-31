@@ -20,10 +20,11 @@ function Row({ o }: { o: BuyerOrder }) {
           <AppText weight="bold" numberOfLines={1}>{o.listing.title}</AppText>
           <AppText tone="muted" size={12}>{o.number} · Size {o.listing.variantLabel} · {o.seller.name}</AppText>
           <AppText>{formatRupees(o.price)}</AppText>
-        </View>
-        <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          <Badge label={o.statusLabel} tone={statusTone(o.status)} />
-          {o.unread > 0 ? <Badge label={`${o.unread} new ${o.unread === 1 ? 'message' : 'messages'}`} tone="accent" /> : null}
+          {/* Below the text, not beside it: a long status ("Waiting for the seller to confirm your payment") would squeeze the title into a narrow column. */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+            <Badge label={o.statusLabel} tone={statusTone(o.status)} />
+            {o.unread > 0 ? <Badge label={`${o.unread} new ${o.unread === 1 ? 'message' : 'messages'}`} tone="accent" /> : null}
+          </View>
         </View>
       </Pressable>
       <View style={{ flexDirection: 'row', gap: 8 }}>

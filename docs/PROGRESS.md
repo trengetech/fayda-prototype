@@ -109,7 +109,7 @@ Decisions D11 to D18 are merged into `docs/DECISIONS.md`. Founder choices: revie
 
 Next, when you are ready: M3.1 needs your answers on dev OTP, separate sessions per app, and `jose` plus `@fastify/rate-limit`.
 
-## M3.4: orders, chat, reviews, requests (31 Oct 2026): built, tested and deployed; not yet run on an emulator or phone
+## M3.4: orders, chat, reviews, requests (31 Oct 2026): built, tested, deployed and emulator-checked; not yet run on a physical phone
 
 Founder decisions used: complete scope (orders plus chat, reviews and buyer requests, D18); order numbers must be extendable and never run out (I-17); an agreement that lapses without an order only frees its unit; a paused listing refuses an order. Branch `m3.4-orders`.
 
@@ -131,9 +131,16 @@ domain 70, contracts 14, api 176 (against the real `fayda-test` database), api-c
 - New API tests: orders 32, chat 9, reviews 12, requests 14 (and others unchanged).
 - **Break-it checks** (recipe in CLAUDE.md): orders, 12 deliberate breaks, all caught (size-row lock, restock on out-of-stock, payment shown after confirm, contact after close, agreed price ignored, agreement not used up, paused listing, another buyer reads an order, QR to any buyer, offers not closed when sold out, stock not taken). Only the two-buyer race catches a missing size-row lock; the agreement-versus-plain-buy race passes without it. Community, 11 breaks, 10 caught; the miss (dropping `status = 'OPEN'` from the request expiry query) behaves the same, but closed requests could fill the 100-row sweep batch. The seller app's cancel-reason guard was also broken and caught.
 
+### Checked on the Android emulator against the live API (31 Oct 2026)
+- A script on the live API: placed an order (a retry with the same key returned the same order), payment details shown while `PLACED` and hidden after confirm, contact numbers only while open, order chat thread, a message, a review after confirm, the public seller record, request reach, and cancel with "Out of stock" (no restock).
+- Buyer app (new APK): home shows My orders, Messages, Your requests, Delivery addresses; the product page shows ★ rating, declared times and the public record; Buy and Make offer both enabled; checkout offered only UPI (the only method that seller has), the saved address and "Add or change address"; placing the order made **FD-100002**; the payment card showed the order number, UPI ID, the seller's private QR (loaded through the order-scoped route), "Pay in a UPI app" (with no UPI app on the emulator it showed the handled message with the UPI ID and note), and one-tap Copy ("Copied", and Android's clipboard bubble showed the text).
+- Seller app (new APK): home showed "1 order needs confirming" and "1 unread message"; the Orders tabs and counts were right; the order screen showed the address, contact card and confirm countdown; "Payment received" moved it to CONFIRMED with "Add shipment details" and "Mark delivered" next.
+- **Found on the emulator, fixed:** the order row's status label squeezed the title and number into a narrow column (seller; the buyer row had the same pattern). Labels now sit under the text. Tests could not see this.
+- Not exercised by hand: delivery address add/edit screen, shipping, review and request screens, chat screens, a second device, real UPI apps, WhatsApp, Call.
+
 ### Not done (honest list)
 - **Deployed 31 Oct 2026** after your go-ahead: migration 0006 is on the dev database and the API (with the address endpoints) is on the VM, healthy.
-- **No emulator or phone run** of any M3.4 screen. UPI intents, WhatsApp, Call, the photo copy when creating a listing from a request, and review photo upload are untested on a device.
+- **Not tried on a physical phone.** UPI intents with a real UPI app, WhatsApp, Call, the photo copy when creating a listing from a request, and review photo upload are untested on a device.
 - Website Buy now at list price creates no order and no visit counter exists (O-5).
 - **Added after review:** an address editor (add, edit, delete, make default, up to 10; checkout links to it) and one-tap copy with `expo-clipboard` ("Copied" shown). Clipboard and the editor are tested with mocks and fake servers, not on a device.
 - Review, request and chat photos are not access-controlled (I-19).

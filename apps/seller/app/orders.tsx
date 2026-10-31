@@ -24,10 +24,11 @@ function Row({ o, onOpen }: { o: SellerOrder; onOpen: () => void }) {
           <AppText tone="muted" size={12}>{o.number} · Size {o.listing.variantLabel} · {o.buyerName}</AppText>
           <AppText>{formatRupees(o.price)}{o.priceSource === 'NEGOTIATED' ? <AppText tone="muted" size={12}> (agreed price)</AppText> : null}</AppText>
           {o.status === 'PLACED' ? <AppText tone="faint" size={12}>Confirm within {timeLeft(o.confirmBy, Date.now())}</AppText> : null}
-        </View>
-        <View style={{ alignItems: 'flex-end', gap: 6 }}>
-          <Badge label={badge.label} tone={badge.tone} />
-          {o.unread ? <Badge label={`${o.unread} new`} tone="accent" /> : null}
+          {/* Below the text, not beside it: a long label such as "Waiting for payment to be confirmed" would squeeze the title and number into a narrow column. */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+            <Badge label={badge.label} tone={badge.tone} />
+            {o.unread ? <Badge label={`${o.unread} new`} tone="accent" /> : null}
+          </View>
         </View>
       </Pressable>
     </Card>
