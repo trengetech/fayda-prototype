@@ -15,6 +15,13 @@
       "when": 1793420617657,
       "tag": "0001_familiar_typhoid_mary",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793426016449,
+      "tag": "0002_bumpy_ultragirl",
+      "breakpoints": true
     }
   ]
 }

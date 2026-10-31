@@ -1,5 +1,5 @@
 import { isWholeRupees, type Paise } from './money.js';
-import { BARGAIN_MODES, CATEGORIES, RULES } from './rules.js';
+import { BARGAIN_MODES, CATEGORIES, IMAGE_MIMES, MEDIA_PURPOSES, RULES, VIDEO_MIMES } from './rules.js';
 import type { BargainMode, DealAccess, DealCodes, PayMethod, PrivateRules } from './types.js';
 
 const PHONE_RE = /^[6-9]\d{9}$/;
@@ -51,6 +51,8 @@ export function validateAddress(a: AddressInput | null | undefined): Record<stri
 export interface PaymentInput {
   upiId?: string | null;
   upiQrMediaId?: string | null;
+  /** The text the phone decoded from the QR image. Needed with `upiQrMediaId`, so the QR can be checked against `upiId`. */
+  upiQrPayload?: string | null;
   bankHolder?: string | null;
   bankAccount?: string | null;
   bankIfsc?: string | null;
@@ -83,6 +85,23 @@ export function cleanPayment(p: PaymentInput | null | undefined): PaymentProfile
   };
 }
 
+/** The payee address (`pa=`) inside a UPI payment QR, lower-cased; null when the text is not a UPI payment link. */
+export function upiPayeeFromQr(payload: string | null | undefined): string | null {
+  const t = text(payload);
+  if (!/^upi:\/\/pay\?/i.test(t)) return null;
+  const pa = new URLSearchParams(t.slice(t.indexOf('?') + 1)).get('pa');
+  return pa ? pa.trim().toLowerCase() : null;
+}
+
+/** Error message when the QR's payee does not match the UPI ID the seller entered; null when it matches. */
+export function validateUpiQr(upiId: string | null | undefined, payload: string | null | undefined): string | null {
+  const payee = upiPayeeFromQr(payload);
+  if (!payee) return 'This image is not a UPI payment QR code. Upload the QR from your UPI app.';
+  if (!text(upiId)) return 'Enter your UPI ID too, so we can check it against the QR.';
+  if (payee !== text(upiId).toLowerCase()) return `The QR belongs to ${payee}, not ${text(upiId).toLowerCase()}. Upload the right QR or fix the UPI ID.`;
+  return null;
+}
+
 export function validatePayment(p: PaymentInput | null | undefined): {
   errors: Record<string, string>;
   clean: PaymentProfile;
@@ -90,6 +109,10 @@ export function validatePayment(p: PaymentInput | null | undefined): {
   const e: Record<string, string> = {};
   const c = cleanPayment(p);
   if (c.upiId && !UPI_RE.test(c.upiId)) e.upiId = 'Enter a UPI ID like name@okbank.';
+  if (c.upiQrMediaId) {
+    const qr = validateUpiQr(c.upiId, p?.upiQrPayload);
+    if (qr) e.upiQr = qr;
+  }
   const anyBank = c.bankHolder || c.bankAccount || c.bankIfsc || c.bankName;
   if (anyBank) {
     if (!c.bankHolder || c.bankHolder.length < 2) e.bankHolder = 'Enter the account holder’s name.';
@@ -263,3 +286,32 @@ export function validateCheckout(i: CheckoutInput): Record<string, string> {
 /** A listing can be published only with stock on at least one size. */
 export const publishStockError = (variants: { stock?: number }[] | undefined): string | null =>
   (variants ?? []).reduce((t, v) => t + (Number(v.stock) || 0), 0) < 1 ? 'Add stock to at least one size before publishing.' : null;
+
+// ---------- media upload intent ----------
+export interface MediaIntentInput {
+  kind?: string;
+  purpose?: string;
+  mime?: string;
+  size?: number;
+  /** Reported by the phone for videos. The server cannot check it, so it is a guard rail, not a guarantee. */
+  durationSec?: number | null;
+}
+
+/** Checks an upload request against the media limits (I-13). A UPI QR is always a photo. */
+export function validateMediaIntent(i: MediaIntentInput): Record<string, string> {
+  const e: Record<string, string> = {};
+  const isImage = i.kind === 'image';
+  const isVideo = i.kind === 'video';
+  if (!isImage && !isVideo) e.kind = 'Choose a photo or a video.';
+  if (!(MEDIA_PURPOSES as readonly string[]).includes(i.purpose ?? '')) e.purpose = 'Unknown upload purpose.';
+  if (i.purpose === 'UPI_QR' && isVideo) e.kind = 'A UPI QR code must be a photo.';
+  const mimes: readonly string[] = isImage ? IMAGE_MIMES : isVideo ? VIDEO_MIMES : [];
+  if ((isImage || isVideo) && !mimes.includes(i.mime ?? '')) e.mime = isImage ? 'Use a JPEG, PNG or WebP photo.' : 'Use an MP4, MOV or WebM video.';
+  const size = i.size;
+  if (typeof size !== 'number' || !Number.isInteger(size) || size < 1) e.size = 'The file looks empty.';
+  else if (isImage && size > RULES.MAX_PHOTO_BYTES) e.size = 'Photos can be up to 15 MB.';
+  else if (isVideo && size > RULES.MAX_VIDEO_BYTES) e.size = 'Videos can be up to 80 MB.';
+  if (isVideo && i.durationSec != null && !(i.durationSec > 0 && i.durationSec <= RULES.MAX_REEL_SECONDS + 1))
+    e.durationSec = `Reels can be up to ${RULES.MAX_REEL_SECONDS} seconds.`;
+  return e;
+}
