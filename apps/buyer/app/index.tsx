@@ -2,6 +2,7 @@ import { NetworkError, useHealth, useMeta } from '@fayda/api-client';
 import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
 import { Link } from 'expo-router';
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
+import { AccountCard } from '../src/account-card';
 import { API_URL, APP_LABEL, SHOW_GALLERY } from '../src/config';
 
 /** Environment status: connects to the API through the typed client and shows loading, error with retry, or success. */
@@ -21,6 +22,7 @@ export default function StatusScreen() {
     >
       <AppText weight="extrabold" size={20}>Fayda {APP_LABEL}</AppText>
       <AppText tone="muted" size={12}>API: {API_URL}</AppText>
+      <AccountCard />
 
       {loading ? (
         <Card>

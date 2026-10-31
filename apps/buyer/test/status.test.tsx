@@ -1,7 +1,6 @@
-import { ApiProvider } from '@fayda/api-client';
-import { ThemeProvider } from '@fayda/ui';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
+import { json, managerWith, renderWith } from './utils';
 import StatusScreen from '../app/index';
 
 jest.mock('expo-router', () => ({ Link: ({ children }: { children: ReactElement }) => children }));
@@ -16,17 +15,8 @@ const meta = {
     { key: 'media', name: 'local-disk', simulated: true },
   ],
 };
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-
 async function renderScreen() {
-  return await render(
-    <ThemeProvider>
-      <ApiProvider baseUrl="http://api.test">
-        <StatusScreen />
-      </ApiProvider>
-    </ThemeProvider>,
-  );
+  return await renderWith(managerWith('buyer', fetchMock, { missing: [] }), <StatusScreen />);
 }
 
 let fetchMock: jest.Mock;
