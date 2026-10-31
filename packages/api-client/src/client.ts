@@ -8,6 +8,8 @@ import {
   MetaSchema,
   OtpRequestedSchema,
   ProblemSchema,
+  BuyerFeedSchema,
+  BuyerListingSchema,
   SellerListingListSchema,
   SellerListingSchema,
   SellerProfileSchema,
@@ -17,6 +19,8 @@ import {
   type BuyerProfileInput,
   type Health,
   type Me,
+  type BuyerFeed,
+  type BuyerListing,
   type ListingInput,
   type Media,
   type MediaIntent,
@@ -88,6 +92,9 @@ export interface ApiClient {
   updateListing(id: string, input: ListingInput, idempotencyKey?: string): Promise<SellerListing>;
   setListingStatus(id: string, status: 'ACTIVE' | 'PAUSED', idempotencyKey?: string): Promise<SellerListing>;
   deleteListingDraft(id: string): Promise<void>;
+  /** One page of the buyer feed. Pass the previous page's `nextCursor` to get the next one. */
+  getBuyerFeed(cursor?: string | null, limit?: number): Promise<BuyerFeed>;
+  getBuyerListing(id: string): Promise<BuyerListing>;
 }
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -171,5 +178,13 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     updateListing: (id, input, key) => call(`/v1/seller/listings/${id}`, SellerListingSchema, { method: 'PUT', body: input, auth: true, ...idem(key) }),
     setListingStatus: (id, status, key) => call(`/v1/seller/listings/${id}/status`, SellerListingSchema, { method: 'POST', body: { status }, auth: true, ...idem(key) }),
     deleteListingDraft: (id) => call(`/v1/seller/listings/${id}`, NoBody, { method: 'DELETE', auth: true }),
+    getBuyerFeed: (cursor, limit) => {
+      const q = new URLSearchParams();
+      if (cursor) q.set('cursor', cursor);
+      if (limit) q.set('limit', String(limit));
+      const qs = q.toString();
+      return call(`/v1/buyer/feed${qs ? `?${qs}` : ''}`, BuyerFeedSchema, { auth: true });
+    },
+    getBuyerListing: (id) => call(`/v1/buyer/listings/${id}`, BuyerListingSchema, { auth: true }),
   };
 }
