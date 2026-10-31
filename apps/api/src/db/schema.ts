@@ -48,6 +48,13 @@ export const sessions = pgTable(
   (t) => [index('sessions_user_app_idx').on(t.userId, t.app), index('sessions_previous_hash_idx').on(t.previousRefreshHash)],
 );
 
+/** Wrong sign-in codes per phone number, shared by every API process. `locked_until` is set once the limit is reached. */
+export const otpAttempts = pgTable('otp_attempts', {
+  phone: text('phone').primaryKey(),
+  count: integer('count').notNull(),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
+});
+
 // ---------- buyer ----------
 export const buyerProfiles = pgTable('buyer_profiles', {
   userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),

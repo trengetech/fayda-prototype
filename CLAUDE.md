@@ -119,6 +119,8 @@ docs/            DECISIONS, TECH_STACK, ARCHITECTURE, PROGRESS
 - Plan before significant changes. Show the plan and wait for approval at each milestone gate.
 - Work in small, demonstrable milestones. Run typecheck, lint and tests before saying something works. **Never claim untested behaviour works.**
 - Use the prototype's screens, copy and flows as the reference. Port them; don't redesign without asking.
+- **Git and pull requests:** work on a branch per milestone (`m3.x-name`) and open the pull request into `dev` yourself with the **GitHub MCP** (`mcp__github__*`: `create_pull_request`, then `pull_request_read` to check CI). Do not use `gh` or `curl`. Report the CI result; if CI is red, fix it before asking for review. Merging is the founder's call unless they say otherwise.
+- **Break-it check:** after writing race, lock or privacy tests, break the rule on purpose (remove the lock, leak the field) and confirm a test fails. Rebuild `packages/domain` before running API tests, because the API loads its `dist`, not its source. Record misses in `docs/PROGRESS.md`.
 - No secrets in the repo. Keep `.env.example` complete.
 - Update `docs/PROGRESS.md` at the end of every milestone: what's built, what's tested, known limits.
 - Record any new decision in `docs/DECISIONS.md` as **proposed** until the founder approves it.

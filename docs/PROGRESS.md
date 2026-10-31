@@ -1,6 +1,6 @@
 # Progress
 
-**Where we are (31 Oct 2026): M3.3 (bargaining) is built and emulator-tested on branch `m3.3-bargaining` (not pushed), awaiting your review and a physical-phone test. M3.2 (catalog, media, publishing) and M3.1 (identity and profiles) also still await a phone test.** The sign-in and onboarding parts of the chat/reviews/requests update are inside it; the chat, review and request screens and API wait for M3.4. Earlier note: the chat/contact/reviews/requests update (`docs/updates/`) has its pure rules built and tested in `packages/domain` (see "Update 2026-10-31" below); the API, database and app parts wait for M3.1 to M3.4. Before that: M3.0a done. M3.0b built and tested on an Android emulator; waiting for the founder to try the APKs on a real phone. M3.1 (identity) not started.
+**Where we are (31 Oct 2026): M3.3 (bargaining) is approved by the founder; its PR into `dev` is open and CI was clean. Two follow-ups are done on the same branch (break-it check, wrong-code counts in the database) and wait for review. Physical-phone tests for M3.1 to M3.3 are still to do (founder, later). Next milestone: M3.4 (orders).** Earlier note: the chat/contact/reviews/requests update (`docs/updates/`) has its pure rules built and tested in `packages/domain`; its API and screens wait for M3.4.
 
 ## M3.0a — Backend foundation (31 Oct 2026): built, awaiting your review
 
@@ -109,9 +109,9 @@ Decisions D11 to D18 are merged into `docs/DECISIONS.md`. Founder choices: revie
 
 Next, when you are ready: M3.1 needs your answers on dev OTP, separate sessions per app, and `jose` plus `@fastify/rate-limit`.
 
-## M3.3: bargaining (31 Oct 2026): built, emulator-tested, awaiting review and a phone test
+## M3.3: bargaining (31 Oct 2026): approved by the founder; emulator-tested; phone test still to do
 
-Branch `m3.3-bargaining` (local, not pushed; a pull request into `dev` is needed to run CI). Founder decisions used: **two listing modes** (`BUY_NOW`, `BOTH`), bargaining always private, no public offers (DECISIONS B-1); **offer expiry per listing: 30 min, 1 h, 3 h, 6 h, 24 h** (offers only). Socket.IO 4.8.4 added (TECH_STACK).
+Branch `m3.3-bargaining`; pull request into `dev` opened by the founder, CI clean. Founder decisions used: **two listing modes** (`BUY_NOW`, `BOTH`), bargaining always private, no public offers (DECISIONS B-1); **offer expiry per listing: 30 min, 1 h, 3 h, 6 h, 24 h** (offers only). Socket.IO 4.8.4 added (TECH_STACK).
 
 ### What was built
 - **Domain:** two modes; `expiryMinutes`; `visibility` removed from negotiations; `timeLeft`, `parseRupees`, `priceAfterPercentOff`. The M3.0a rules (`validateNewOffer`, `validateCounter`, `decideAutomation`, `sweepNegotiation`, invalidation, buyer view) are used as they were.
@@ -131,7 +131,19 @@ Branch `m3.3-bargaining` (local, not pushed; a pull request into `dev` is needed
 domain 70, contracts 14, api 104, api-client 25, ui 6, seller 67, buyer 44. API tests run against the real `fayda-test` database.
 - **API (29 negotiation + 5 real-time):** the walk offer, counter, counter, accept; the 6-offer limit; every offer rule (floor, list price, whole rupees, own listing, Buy now only, one open per size, 3 per day); retry with the same key; privacy between buyers and sellers and between apps; **two buyers accepting the last unit at once (one wins, the other is closed SOLD_OUT, one reservation)**; three sellers' accepts racing for two units; auto-accept, 5 s auto-counter (also on read without the sweep), 2 min auto-decline, and **three sweeps at once fire a step once**; a scan of every buyer payload for rules, codes, rule amounts, "AUTO", "SYSTEM" and payment details; 30-minute expiry; 12 h agreement lapse and the unit freed; each listing edit that closes offers; website code rules and the B-6 price.
 - **Real time (against a real socket server):** no token, bad token, ended session refused; the seller hears a new offer and the buyer hears the reply; a stranger and the other app hear nothing; the event arrives after the commit.
-- Not done this milestone: breaking rules on purpose to confirm tests fail (I did this in M3.1 and M3.2). The race and leak tests are written to fail without the lock order and the buyer view, but I have not removed them to check.
+- **Break-it check (done after approval).** I broke each rule on purpose and ran the negotiation tests (the API loads the built `packages/domain`, so it was rebuilt after each domain change):
+
+  | Broken on purpose | Result |
+  |---|---|
+  | Size-row lock removed | **Caught**: both last-unit race tests fail |
+  | Lock order reversed (negotiation, then size) | **Caught**: 2 tests fail |
+  | Buyer sees `AUTO_DECLINED` as the close reason | **Caught**: the ordinary-decline test fails |
+  | Buyer sees the real event actor | **Caught**: the same test fails |
+  | Wrong-code count never increments (new lockout) | **Caught**: 6 tests fail |
+  | Negotiation-row lock removed | **Not caught.** The size-row lock already serialises every user action on a size, so this lock only matters where a user action overlaps the sweep. I added a test for that overlap (sweep plus several readers at the same moment); it passes with and without the lock. Known limit. |
+  | Sweep `skipLocked` removed | **Not caught, and equivalent.** The second sweep waits, then sees the row is no longer due and skips it. Same result, slightly slower. |
+
+  Lesson: the first run of the two buyer-view checks said "not caught" only because the domain `dist` was stale. Rebuild `packages/domain` before API tests. The remote test database can be slow (a full negotiations file took 281 s), so caps on test runs must be generous.
 
 ### Checked on the Android emulator against the live API
 Both new APKs built and installed on one emulator (the old builds had to be uninstalled; the disk is 98% full).
@@ -151,6 +163,13 @@ Both new APKs built and installed on one emulator (the old builds had to be unin
 - Changing a listing's rules does not change timers already set on pending offers.
 - The seller sees the buyer's profile name, or "Buyer" if none.
 - Dev data left on the live API: listings "Manual Offer Saree" and "Sheet Test Kurta", the existing kurta now takes offers with rules (accept ₹1,400, counter ₹1,600, decline below ₹500), and several test negotiations (buyers `9000000001`, `9000000003`).
+
+### M3.3 follow-ups (31 Oct 2026): built, awaiting review
+- **Wrong-code lockout moved to the database.** New table `otp_attempts` (migration 0005, applied to dev and test): phone, count, `locked_until`. One atomic upsert counts each wrong code, so two API processes, or two requests at the same moment, cannot lose a count. 5 wrong codes lock a number for 5 minutes; a lock that has run out starts again at 1; a right code clears the count. The in-memory map is gone.
+  - Tests (`test/auth-lockout.test.ts`, 4): two API instances on one database share the count and both lock; five simultaneous wrong codes still lock; unlock after 5 minutes then a fresh count; a right code clears it. Breaking the increment makes 6 tests fail.
+  - Found while building: a `Date` inside a raw SQL fragment travels as text and Postgres refused it (a 500 only the new tests showed). Fixed with an explicit `::timestamptz` cast.
+- **Sweep-and-readers test** added to `negotiations.test.ts` (an automatic step fires once when a sweep and several readers arrive together).
+- **Project rules** (`CLAUDE.md`): open PRs into `dev` with the GitHub MCP and check CI; run the break-it check and rebuild `packages/domain` first.
 
 ## M3.2: catalog, media, publishing (31 Oct 2026): built, emulator-tested, awaiting review and a phone test
 
@@ -214,7 +233,7 @@ domain 58, contracts 8, api 38, api-client 14, ui 6, buyer 14, seller 15. API te
 
 ### Known limits
 - **Not done on a physical phone**; emulator only, driven with scripted taps. The seller's steps 2 and 3 were not clicked through on the device (covered by app tests that use a fake server).
-- Wrong-code counts are kept in the API's memory. That is fine for one process; before running two, move them to the database.
+- ~~Wrong-code counts are kept in the API's memory.~~ **Fixed** (see "Wrong-code lockout" under M3.3 follow-ups).
 - A lost network reply during a token refresh makes the app sign out (the retry replays the old token, which is treated as theft). Rare, and safe.
 - Forms check shape on the phone and leave the detailed rules to the server, which sends field messages that the forms show.
 - The agreement and Code of Conduct texts are drafts and are labelled as such.

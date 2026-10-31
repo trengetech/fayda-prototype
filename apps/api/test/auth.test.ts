@@ -10,6 +10,7 @@ beforeAll(async () => {
 });
 afterEach(async () => {
   await dbOf(app).db.execute(sql`truncate table users cascade`);
+  await dbOf(app).db.execute(sql`truncate table otp_attempts`);
 });
 afterAll(async () => {
   await app.close();

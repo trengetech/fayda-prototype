@@ -350,6 +350,16 @@ describe('the seller’s private rules', () => {
     expect((await sellerGet(s, id)).body.offers).toHaveLength(2);
   });
 
+  it('fires an automatic step once when a sweep and several people looking arrive at the same moment', async () => {
+    const s = await shop({ rules });
+    const id = (await offer(s, s.buyerA, 1000)).body.id as string;
+    clock.advance(6 * SECOND);
+    const svc = app.get(NegotiationsService);
+    await Promise.all([svc.run(clock.now()), buyerGet(s.buyerA, id), sellerGet(s, id), buyerGet(s.buyerA, id), svc.run(clock.now())]);
+    const seen = await sellerGet(s, id);
+    expect(seen.body.offers.map((x: Json) => x.by)).toEqual(['BUYER', 'SYSTEM']);
+  });
+
   it('never reaches the buyer, in any payload, even with rules, codes and payment details set', async () => {
     const s = await shop({
       rules: { autoAcceptAt: rupees(1111), autoCounterAt: rupees(1333), autoDeclineBelow: rupees(777) },
