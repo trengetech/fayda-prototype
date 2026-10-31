@@ -116,7 +116,7 @@ export class ProfileService {
       sla: { confirmHours: s.slaConfirmHours, shipDays: s.slaShipDays },
     });
     const [pay] = await this.db.select().from(sellerPaymentProfiles).where(eq(sellerPaymentProfiles.sellerId, s.id)).limit(1);
-    if (!pay || Object.keys(validatePayment(pay).errors).length) missing.push('payment');
+    if (!pay || Object.keys(validatePayment(pay, { skipQrCheck: true }).errors).length) missing.push('payment');
     if (!s.conductAcceptedAt || s.conductVersion !== RULES.CONDUCT_VERSION) missing.push('conduct');
     return missing;
   }

@@ -32,6 +32,13 @@ describe('UPI QR check', () => {
     expect(validatePayment({ ...ok, upiQrPayload: undefined }).errors.upiQr).toMatch(/not a UPI payment QR/);
     expect(validatePayment({ upiId: 'shop@okicici' }).errors).toEqual({});
   });
+
+  it('can re-check a saved profile, whose QR text is no longer known', () => {
+    const saved = { upiId: 'shop@okicici', upiQrMediaId: 'm1' };
+    expect(validatePayment(saved).errors.upiQr).toBeDefined();
+    expect(validatePayment(saved, { skipQrCheck: true }).errors).toEqual({});
+    expect(validatePayment({ upiQrMediaId: 'm1' }, { skipQrCheck: true }).errors).toEqual({}); // a QR alone still counts as a way to pay
+  });
 });
 
 describe('media upload intent', () => {

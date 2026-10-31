@@ -102,14 +102,18 @@ export function validateUpiQr(upiId: string | null | undefined, payload: string 
   return null;
 }
 
-export function validatePayment(p: PaymentInput | null | undefined): {
+export function validatePayment(
+  p: PaymentInput | null | undefined,
+  /** Pass `skipQrCheck` when re-checking a saved profile: its QR was checked when it was uploaded, and the decoded text is not stored. */
+  opts: { skipQrCheck?: boolean } = {},
+): {
   errors: Record<string, string>;
   clean: PaymentProfile;
 } {
   const e: Record<string, string> = {};
   const c = cleanPayment(p);
   if (c.upiId && !UPI_RE.test(c.upiId)) e.upiId = 'Enter a UPI ID like name@okbank.';
-  if (c.upiQrMediaId) {
+  if (c.upiQrMediaId && !opts.skipQrCheck) {
     const qr = validateUpiQr(c.upiId, p?.upiQrPayload);
     if (qr) e.upiQr = qr;
   }

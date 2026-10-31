@@ -33,6 +33,10 @@ describe('UPI QR on the payment profile', () => {
     const ok = await pay(t, { upiQrMediaId: m.id, upiQrPayload: qr('Sana@OkAxis') });
     expect(ok.status).toBe(200);
     expect(ok.body.payment.upiQrMediaId).toBe(m.id);
+    // The saved QR must not make the profile look incomplete (its decoded text is not stored).
+    expect(ok.body.missing).toEqual([]);
+    const me = await call('GET', '/v1/me', { token: t });
+    expect(me.body.profile).toEqual({ complete: true, missing: [] });
     expect((await call('GET', `/v1/media/${m.id}`)).status).toBe(404); // not public
     // Saving again without the QR removes it: the payment details are replaced as a whole.
     expect((await pay(t, {})).body.payment.upiQrMediaId).toBeNull();
