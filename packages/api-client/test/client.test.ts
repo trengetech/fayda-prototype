@@ -97,4 +97,20 @@ describe('media and listings', () => {
     const c = authed(async () => json(201, intent));
     expect((await c.createMediaIntent({ kind: 'image', purpose: 'LISTING', mime: 'image/jpeg', size: 10 })).upload.url).toContain('/v1/media/upload/');
   });
+  it('asks for the next feed page with the cursor, and parses the page', async () => {
+    const seller = { id: 's1', name: 'Kiran Studio', handle: 'kiranstudio', area: 'Madhapur', city: 'Hyderabad' };
+    const item = { id: listing.id, title: 'Cotton kurta', price: 150000, category: 'Ethnic wear', soldOut: false, acceptsOffers: true, coverUrl: '/v1/media/m1', hasVideo: false, seller };
+    const urls: string[] = [];
+    const c = authed(async (u) => { urls.push(String(u)); return json(200, { items: [item], nextCursor: 'abc' }); });
+    expect((await c.getBuyerFeed()).nextCursor).toBe('abc');
+    await c.getBuyerFeed('abc', 5);
+    expect(urls).toEqual(['http://api.test/v1/buyer/feed', 'http://api.test/v1/buyer/feed?cursor=abc&limit=5']);
+  });
+
+  it('drops a private field the buyer schema does not list', async () => {
+    const seller = { id: 's1', name: 'Kiran Studio', handle: 'kiranstudio', area: 'Madhapur', city: 'Hyderabad' };
+    const page = { id: listing.id, title: 'Cotton kurta', description: '', category: 'Ethnic wear', price: 150000, soldOut: false, media: [], variants: [{ id: 'v1', label: 'M', available: true, low: false }], bargaining: { mode: 'PRIVATE', acceptsOffers: true, expiryHours: 24 }, checkout: { channel: 'DIRECT', productUrl: null }, seller };
+    const got = await authed(async () => json(200, { ...page, rules: { autoAcceptAt: 120000 } })).getBuyerListing(listing.id);
+    expect(got).not.toHaveProperty('rules'); // the buyer schema drops anything it does not list
+  });
 });

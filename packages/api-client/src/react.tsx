@@ -1,5 +1,5 @@
 import type { ListingInput } from '@fayda/contracts/schemas';
-import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import { createApiClient, type ApiClient } from './client';
@@ -39,6 +39,22 @@ export const sellerListingsKey = (baseUrl: string) => ['seller-listings', baseUr
 export function useSellerListings() {
   const client = useApiClient();
   return useQuery({ queryKey: sellerListingsKey(client.baseUrl), queryFn: () => client.listSellerListings() });
+}
+
+/** The buyer feed, one page at a time: call `fetchNextPage` near the end of the list. */
+export function useBuyerFeed() {
+  const client = useApiClient();
+  return useInfiniteQuery({
+    queryKey: ['buyer-feed', client.baseUrl],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => client.getBuyerFeed(pageParam),
+    getNextPageParam: (last) => last.nextCursor,
+  });
+}
+
+export function useBuyerListing(id: string | null) {
+  const client = useApiClient();
+  return useQuery({ queryKey: ['buyer-listing', client.baseUrl, id], queryFn: () => client.getBuyerListing(id as string), enabled: !!id });
 }
 
 export function useSellerListing(id: string | null) {

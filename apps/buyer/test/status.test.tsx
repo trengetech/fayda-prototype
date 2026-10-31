@@ -3,7 +3,8 @@ import type { ReactElement } from 'react';
 import { json, managerWith, renderWith } from './utils';
 import StatusScreen from '../app/index';
 
-jest.mock('expo-router', () => ({ Link: ({ children }: { children: ReactElement }) => children }));
+const mockRouter = { push: jest.fn() };
+jest.mock('expo-router', () => ({ Link: ({ children }: { children: ReactElement }) => children, useRouter: () => mockRouter }));
 
 const time = '2026-10-31T10:00:00.000Z';
 const health = { status: 'ok', database: { status: 'up', latencyMs: 12 }, time };
@@ -32,6 +33,13 @@ describe('status screen', () => {
     expect(await screen.findByText('Connecting to the API…')).toBeOnTheScreen();
     expect(screen.queryByText('Online')).not.toBeOnTheScreen();
     expect(screen.queryByText("Can't connect")).not.toBeOnTheScreen();
+  });
+
+  it('opens the feed from the Browse listings button', async () => {
+    fetchMock.mockImplementation(() => new Promise(() => {}));
+    await renderScreen();
+    await act(async () => void fireEvent.press(screen.getByText('Browse listings')));
+    expect(mockRouter.push).toHaveBeenCalledWith('/feed');
   });
 
   it('shows the API, database, environment and simulated providers on success', async () => {

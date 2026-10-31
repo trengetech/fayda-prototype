@@ -29,3 +29,25 @@ export const renderWith = (manager: SessionManager, ui: ReactElement) =>
       </SessionProvider>
     </ThemeProvider>,
   );
+
+/** A fake API: routes are keyed "METHOD /path". An unexpected request fails the test with its name. */
+export type Route = (init: { method: string; headers: Record<string, string>; body: unknown }) => Response | Promise<Response>;
+export function fakeApi(routes: Record<string, Route>, fetchFn: jest.Mock) {
+  fetchFn.mockImplementation((url: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}) => {
+    const key = `${init.method ?? 'GET'} ${String(url).replace('http://api.test', '')}`;
+    const route = routes[key];
+    if (!route) return Promise.reject(new Error(`Unexpected request: ${key}`));
+    return Promise.resolve(route({ method: init.method ?? 'GET', headers: init.headers ?? {}, body: init.body ? JSON.parse(init.body) : undefined }));
+  });
+}
+
+const seller = { id: 's1', name: 'Kiran Studio', handle: 'kiranstudio', area: 'Madhapur', city: 'Hyderabad' };
+export const feedItem = (over: Record<string, unknown> = {}) => ({
+  id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', title: 'Cotton kurta', price: 150000, category: 'Ethnic wear', soldOut: false, acceptsOffers: true, coverUrl: '/v1/media/m1', hasVideo: false, seller, ...over,
+});
+export const buyerListing = (over: Record<string, unknown> = {}) => ({
+  id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', title: 'Cotton kurta', description: 'Block print, soft cotton.', category: 'Ethnic wear', price: 150000, soldOut: false,
+  media: [{ kind: 'image', url: '/v1/media/m1', posterUrl: null }],
+  variants: [{ id: 'v1', label: 'M', available: true, low: false }],
+  bargaining: { mode: 'PRIVATE', acceptsOffers: true, expiryHours: 24 }, checkout: { channel: 'DIRECT', productUrl: null }, seller, ...over,
+});
