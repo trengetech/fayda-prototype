@@ -51,11 +51,11 @@ describe('api client', () => {
 describe('media and listings', () => {
   const listing = {
     id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', status: 'DRAFT', title: 'Kurta', description: '', category: 'Ethnic wear', price: 150000, media: [],
-    variants: [{ id: 'v1', label: 'M', stock: 2 }], bargaining: { mode: 'FIXED', expiryHours: 24 },
+    variants: [{ id: 'v1', label: 'M', stock: 2 }], bargaining: { mode: 'BUY_NOW', expiryMinutes: 1440 },
     rules: { autoAcceptAt: null, autoDeclineBelow: null, autoCounterAt: null }, checkout: { channel: 'DIRECT', productUrl: null },
     dealCodes: { accept: null, counter: null }, publishedAt: null, updatedAt: 1,
   };
-  const input = { title: 'Kurta', category: 'Ethnic wear', price: 150000, media: [], variants: [{ label: 'M', stock: 2 }], bargaining: { mode: 'FIXED', expiryHours: 24 }, checkout: { channel: 'DIRECT' }, publish: false };
+  const input = { title: 'Kurta', category: 'Ethnic wear', price: 150000, media: [], variants: [{ label: 'M', stock: 2 }], bargaining: { mode: 'BUY_NOW', expiryMinutes: 1440 }, checkout: { channel: 'DIRECT' }, publish: false };
   const authed = (f: typeof fetch) => createApiClient({ baseUrl: 'http://api.test', fetch: f, getAccessToken: () => 'tok' });
 
   it('sends the idempotency key and bearer token on a create, and parses the listing', async () => {
@@ -109,7 +109,7 @@ describe('media and listings', () => {
 
   it('drops a private field the buyer schema does not list', async () => {
     const seller = { id: 's1', name: 'Kiran Studio', handle: 'kiranstudio', area: 'Madhapur', city: 'Hyderabad' };
-    const page = { id: listing.id, title: 'Cotton kurta', description: '', category: 'Ethnic wear', price: 150000, soldOut: false, media: [], variants: [{ id: 'v1', label: 'M', available: true, low: false }], bargaining: { mode: 'PRIVATE', acceptsOffers: true, expiryHours: 24 }, checkout: { channel: 'DIRECT', productUrl: null }, seller };
+    const page = { id: listing.id, title: 'Cotton kurta', description: '', category: 'Ethnic wear', price: 150000, soldOut: false, media: [], variants: [{ id: 'v1', label: 'M', available: true, low: false }], bargaining: { mode: 'BOTH', acceptsOffers: true, expiryMinutes: 1440 }, checkout: { channel: 'DIRECT', productUrl: null }, seller };
     const got = await authed(async () => json(200, { ...page, rules: { autoAcceptAt: 120000 } })).getBuyerListing(listing.id);
     expect(got).not.toHaveProperty('rules'); // the buyer schema drops anything it does not list
   });

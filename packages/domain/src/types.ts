@@ -4,7 +4,8 @@ export type Side = 'BUYER' | 'SELLER';
 /** Who authored an offer. SYSTEM is the seller's automatic rule; buyers must never be able to tell. */
 export type Author = 'BUYER' | 'SELLER' | 'SYSTEM';
 
-export type BargainMode = 'FIXED' | 'PRIVATE' | 'PUBLIC' | 'BOTH';
+/** BUY_NOW: fixed price, no offers. BOTH: a Buy button at list price plus private offers (D-bargain, 31 Oct 2026). */
+export type BargainMode = 'BUY_NOW' | 'BOTH';
 export type Channel = 'DIRECT' | 'WEBSITE';
 export type PayMethod = 'UPI' | 'BANK' | 'LINK';
 
@@ -84,7 +85,6 @@ export interface Negotiation {
   listingId: string;
   variantId: string;
   buyerId: string;
-  visibility: 'PUBLIC' | 'PRIVATE';
   status: NegotiationStatus;
   closeReason: CloseReason | null;
   offers: Offer[];

@@ -10,7 +10,8 @@ import { useRef, useState } from 'react';
 import { Controller, useFieldArray, useForm, type FieldPath } from 'react-hook-form';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, View } from 'react-native';
 import {
-  EXPIRY_HOURS,
+  EXPIRY_MINUTES,
+  expiryLabel,
   EditorSchema,
   FIELD_MAP,
   MODES,
@@ -62,7 +63,7 @@ function Editor({ existing }: { existing: SellerListing | null }) {
 
   const mode = form.watch('mode');
   const channel = form.watch('channel');
-  const priced = mode !== 'FIXED';
+  const priced = mode === 'BOTH';
   const status = existing?.status ?? 'DRAFT';
   const isDraft = status === 'DRAFT';
   const src = (u: string) => client.resolveUrl(u);
@@ -202,11 +203,11 @@ function Editor({ existing }: { existing: SellerListing | null }) {
       </View>
 
       {/* Bargaining */}
-      <Controller control={form.control} name="mode" render={({ field: f, fieldState }) => <ChipGroup label="How can buyers bargain?" options={MODES} value={[f.value]} onChange={(v) => v[0] && f.onChange(v[0])} format={(m) => MODE_LABEL[m]} error={fieldState.error?.message} />} />
+      <Controller control={form.control} name="mode" render={({ field: f, fieldState }) => <ChipGroup label="How can buyers buy?" options={MODES} value={[f.value]} onChange={(v) => v[0] && f.onChange(v[0])} format={(m) => MODE_LABEL[m]} error={fieldState.error?.message} />} />
       <AppText tone="muted" size={12}>{MODE_HINT[mode]}</AppText>
       {priced ? (
         <>
-          <Controller control={form.control} name="expiryHours" render={({ field: f, fieldState }) => <ChipGroup label="Offers expire after" options={EXPIRY_HOURS} value={[f.value]} onChange={(v) => v[0] && f.onChange(v[0])} format={(h) => `${h} hours`} error={fieldState.error?.message} />} />
+          <Controller control={form.control} name="expiryMinutes" render={({ field: f, fieldState }) => <ChipGroup label="Offers expire after" options={EXPIRY_MINUTES} value={[f.value]} onChange={(v) => v[0] && f.onChange(v[0])} format={expiryLabel} error={fieldState.error?.message} />} />
           <Card>
             <AppText weight="bold">Your private rules</AppText>
             <AppText tone="muted" size={12}>Only you see these. Buyers never learn that a reply was automatic.</AppText>

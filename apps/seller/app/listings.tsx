@@ -45,7 +45,7 @@ function Row({ l, onOpen }: { l: SellerListing; onOpen: () => void }) {
         <View style={{ flex: 1, gap: 2 }}>
           <AppText weight="bold" numberOfLines={1}>{l.title}</AppText>
           <AppText>{formatRupees(l.price)}</AppText>
-          <AppText tone="muted" size={12}>{stock} in stock{l.bargaining.mode === 'FIXED' ? '' : ' · takes offers'}</AppText>
+          <AppText tone="muted" size={12}>{stock} in stock{l.bargaining.mode === 'BOTH' ? ' · takes offers' : ''}</AppText>
         </View>
         <Badge label={badge.label} tone={badge.tone} />
       </Pressable>

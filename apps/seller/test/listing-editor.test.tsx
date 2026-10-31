@@ -179,7 +179,7 @@ describe('bargaining and checkout fields', () => {
     await renderWith(signedIn(), <ListingScreen />);
     expect(screen.queryByText('Your private rules')).not.toBeOnTheScreen();
     await fillBasics();
-    await pressLabel('Private offers');
+    await pressLabel('Buy now + offers');
     expect(screen.getByText('Your private rules')).toBeOnTheScreen();
     expect(screen.queryByLabelText('Counter automatically with')).not.toBeOnTheScreen();
     await type('Accept automatically at or above', '1200');
@@ -188,7 +188,7 @@ describe('bargaining and checkout fields', () => {
     await type('Decline automatically below', '900');
     await press('Save draft');
     await waitFor(() => expect(saved).toBeDefined());
-    expect(saved).toMatchObject({ bargaining: { mode: 'PRIVATE', expiryHours: 24 }, rules: { autoAcceptAt: 120000, autoCounterAt: 130000, autoDeclineBelow: 90000 } });
+    expect(saved).toMatchObject({ bargaining: { mode: 'BOTH', expiryMinutes: 1440 }, rules: { autoAcceptAt: 120000, autoCounterAt: 130000, autoDeclineBelow: 90000 } });
   });
 
   it('asks for the product link and a code for each automatic price on a website listing', async () => {
@@ -196,7 +196,7 @@ describe('bargaining and checkout fields', () => {
     fakeApi({ 'POST /v1/seller/listings': (r) => { saved = r.body; return json(sellerListing(), 201); } }, fetchMock);
     await renderWith(signedIn(), <ListingScreen />);
     await fillBasics();
-    await pressLabel('Private offers');
+    await pressLabel('Buy now + offers');
     await type('Accept automatically at or above', '1200');
     await pressLabel('My website');
     await type('Link to this product on your website', 'https://shop.example/p');
@@ -210,7 +210,7 @@ describe('bargaining and checkout fields', () => {
     fakeApi({ 'POST /v1/seller/listings': () => problem(400, 'VALIDATION', { acceptCode: 'Code for your automatic price: enter a coupon code or a discount link.' }) }, fetchMock);
     await renderWith(signedIn(), <ListingScreen />);
     await fillBasics();
-    await pressLabel('Private offers');
+    await pressLabel('Buy now + offers');
     await type('Accept automatically at or above', '1200');
     await pressLabel('My website');
     await press('Save draft');

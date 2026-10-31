@@ -38,7 +38,6 @@ import {
   validateNewOffer,
   validatePayment,
   validatePlacement,
-  visibilityFor,
   withdraw,
   type AutomationDecision,
   type BargainMode,
@@ -72,7 +71,7 @@ interface Listing {
   status: 'DRAFT' | 'ACTIVE' | 'PAUSED';
   price: number;
   mode: BargainMode;
-  expiryHours: number;
+  expiryMinutes: number;
   channel: Channel;
   productUrl: string | null;
   title: string;
@@ -98,7 +97,6 @@ export interface Cmd {
   amount?: number;
   action?: 'ACCEPT' | 'DECLINE' | 'COUNTER';
   dealAccess?: Partial<DealAccess>;
-  visibility?: 'PUBLIC' | 'PRIVATE';
   paymentMethod?: string;
   addressId?: string;
   shipment?: ShipmentInput;
@@ -115,7 +113,7 @@ export interface Draft {
   price?: number;
   media?: unknown[];
   variants?: { id?: string; label?: string; stock?: number }[];
-  bargaining?: { mode?: string; expiryHours?: number };
+  bargaining?: { mode?: string; expiryMinutes?: number };
   rules?: { autoAcceptAt?: number | null; autoDeclineBelow?: number | null; autoCounterAt?: number | null };
   checkout?: { channel?: string; productUrl?: string };
   dealCodes?: { accept?: Partial<DealAccess>; counter?: Partial<DealAccess> };
@@ -165,7 +163,7 @@ export class World {
   private sweepCtx(l: Listing) {
     return {
       listPrice: l.price,
-      expiryHours: l.expiryHours,
+      expiryMinutes: l.expiryMinutes,
       channel: l.channel,
       rules: this.rules.get(l.id) as PrivateRules,
       codes: this.codes.get(l.id) ?? {},
@@ -298,7 +296,7 @@ export class World {
       category: d.category,
       price: paise.price as number,
       mode,
-      expiryHours: Number(d.bargaining?.expiryHours),
+      expiryMinutes: Number(d.bargaining?.expiryMinutes),
       variants,
       channel: co.channel === 'WEBSITE' ? 'WEBSITE' : 'DIRECT',
       productUrl: co.channel === 'WEBSITE' ? String(co.productUrl).trim() : null,
@@ -306,7 +304,7 @@ export class World {
     this.rules.set(l.id, rules);
     this.codes.set(
       l.id,
-      co.channel === 'WEBSITE' && mode !== 'FIXED'
+      co.channel === 'WEBSITE' && mode === 'BOTH'
         ? { accept: rules.autoAcceptAt != null ? cleanDeal(dealCodes.accept) : null, counter: rules.autoCounterAt != null ? cleanDeal(dealCodes.counter) : null }
         : {},
     );
@@ -376,8 +374,8 @@ export class World {
       startedLast24h: mine.filter((n) => n.createdAt > now - DAY).length,
     });
     if (!check.ok) return check;
-    let n = startNegotiation({ id: this.id('ng'), listingId: l.id, variantId: (v as Variant).id, buyerId: c.userId as string, visibility: visibilityFor(l.mode, c.visibility) }, now);
-    n = appendOffer(n, { id: this.id('of'), by: 'BUYER', amount }, now, l.expiryHours);
+    let n = startNegotiation({ id: this.id('ng'), listingId: l.id, variantId: (v as Variant).id, buyerId: c.userId as string }, now);
+    n = appendOffer(n, { id: this.id('of'), by: 'BUYER', amount }, now, l.expiryMinutes);
     n = this.runAutomation(n, l, now);
     this.negs.set(n.id, n);
     if (n.status === 'AGREED') this.invalidateIfSoldOut(l, v as Variant, now, n.id);
@@ -431,7 +429,7 @@ export class World {
         if (m) return fail('DEAL_ACCESS_REQUIRED', m, { dealAccess: m });
         dealAccess = cleanDeal(c.dealAccess as DealAccess);
       }
-      let next = appendOffer(n, { id: this.id('of'), by: side, amount, dealAccess }, now, l.expiryHours);
+      let next = appendOffer(n, { id: this.id('of'), by: side, amount, dealAccess }, now, l.expiryMinutes);
       if (side === 'SELLER') this.notifyNeg(n, [{ audience: 'buyer', code: 'SELLER_COUNTERED', at: now, params: { amount } }]);
       else next = this.runAutomation(next, l, now);
       this.negs.set(n.id, next);
@@ -534,7 +532,7 @@ export class World {
   buyerListing(listingId: string, now: number) {
     const l = this.listings.get(listingId) as Listing;
     return buyerListingView(
-      { id: l.id, sellerId: l.sellerId, title: l.title, description: l.description, category: l.category, price: l.price, status: l.status, mode: l.mode, expiryHours: l.expiryHours, channel: l.channel, productUrl: l.productUrl, variants: l.variants },
+      { id: l.id, sellerId: l.sellerId, title: l.title, description: l.description, category: l.category, price: l.price, status: l.status, mode: l.mode, expiryMinutes: l.expiryMinutes, channel: l.channel, productUrl: l.productUrl, variants: l.variants },
       Object.fromEntries(l.variants.map((v) => [v.id, this.available(l, v, now)])),
     );
   }

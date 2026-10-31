@@ -55,7 +55,7 @@ describe('buyer product page', () => {
   });
 
   it('labels a fixed-price listing as fixed price', async () => {
-    serve(buyerListing({ bargaining: { mode: 'FIXED', acceptsOffers: false, expiryHours: 24 } }));
+    serve(buyerListing({ bargaining: { mode: 'BUY_NOW', acceptsOffers: false, expiryMinutes: 1440 } }));
     await renderWith(signedIn(), <ListingScreen />);
     expect(await screen.findByText('Fixed price')).toBeOnTheScreen();
     expect(screen.queryByText('Open to offers')).not.toBeOnTheScreen();

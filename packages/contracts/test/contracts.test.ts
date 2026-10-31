@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BuyerFeedSchema, ERROR_CODES, HealthSchema, ListingInputSchema, MediaIntentSchema, MetaSchema, PaiseSchema, ProblemSchema, buildOpenApiDocument } from '../src/index.js';
+import { BuyerFeedSchema, BuyerNegotiationSchema, CounterSchema, ERROR_CODES, HealthSchema, ListingInputSchema, MediaIntentSchema, MetaSchema, PaiseSchema, ProblemSchema, StartOfferSchema, buildOpenApiDocument } from '../src/index.js';
 
 describe('system contracts', () => {
   it('accepts a healthy response and a database-down response', () => {
@@ -39,10 +39,13 @@ describe('OpenAPI', () => {
     expect(Object.keys(doc.paths ?? {}).sort()).toEqual(
       [
         '/v1/auth/logout', '/v1/auth/otp/request', '/v1/auth/otp/verify', '/v1/auth/refresh',
-        '/v1/buyer/feed', '/v1/buyer/listings/{id}', '/v1/buyer/profile', '/v1/buyer/profile/contact',
+        '/v1/buyer/feed', '/v1/buyer/listings/{id}', '/v1/buyer/listings/{id}/offers', '/v1/buyer/profile', '/v1/buyer/profile/contact',
+        '/v1/buyer/negotiations', '/v1/buyer/negotiations/{id}', '/v1/buyer/negotiations/{id}/accept', '/v1/buyer/negotiations/{id}/counter',
+        '/v1/buyer/negotiations/{id}/decline', '/v1/buyer/negotiations/{id}/withdraw',
         '/v1/health', '/v1/me', '/v1/media/upload/{id}', '/v1/media/{id}', '/v1/meta',
         '/v1/seller/listings', '/v1/seller/listings/{id}', '/v1/seller/listings/{id}/status',
-        '/v1/seller/media/intents', '/v1/seller/media/{id}/complete', '/v1/seller/payment', '/v1/seller/profile',
+        '/v1/seller/negotiations', '/v1/seller/negotiations/{id}', '/v1/seller/negotiations/{id}/accept', '/v1/seller/negotiations/{id}/counter',
+        '/v1/seller/negotiations/{id}/decline', '/v1/seller/media/intents', '/v1/seller/media/{id}/complete', '/v1/seller/payment', '/v1/seller/profile',
       ].sort(),
     );
   });
@@ -57,7 +60,7 @@ describe('OpenAPI', () => {
 });
 
 describe('listing and media contracts', () => {
-  const listing = { title: 'Kurta', category: 'Ethnic wear', price: 150000, media: [], variants: [], bargaining: { mode: 'FIXED', expiryHours: 24 }, checkout: { channel: 'DIRECT' } };
+  const listing = { title: 'Kurta', category: 'Ethnic wear', price: 150000, media: [], variants: [], bargaining: { mode: 'BUY_NOW', expiryMinutes: 1440 }, checkout: { channel: 'DIRECT' } };
   it('saves a draft unless the app says publish', () => {
     expect(ListingInputSchema.parse(listing).publish).toBe(false);
     expect(ListingInputSchema.parse({ ...listing, publish: true }).publish).toBe(true);
@@ -75,5 +78,23 @@ describe('listing and media contracts', () => {
     const seller = { id: 's', name: 'n', handle: 'h', area: 'a', city: 'c' };
     const parsed = BuyerFeedSchema.parse({ items: [{ id: 'l', title: 't', price: 1, category: 'c', soldOut: false, acceptsOffers: true, coverUrl: null, hasVideo: false, seller, rules: { autoAcceptAt: 1 }, dealCodes: { accept: 'X' } }], nextCursor: null });
     expect(JSON.stringify(parsed)).not.toMatch(/rules|dealCodes|autoAccept/);
+  });
+});
+
+describe('negotiation contracts', () => {
+  it('accepts whole-paise offers and refuses a missing size', () => {
+    expect(StartOfferSchema.safeParse({ variantId: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', amount: 120000 }).success).toBe(true);
+    expect(StartOfferSchema.safeParse({ amount: 120000 }).success).toBe(false);
+    expect(StartOfferSchema.safeParse({ variantId: 'x', amount: 120000 }).success).toBe(false);
+    expect(CounterSchema.safeParse({ amount: -5 }).success).toBe(false);
+  });
+
+  it('gives the buyer a view with no field that could carry a private rule or an automatic marker', () => {
+    const keys = Object.keys(BuyerNegotiationSchema.shape);
+    for (const forbidden of ['rules', 'autoAcceptAt', 'autoCounterAt', 'autoDeclineBelow', 'autoCounterDueAt', 'autoDeclineAt', 'dealCodes', 'by', 'visibility']) expect(keys).not.toContain(forbidden);
+    // Offers show only "ME" or "SELLER": a rule's reply is a seller reply.
+    const offer = BuyerNegotiationSchema.shape.offers.element.shape.side;
+    expect(offer.safeParse('SYSTEM').success).toBe(false);
+    expect(offer.safeParse('SELLER').success).toBe(true);
   });
 });

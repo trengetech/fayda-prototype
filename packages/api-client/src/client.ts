@@ -10,6 +10,10 @@ import {
   ProblemSchema,
   BuyerFeedSchema,
   BuyerListingSchema,
+  BuyerNegotiationListSchema,
+  BuyerNegotiationSchema,
+  SellerNegotiationListSchema,
+  SellerNegotiationSchema,
   SellerListingListSchema,
   SellerListingSchema,
   SellerProfileSchema,
@@ -21,6 +25,10 @@ import {
   type Me,
   type BuyerFeed,
   type BuyerListing,
+  type BuyerNegotiation,
+  type BuyerNegotiationList,
+  type SellerNegotiation,
+  type SellerNegotiationList,
   type ListingInput,
   type Media,
   type MediaIntent,
@@ -95,6 +103,25 @@ export interface ApiClient {
   /** One page of the buyer feed. Pass the previous page's `nextCursor` to get the next one. */
   getBuyerFeed(cursor?: string | null, limit?: number): Promise<BuyerFeed>;
   getBuyerListing(id: string): Promise<BuyerListing>;
+  /** Make a first offer on a size. Amounts are paise (whole rupees). Pass `idempotencyKey` to make a retry safe. */
+  startOffer(listingId: string, variantId: string, amount: number, idempotencyKey?: string): Promise<BuyerNegotiation>;
+  listBuyerNegotiations(): Promise<BuyerNegotiationList>;
+  getBuyerNegotiation(id: string): Promise<BuyerNegotiation>;
+  buyerCounter(id: string, amount: number, idempotencyKey?: string): Promise<BuyerNegotiation>;
+  buyerAccept(id: string, idempotencyKey?: string): Promise<BuyerNegotiation>;
+  buyerDecline(id: string, idempotencyKey?: string): Promise<BuyerNegotiation>;
+  buyerWithdraw(id: string, idempotencyKey?: string): Promise<BuyerNegotiation>;
+  listSellerNegotiations(): Promise<SellerNegotiationList>;
+  getSellerNegotiation(id: string): Promise<SellerNegotiation>;
+  /** On a website listing, send the code or link that gives the agreed price. */
+  sellerAccept(id: string, dealAccess?: DealAccessInput | null, idempotencyKey?: string): Promise<SellerNegotiation>;
+  sellerCounter(id: string, amount: number, dealAccess?: DealAccessInput | null, idempotencyKey?: string): Promise<SellerNegotiation>;
+  sellerDecline(id: string, idempotencyKey?: string): Promise<SellerNegotiation>;
+}
+
+export interface DealAccessInput {
+  type: 'CODE' | 'LINK';
+  value: string;
 }
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -186,5 +213,17 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
       return call(`/v1/buyer/feed${qs ? `?${qs}` : ''}`, BuyerFeedSchema, { auth: true });
     },
     getBuyerListing: (id) => call(`/v1/buyer/listings/${id}`, BuyerListingSchema, { auth: true }),
+    startOffer: (listingId, variantId, amount, key) => call(`/v1/buyer/listings/${listingId}/offers`, BuyerNegotiationSchema, { method: 'POST', body: { variantId, amount }, auth: true, ...idem(key) }),
+    listBuyerNegotiations: () => call('/v1/buyer/negotiations', BuyerNegotiationListSchema, { auth: true }),
+    getBuyerNegotiation: (id) => call(`/v1/buyer/negotiations/${id}`, BuyerNegotiationSchema, { auth: true }),
+    buyerCounter: (id, amount, key) => call(`/v1/buyer/negotiations/${id}/counter`, BuyerNegotiationSchema, { method: 'POST', body: { amount }, auth: true, ...idem(key) }),
+    buyerAccept: (id, key) => call(`/v1/buyer/negotiations/${id}/accept`, BuyerNegotiationSchema, { method: 'POST', auth: true, ...idem(key) }),
+    buyerDecline: (id, key) => call(`/v1/buyer/negotiations/${id}/decline`, BuyerNegotiationSchema, { method: 'POST', auth: true, ...idem(key) }),
+    buyerWithdraw: (id, key) => call(`/v1/buyer/negotiations/${id}/withdraw`, BuyerNegotiationSchema, { method: 'POST', auth: true, ...idem(key) }),
+    listSellerNegotiations: () => call('/v1/seller/negotiations', SellerNegotiationListSchema, { auth: true }),
+    getSellerNegotiation: (id) => call(`/v1/seller/negotiations/${id}`, SellerNegotiationSchema, { auth: true }),
+    sellerAccept: (id, dealAccess, key) => call(`/v1/seller/negotiations/${id}/accept`, SellerNegotiationSchema, { method: 'POST', body: { dealAccess: dealAccess ?? null }, auth: true, ...idem(key) }),
+    sellerCounter: (id, amount, dealAccess, key) => call(`/v1/seller/negotiations/${id}/counter`, SellerNegotiationSchema, { method: 'POST', body: { amount, dealAccess: dealAccess ?? null }, auth: true, ...idem(key) }),
+    sellerDecline: (id, key) => call(`/v1/seller/negotiations/${id}/decline`, SellerNegotiationSchema, { method: 'POST', auth: true, ...idem(key) }),
   };
 }

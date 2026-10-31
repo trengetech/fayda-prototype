@@ -1,4 +1,4 @@
-import { HOUR } from './clock.js';
+import { MINUTE } from './clock.js';
 import { formatRupees, isWholeRupees, type Paise } from './money.js';
 import { RULES } from './rules.js';
 import {
@@ -62,7 +62,7 @@ export interface NewOfferCheck {
 export function validateNewOffer(c: NewOfferCheck): Result {
   if (!c.listingActive) return fail('NOT_AVAILABLE', 'This listing isn’t available.');
   if (c.isOwnListing) return fail('OWN_LISTING', 'You can’t make an offer on your own listing.');
-  if (c.mode === 'FIXED') return fail('FIXED_PRICE', 'This listing is fixed price.');
+  if (c.mode === 'BUY_NOW') return fail('FIXED_PRICE', 'This listing is fixed price.');
   if (!c.variantExists) return fail('NO_VARIANT', 'Choose a size.');
   if (c.availableUnits < 1) return fail('OUT_OF_STOCK', 'This size is out of stock.');
   if (!isWholeRupees(c.amount) || c.amount <= 0) return fail('INVALID_AMOUNT', 'Enter an amount in whole rupees.');
@@ -77,7 +77,7 @@ export function validateNewOffer(c: NewOfferCheck): Result {
 }
 
 export function startNegotiation(
-  init: { id: string; listingId: string; variantId: string; buyerId: string; visibility: 'PUBLIC' | 'PRIVATE' },
+  init: { id: string; listingId: string; variantId: string; buyerId: string },
   now: number,
 ): Negotiation {
   return {
@@ -92,18 +92,12 @@ export function startNegotiation(
   };
 }
 
-/** Visibility a new negotiation gets: BOTH lets the buyer choose, otherwise the listing's mode decides. */
-export function visibilityFor(mode: BargainMode, requested: 'PUBLIC' | 'PRIVATE' | undefined): 'PUBLIC' | 'PRIVATE' {
-  if (mode === 'BOTH') return requested === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE';
-  return mode === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE';
-}
-
 // ---------- offers and counters (R4–R6) ----------
 export function appendOffer(
   n: Negotiation,
   offer: { id: string; by: Author; amount: Paise; dealAccess?: DealAccess | null },
   now: number,
-  expiryHours: number,
+  expiryMinutes: number,
 ): Negotiation {
   const prev = n.offers.length ? latest(n) : null;
   const offers: Offer[] = n.offers.map((o) =>
@@ -115,7 +109,7 @@ export function appendOffer(
     amount: offer.amount,
     status: 'PENDING',
     at: now,
-    expiresAt: now + expiryHours * HOUR,
+    expiresAt: now + expiryMinutes * MINUTE,
     ...(offer.dealAccess ? { dealAccess: offer.dealAccess } : {}),
   });
   return {
@@ -300,7 +294,7 @@ export function scheduleAutomation(n: Negotiation, d: AutomationDecision): Negot
 // ---------- sweep: delayed automation, expiry, lapsed agreements ----------
 export interface SweepContext {
   listPrice: Paise;
-  expiryHours: number;
+  expiryMinutes: number;
   channel: Channel;
   rules: PrivateRules;
   codes: DealCodes;
@@ -333,7 +327,7 @@ export function sweepNegotiation(n: Negotiation, now: number, ctx: SweepContext)
               : (prev?.dealAccess ?? ctx.codes.counter ?? null)
             : null;
         // The counter is stamped with the time it was due, so a late sweep does not shift its expiry.
-        const next = appendOffer(cleared, { id: ctx.newOfferId(), by: 'SYSTEM', amount, dealAccess }, due, ctx.expiryHours);
+        const next = appendOffer(cleared, { id: ctx.newOfferId(), by: 'SYSTEM', amount, dealAccess }, due, ctx.expiryMinutes);
         return {
           negotiation: next,
           changed: true,
@@ -415,7 +409,7 @@ export function invalidationsForListingChange(
   };
   if (c.paused) open.forEach((o) => add(o.id, 'LISTING_PAUSED'));
   open.forEach((o) => c.removedVariantIds.includes(o.variantId) && add(o.id, 'SOLD_OUT'));
-  if (c.oldMode && c.oldMode !== 'FIXED' && c.newMode === 'FIXED') open.forEach((o) => add(o.id, 'FIXED_PRICE'));
+  if (c.oldMode && c.oldMode !== 'BUY_NOW' && c.newMode === 'BUY_NOW') open.forEach((o) => add(o.id, 'FIXED_PRICE'));
   if (c.oldPrice && c.newPrice < c.oldPrice) open.forEach((o) => o.latestAmount >= c.newPrice && add(o.id, 'PRICE_DROPPED'));
   return [...out].map(([id, reason]) => ({ id, reason }));
 }

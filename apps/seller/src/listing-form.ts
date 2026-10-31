@@ -1,17 +1,17 @@
 import type { ListingInput, SellerListing } from '@fayda/contracts/schemas';
 import { z } from '@fayda/contracts/schemas';
-import { RULES } from '@fayda/domain';
+import { OFFER_EXPIRY_MINUTES, RULES } from '@fayda/domain';
 
-export const MODES = ['FIXED', 'PRIVATE', 'PUBLIC', 'BOTH'] as const;
+export const MODES = ['BUY_NOW', 'BOTH'] as const;
 export type Mode = (typeof MODES)[number];
-export const MODE_LABEL: Record<Mode, string> = { FIXED: 'Fixed price', PRIVATE: 'Private offers', PUBLIC: 'Public offers', BOTH: 'Private + public' };
+export const MODE_LABEL: Record<Mode, string> = { BUY_NOW: 'Buy now only', BOTH: 'Buy now + offers' };
 export const MODE_HINT: Record<Mode, string> = {
-  FIXED: 'Buyers pay the listed price. No bargaining.',
-  PRIVATE: 'Buyers send offers only you see.',
-  PUBLIC: 'Offers are visible to other buyers (amounts, never names).',
-  BOTH: 'Buyers can offer privately or publicly.',
+  BUY_NOW: 'Buyers pay the listed price. No bargaining.',
+  BOTH: 'Buyers can buy at the listed price, or send you a private offer.',
 };
-export const EXPIRY_HOURS = [6, 12, 24, 48, 72] as const;
+/** How long a buyer's offer waits for a reply, in minutes. */
+export const EXPIRY_MINUTES = OFFER_EXPIRY_MINUTES;
+export const expiryLabel = (m: number): string => (m < 60 ? `${m} min` : m === 60 ? '1 hour' : `${m / 60} hours`);
 
 /** One photo or video on a listing. `previewUri` is a local file while editing, or the API address once saved. */
 export interface EditorMedia {
@@ -29,7 +29,7 @@ export interface EditorValues {
   price: string;
   variants: { id?: string; label: string; stock: string }[];
   mode: Mode;
-  expiryHours: number;
+  expiryMinutes: number;
   autoAcceptAt: string;
   autoCounterAt: string;
   autoDeclineBelow: string;
@@ -50,7 +50,7 @@ export const EditorSchema = z.object({
   price: digits.max(8, 'That is too large.'),
   variants: z.array(z.object({ id: z.string().optional(), label: z.string().max(60), stock: digits.max(5, 'Use up to 9,999.') })).max(30),
   mode: z.enum(MODES),
-  expiryHours: z.number(),
+  expiryMinutes: z.number(),
   autoAcceptAt: digits.max(8),
   autoCounterAt: digits.max(8),
   autoDeclineBelow: digits.max(8),
@@ -68,8 +68,8 @@ export const emptyValues = (): EditorValues => ({
   category: '',
   price: '',
   variants: [{ label: '', stock: '' }],
-  mode: 'FIXED',
-  expiryHours: RULES.DEFAULT_EXPIRY_HOURS,
+  mode: 'BUY_NOW',
+  expiryMinutes: RULES.DEFAULT_EXPIRY_MINUTES,
   autoAcceptAt: '',
   autoCounterAt: '',
   autoDeclineBelow: '',
@@ -94,7 +94,7 @@ export function fromListing(l: SellerListing): { values: EditorValues; media: Ed
       price: rupeesText(l.price),
       variants: l.variants.length ? l.variants.map((v) => ({ id: v.id, label: v.label, stock: String(v.stock) })) : [{ label: '', stock: '' }],
       mode: l.bargaining.mode as Mode,
-      expiryHours: l.bargaining.expiryHours,
+      expiryMinutes: l.bargaining.expiryMinutes,
       autoAcceptAt: rupeesText(l.rules.autoAcceptAt),
       autoCounterAt: rupeesText(l.rules.autoCounterAt),
       autoDeclineBelow: rupeesText(l.rules.autoDeclineBelow),
@@ -111,7 +111,7 @@ export function fromListing(l: SellerListing): { values: EditorValues; media: Ed
 
 /** Builds the API request. A fixed-price listing sends no private rules; website deal codes go only where they apply. */
 export function toInput(v: EditorValues, media: EditorMedia[], publish: boolean): ListingInput {
-  const priced = v.mode !== 'FIXED';
+  const priced = v.mode === 'BOTH';
   const website = v.channel === 'WEBSITE';
   const deal = (type: 'CODE' | 'LINK', value: string) => (value.trim() ? { type, value: value.trim() } : null);
   return {
@@ -121,7 +121,7 @@ export function toInput(v: EditorValues, media: EditorMedia[], publish: boolean)
     price: Number(v.price || 0) * 100,
     media: media.map((m) => ({ mediaId: m.mediaId, ...(m.kind === 'video' && m.posterMediaId ? { posterMediaId: m.posterMediaId } : {}) })),
     variants: v.variants.filter((x) => x.label.trim() !== '' || x.stock !== '').map((x) => ({ ...(x.id ? { id: x.id } : {}), label: x.label.trim(), stock: Number(x.stock || 0) })),
-    bargaining: { mode: v.mode, expiryHours: v.expiryHours },
+    bargaining: { mode: v.mode, expiryMinutes: v.expiryMinutes },
     rules: priced ? { autoAcceptAt: paiseOrNull(v.autoAcceptAt), autoCounterAt: paiseOrNull(v.autoCounterAt), autoDeclineBelow: paiseOrNull(v.autoDeclineBelow) } : null,
     checkout: { channel: v.channel, ...(website ? { productUrl: v.productUrl.trim() } : {}) },
     dealCodes: website && priced ? { accept: deal(v.acceptType, v.acceptValue), counter: deal(v.counterType, v.counterValue) } : null,
@@ -144,4 +144,4 @@ export function saveKey(sessionNonce: string, input: ListingInput): string {
 export const newNonce = (): string => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 
 /** Server field names to the form's field names, so an error appears next to the right input. */
-export const FIELD_MAP: Record<string, string> = { mode: 'mode', expiryHours: 'expiryHours', autoAcceptAt: 'autoAcceptAt', autoCounterAt: 'autoCounterAt', autoDeclineBelow: 'autoDeclineBelow', acceptCode: 'acceptValue', counterCode: 'counterValue' };
+export const FIELD_MAP: Record<string, string> = { mode: 'mode', expiryMinutes: 'expiryMinutes', autoAcceptAt: 'autoAcceptAt', autoCounterAt: 'autoCounterAt', autoDeclineBelow: 'autoDeclineBelow', acceptCode: 'acceptValue', counterCode: 'counterValue' };
