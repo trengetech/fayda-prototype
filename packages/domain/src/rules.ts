@@ -33,7 +33,7 @@ export const SHIP_DAYS_OPTIONS = [1, 2, 3, 5, 7] as const;
 export const CATEGORIES = ['Ethnic wear', 'Western wear', 'Menswear', 'Accessories', 'Footwear'] as const;
 export const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export const VIDEO_MIMES = ['video/mp4', 'video/quicktime', 'video/webm'] as const;
-export const MEDIA_PURPOSES = ['LISTING', 'UPI_QR'] as const;
+export const MEDIA_PURPOSES = ['LISTING', 'UPI_QR', 'REVIEW', 'REQUEST', 'CHAT'] as const;
 
 export const BARGAIN_MODES = ['BUY_NOW', 'BOTH'] as const;
 /** How long a bargaining offer stays open, chosen per listing by the seller: 30 min, 1 h, 3 h, 6 h, 24 h. */

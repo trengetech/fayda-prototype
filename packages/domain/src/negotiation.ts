@@ -154,6 +154,11 @@ function pushEvent(n: Negotiation, e: Negotiation['events'][number]): Negotiatio
   return { ...n, events: [...n.events, e] };
 }
 
+/** An order was placed at the agreed price: the agreement is used up. */
+export function markPurchased(n: Negotiation, now: number): Negotiation {
+  return pushEvent({ ...n, status: 'PURCHASED', closeReason: 'PURCHASED', updatedAt: now }, { type: 'PURCHASED', actor: 'BUYER', at: now });
+}
+
 // ---------- closing ----------
 export function closeNegotiation(
   n: Negotiation,

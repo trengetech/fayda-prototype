@@ -1,5 +1,5 @@
-import { index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
-import type { DealAccess, Negotiation } from '@fayda/domain';
+import { bigint, boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import type { DealAccess, Negotiation, Shipment } from '@fayda/domain';
 
 /**
  * Replays the stored response when a client retries a mutating request with the same Idempotency-Key.
@@ -134,7 +134,7 @@ export const media = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     ownerUserId: uuid('owner_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
     kind: text('kind', { enum: ['image', 'video'] }).notNull(),
-    purpose: text('purpose', { enum: ['LISTING', 'UPI_QR'] }).notNull(),
+    purpose: text('purpose', { enum: ['LISTING', 'UPI_QR', 'REVIEW', 'REQUEST', 'CHAT'] }).notNull(),
     mime: text('mime').notNull(),
     declaredSize: integer('declared_size').notNull(),
     size: integer('size'),
@@ -261,8 +261,180 @@ export const notifications = pgTable(
     code: text('code').notNull(),
     params: jsonb('params').$type<Record<string, string | number>>(),
     negotiationId: uuid('negotiation_id'),
+    orderId: uuid('order_id'),
+    threadId: uuid('thread_id'),
+    requestId: uuid('request_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     readAt: timestamp('read_at', { withTimezone: true }),
   },
   (t) => [index('notifications_user_idx').on(t.userId, t.app, t.createdAt)],
+);
+
+// ---------- orders (M3.4) ----------
+/**
+ * One order. `seq` is a database identity (bigint), so the readable number `FD-100001` never runs out and never repeats;
+ * the number is built from it on read (`formatOrderNumber`). Prices, the address and the listing's title are snapshots:
+ * later edits to the listing or the buyer's address never change an order.
+ */
+export const orders = pgTable(
+  'orders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    seq: bigint('seq', { mode: 'number' }).generatedAlwaysAsIdentity({ startWith: 100001 }),
+    buyerUserId: uuid('buyer_user_id').notNull().references(() => users.id),
+    sellerId: uuid('seller_id').notNull().references(() => sellers.id),
+    listingId: uuid('listing_id').notNull().references(() => listings.id),
+    /** No foreign key: a seller may later remove a size; the order keeps its label. */
+    variantId: uuid('variant_id').notNull(),
+    variantLabel: text('variant_label').notNull(),
+    listingTitle: text('listing_title').notNull(),
+    coverMediaId: uuid('cover_media_id'),
+    pricePaise: integer('price_paise').notNull(),
+    listPricePaise: integer('list_price_paise').notNull(),
+    priceSource: text('price_source', { enum: ['LIST', 'NEGOTIATED'] }).notNull(),
+    negotiationId: uuid('negotiation_id').references(() => negotiations.id),
+    channel: text('channel', { enum: ['DIRECT', 'WEBSITE'] }).notNull(),
+    paymentMethod: text('payment_method', { enum: ['UPI', 'BANK', 'LINK'] }),
+    dealAccess: jsonb('deal_access').$type<DealAccess | null>(),
+    /** Delivery address as it was when the order was placed. Null for website orders. */
+    address: jsonb('address').$type<{ name: string; line1: string; line2: string; pin: string; city: string; state: string } | null>(),
+    status: text('status', { enum: ['PLACED', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'EXPIRED'] }).notNull(),
+    confirmBy: timestamp('confirm_by', { withTimezone: true }).notNull(),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    shipment: jsonb('shipment').$type<Shipment | null>(),
+    cancelReason: text('cancel_reason'),
+    cancelNote: text('cancel_note'),
+    restocked: boolean('restocked').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    index('orders_buyer_idx').on(t.buyerUserId, t.createdAt),
+    index('orders_seller_idx').on(t.sellerId, t.status, t.createdAt),
+    index('orders_confirm_due_idx').on(t.status, t.confirmBy),
+    uniqueIndex('orders_seq_idx').on(t.seq),
+    // One order per agreement: a double tap or a retry cannot make two.
+    uniqueIndex('orders_negotiation_idx').on(t.negotiationId),
+  ],
+);
+
+// ---------- chat ----------
+export const chatThreads = pgTable(
+  'chat_threads',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    kind: text('kind', { enum: ['ORDER', 'REQUEST'] }).notNull(),
+    orderId: uuid('order_id').references(() => orders.id),
+    requestId: uuid('request_id'),
+    responseId: uuid('response_id'),
+    buyerUserId: uuid('buyer_user_id').notNull().references(() => users.id),
+    sellerId: uuid('seller_id').notNull().references(() => sellers.id),
+    sellerUserId: uuid('seller_user_id').notNull().references(() => users.id),
+    buyerReadAt: timestamp('buyer_read_at', { withTimezone: true }).notNull(),
+    sellerReadAt: timestamp('seller_read_at', { withTimezone: true }).notNull(),
+    lastMessageAt: timestamp('last_message_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('chat_threads_order_idx').on(t.orderId),
+    uniqueIndex('chat_threads_response_idx').on(t.responseId),
+    index('chat_threads_buyer_idx').on(t.buyerUserId, t.lastMessageAt),
+    index('chat_threads_seller_idx').on(t.sellerUserId, t.lastMessageAt),
+  ],
+);
+
+export const chatMessages = pgTable(
+  'chat_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    threadId: uuid('thread_id').notNull().references(() => chatThreads.id, { onDelete: 'cascade' }),
+    from: text('from', { enum: ['BUYER', 'SELLER', 'SYSTEM'] }).notNull(),
+    type: text('type', { enum: ['TEXT', 'MEDIA', 'LISTING'] }).notNull(),
+    text: text('text'),
+    mediaId: uuid('media_id').references(() => media.id),
+    listingId: uuid('listing_id').references(() => listings.id),
+    /** Idempotency for a retried send: the client's key per thread. */
+    clientKey: text('client_key'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [index('chat_messages_thread_idx').on(t.threadId, t.createdAt), uniqueIndex('chat_messages_client_key_idx').on(t.threadId, t.clientKey)],
+);
+
+// ---------- reviews ----------
+export const reviews = pgTable(
+  'reviews',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orderId: uuid('order_id').notNull().references(() => orders.id),
+    buyerUserId: uuid('buyer_user_id').notNull().references(() => users.id),
+    sellerId: uuid('seller_id').notNull().references(() => sellers.id),
+    listingId: uuid('listing_id').notNull().references(() => listings.id),
+    rating: integer('rating').notNull(),
+    text: text('text').notNull().default(''),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    editedAt: timestamp('edited_at', { withTimezone: true }),
+  },
+  (t) => [uniqueIndex('reviews_order_idx').on(t.orderId), index('reviews_seller_idx').on(t.sellerId, t.createdAt), index('reviews_listing_idx').on(t.listingId)],
+);
+export const reviewMedia = pgTable(
+  'review_media',
+  {
+    reviewId: uuid('review_id').notNull().references(() => reviews.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    mediaId: uuid('media_id').notNull().references(() => media.id),
+  },
+  (t) => [primaryKey({ columns: [t.reviewId, t.position] })],
+);
+
+// ---------- buyer requests ----------
+export const buyerRequests = pgTable(
+  'buyer_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    buyerUserId: uuid('buyer_user_id').notNull().references(() => users.id),
+    category: text('category').notNull(),
+    title: text('title').notNull(),
+    description: text('description'),
+    size: text('size'),
+    budgetPaise: integer('budget_paise'),
+    status: text('status', { enum: ['OPEN', 'CLOSED', 'EXPIRED'] }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    reachedCount: integer('reached_count').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [index('buyer_requests_buyer_idx').on(t.buyerUserId, t.createdAt), index('buyer_requests_open_idx').on(t.status, t.expiresAt), index('buyer_requests_category_idx').on(t.category, t.status)],
+);
+export const requestMedia = pgTable(
+  'request_media',
+  {
+    requestId: uuid('request_id').notNull().references(() => buyerRequests.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    mediaId: uuid('media_id').notNull().references(() => media.id),
+  },
+  (t) => [primaryKey({ columns: [t.requestId, t.position] })],
+);
+export const requestResponses = pgTable(
+  'request_responses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    requestId: uuid('request_id').notNull().references(() => buyerRequests.id, { onDelete: 'cascade' }),
+    sellerId: uuid('seller_id').notNull().references(() => sellers.id),
+    text: text('text'),
+    pricePaise: integer('price_paise'),
+    status: text('status', { enum: ['SENT', 'WANTED', 'DECLINED'] }).notNull(),
+    threadId: uuid('thread_id'),
+    listingId: uuid('listing_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  // One response per seller per request.
+  (t) => [uniqueIndex('request_responses_seller_idx').on(t.requestId, t.sellerId)],
+);
+export const responseMedia = pgTable(
+  'response_media',
+  {
+    responseId: uuid('response_id').notNull().references(() => requestResponses.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    mediaId: uuid('media_id').notNull().references(() => media.id),
+  },
+  (t) => [primaryKey({ columns: [t.responseId, t.position] })],
 );

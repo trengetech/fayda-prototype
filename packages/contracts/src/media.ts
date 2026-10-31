@@ -2,7 +2,7 @@ import { EpochMsSchema } from './common.js';
 import { z } from './zod.js';
 
 export const MediaKindSchema = z.enum(['image', 'video']).openapi('MediaKind');
-export const MediaPurposeSchema = z.enum(['LISTING', 'UPI_QR']).openapi('MediaPurpose');
+export const MediaPurposeSchema = z.enum(['LISTING', 'UPI_QR', 'REVIEW', 'REQUEST', 'CHAT']).openapi('MediaPurpose');
 
 /** Asks to upload one file. The server checks kind, type and size before handing out an upload address. */
 export const MediaIntentInputSchema = z

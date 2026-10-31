@@ -16,9 +16,10 @@ import { BuyerNegotiationsController, SellerNegotiationsController } from './neg
 import { NegotiationEvents } from './negotiations/negotiation-events.js';
 import { NegotiationsGateway } from './negotiations/negotiations.gateway.js';
 import { NegotiationsService } from './negotiations/negotiations.service.js';
-import { MediaController } from './media/media.controller.js';
+import { BuyerMediaController, MediaController } from './media/media.controller.js';
 import { DiskMediaStorage, MEDIA_STORAGE } from './media/media-storage.js';
 import { MediaService } from './media/media.service.js';
+import { ChatService } from './chat/chat.service.js';
 import { IdempotencyService } from './common/idempotency.service.js';
 import { APP_CONFIG, type AppConfig } from './config.js';
 import { DbService } from './db/db.service.js';
@@ -31,7 +32,7 @@ export class AppModule {
     return {
       module: AppModule,
       imports: [ScheduleModule.forRoot()],
-      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController, SellerListingsController, BuyerCatalogController, BuyerNegotiationsController, SellerNegotiationsController],
+      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController, BuyerMediaController, SellerListingsController, BuyerCatalogController, BuyerNegotiationsController, SellerNegotiationsController],
       providers: [
         { provide: APP_CONFIG, useValue: config },
         { provide: CLOCK, useValue: clock },
@@ -45,12 +46,13 @@ export class AppModule {
         ListingsService,
         NegotiationEvents,
         NegotiationsService,
+        ChatService,
         NegotiationsGateway,
         AuthService,
         AuthGuard,
         { provide: AUTH_VERIFIER, useClass: DevOtpVerifier },
       ],
-      exports: [DbService, IdempotencyService, SweepRunner, CLOCK, APP_CONFIG, MediaService, NegotiationsService, NegotiationEvents],
+      exports: [DbService, IdempotencyService, SweepRunner, CLOCK, APP_CONFIG, MediaService, NegotiationsService, NegotiationEvents, ChatService],
     };
   }
 }

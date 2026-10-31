@@ -43,6 +43,13 @@
       "when": 1793442161295,
       "tag": "0005_right_juggernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793456802638,
+      "tag": "0006_uneven_skin",
+      "breakpoints": true
     }
   ]
 }

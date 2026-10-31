@@ -308,6 +308,7 @@ export function validateMediaIntent(i: MediaIntentInput): Record<string, string>
   if (!isImage && !isVideo) e.kind = 'Choose a photo or a video.';
   if (!(MEDIA_PURPOSES as readonly string[]).includes(i.purpose ?? '')) e.purpose = 'Unknown upload purpose.';
   if (i.purpose === 'UPI_QR' && isVideo) e.kind = 'A UPI QR code must be a photo.';
+  if ((i.purpose === 'REQUEST' || i.purpose === 'CHAT') && isVideo) e.kind = 'Use a photo here.';
   const mimes: readonly string[] = isImage ? IMAGE_MIMES : isVideo ? VIDEO_MIMES : [];
   if ((isImage || isVideo) && !mimes.includes(i.mime ?? '')) e.mime = isImage ? 'Use a JPEG, PNG or WebP photo.' : 'Use an MP4, MOV or WebM video.';
   const size = i.size;
