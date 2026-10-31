@@ -1,12 +1,12 @@
-import { useApiClient, useDeleteListingDraft, useSaveListing, useSellerListing, useSetListingStatus } from '@fayda/api-client';
-import { CATEGORY_NAMES, type SellerListing } from '@fayda/contracts/schemas';
+import { useApiClient, useDeleteListingDraft, useSaveListing, useSellerListing, useSellerRequests, useSetListingStatus } from '@fayda/api-client';
+import { CATEGORY_NAMES, type SellerListing, type SellerRequest } from '@fayda/contracts/schemas';
 import { RULES } from '@fayda/domain';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AppText, Button, Card, ChipGroup, FieldError, Screen, TextField, describeError, useTheme } from '@fayda/ui';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as VideoThumbnails from 'expo-video-thumbnails';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useFieldArray, useForm, type FieldPath } from 'react-hook-form';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, View } from 'react-native';
 import {
@@ -25,7 +25,8 @@ import {
   type EditorMedia,
   type EditorValues,
 } from '../../src/listing-form';
-import { sizeOf, uploadMedia } from '../../src/upload';
+import { prefillFromRequest } from '../../src/requests';
+import { copyAsListingPhoto, sizeOf, uploadMedia } from '../../src/upload';
 
 const CHANNEL_LABEL = { DIRECT: 'Pay me directly', WEBSITE: 'My website' } as const;
 const DEAL_LABEL = { CODE: 'Coupon code', LINK: 'Discount link' } as const;
@@ -33,16 +34,27 @@ const SECTION_FIELDS = ['media', 'variants', 'channel'] as const;
 
 /** Opens the editor for a new listing (`/listing/new`) or an existing one (`/listing/<id>`). */
 export default function ListingScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, fromResponseId } = useLocalSearchParams<{ id: string; fromResponseId?: string }>();
   const existingId = id && id !== 'new' ? id : null;
   const listing = useSellerListing(existingId);
+  if (!existingId && fromResponseId) return <FromRequest responseId={fromResponseId} />;
   if (!existingId) return <Editor existing={null} />;
   if (listing.isPending) return <Screen><View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><ActivityIndicator /><AppText>Loading…</AppText></View></Screen>;
   if (listing.isError) return <Screen><AppText weight="bold">Can’t load this listing</AppText><AppText tone="muted">{listing.error.message}</AppText><Button title="Try again" onPress={() => void listing.refetch()} /></Screen>;
   return <Editor existing={listing.data} />;
 }
 
-function Editor({ existing }: { existing: SellerListing | null }) {
+/** "Create listing" from a buyer's request: the editor starts filled in from the request and the response the buyer wants. */
+function FromRequest({ responseId }: { responseId: string }) {
+  const requests = useSellerRequests();
+  if (requests.isPending) return <Screen><View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><ActivityIndicator /><AppText>Loading the request…</AppText></View></Screen>;
+  const request = requests.data?.items.find((r) => r.response?.id === responseId);
+  if (!request || request.response?.status !== 'WANTED')
+    return <Screen><AppText weight="bold">This request isn’t ready for a listing</AppText><AppText tone="muted">The buyer has to say they want it first.</AppText></Screen>;
+  return <Editor existing={null} request={request} />;
+}
+
+function Editor({ existing, request }: { existing: SellerListing | null; request?: SellerRequest }) {
   const router = useRouter();
   const client = useApiClient();
   const { colors } = useTheme();
@@ -50,16 +62,42 @@ function Editor({ existing }: { existing: SellerListing | null }) {
   const setStatus = useSetListingStatus();
   const remove = useDeleteListingDraft();
   const nonce = useRef(newNonce());
-  const initial = existing ? fromListing(existing) : { values: emptyValues(), media: [] as EditorMedia[] };
+  const initial = existing ? fromListing(existing) : { values: request ? prefillFromRequest(request) : emptyValues(), media: [] as EditorMedia[] };
 
   const form = useForm<EditorValues>({ resolver: zodResolver(EditorSchema), defaultValues: initial.values });
   const sizes = useFieldArray({ control: form.control, name: 'variants' });
   const [media, setMedia] = useState<EditorMedia[]>(initial.media);
-  const [mediaBusy, setMediaBusy] = useState(false);
+  const [mediaBusy, setMediaBusy] = useState(!!request?.response?.media.length);
   const [mediaNote, setMediaNote] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [sectionErrors, setSectionErrors] = useState<Record<string, string>>({});
   const [moreRules, setMoreRules] = useState(!!existing && (existing.rules.autoDeclineBelow != null || existing.rules.autoCounterAt != null));
+
+  // The buyer's photos from the response were uploaded for the request, so they are copied once as listing photos.
+  useEffect(() => {
+    const photos = request?.response?.media.filter((m) => m.kind === 'image').slice(0, RULES.MAX_MEDIA_PER_LISTING) ?? [];
+    if (!photos.length) return;
+    let live = true;
+    void (async () => {
+      const added: EditorMedia[] = [];
+      const notes: string[] = [];
+      for (const p of photos) {
+        try {
+          const up = await copyAsListingPhoto(client, p.url);
+          added.push({ mediaId: up.id, kind: 'image', previewUri: p.url, posterMediaId: null });
+        } catch (e) {
+          notes.push(e instanceof Error ? e.message : 'Could not copy a photo.');
+        }
+      }
+      if (!live) return;
+      setMedia((cur) => [...cur, ...added]);
+      if (notes.length) setMediaNote(notes.join(' '));
+      setMediaBusy(false);
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const mode = form.watch('mode');
   const channel = form.watch('channel');
@@ -117,10 +155,13 @@ function Editor({ existing }: { existing: SellerListing | null }) {
     form.handleSubmit(async (values) => {
       setFormError(null);
       setSectionErrors({});
-      const input = toInput(values, media, publish);
+      const input = toInput(values, media, publish, request?.response?.id ?? null);
       try {
         await save.mutateAsync({ id: existing?.id ?? null, input, idempotencyKey: saveKey(nonce.current, input) });
-        router.replace('/listings' as never);
+        // A listing made for a buyer's request is shared in that chat by the server; go there to see it.
+        const chat = request?.response?.threadId;
+        if (publish && chat) router.replace({ pathname: '/chat/[id]', params: { id: chat, published: '1' } } as never);
+        else router.replace('/listings' as never);
       } catch (e) {
         const { message, fields } = describeError(e);
         const sections: Record<string, string> = {};
@@ -157,7 +198,8 @@ function Editor({ existing }: { existing: SellerListing | null }) {
 
   return (
     <Screen>
-      <AppText weight="extrabold" size={22}>{existing ? 'Edit listing' : 'New listing'}</AppText>
+      <AppText weight="extrabold" size={22}>{existing ? 'Edit listing' : request ? 'Listing for a request' : 'New listing'}</AppText>
+      {request ? <AppText tone="muted" size={13}>Made for the buyer’s request “{request.title}”. When you publish, it is shared in your chat with the buyer.</AppText> : null}
 
       {/* Media */}
       <View style={{ gap: 8 }}>

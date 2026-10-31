@@ -216,3 +216,15 @@ export function buyAgain(l: { id: string; status: string; channel: Channel } | n
     anyAvailable: Object.values(availableByVariant).some((n) => n > 0),
   };
 }
+
+/** The readable order number, built from the database's never-repeating sequence. It only ever grows: FD-100001, FD-1000000, ... */
+export const formatOrderNumber = (seq: number): string => `FD-${seq}`;
+
+/**
+ * The `upi://pay` link for "Pay in a UPI app". The order number goes in the note (`tn`), so the seller can match the payment.
+ * `amount` is in paise and is written in rupees with two decimals.
+ */
+export function upiPayUri(p: { upiId: string; payeeName: string; amount: Paise; note: string }): string {
+  const q = new URLSearchParams({ pa: p.upiId, pn: p.payeeName, am: (p.amount / 100).toFixed(2), cu: 'INR', tn: p.note });
+  return `upi://pay?${q.toString().replace(/\+/g, '%20')}`;
+}

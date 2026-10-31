@@ -1,5 +1,6 @@
 import { PaiseSchema, EpochMsSchema } from './common.js';
 import { MediaKindSchema } from './media.js';
+import { SellerRecordSchema } from './orders.js';
 import { z } from './zod.js';
 
 const DealAccessSchema = z.object({ type: z.enum(['CODE', 'LINK']), value: z.string().max(500) }).openapi('DealAccess');
@@ -22,6 +23,8 @@ export const ListingInputSchema = z
     dealCodes: z.object({ accept: DealAccessSchema.nullish(), counter: DealAccessSchema.nullish() }).nullish(),
     /** True to publish (or keep published); false saves a draft. Ignored for a listing that is already live. */
     publish: z.boolean().default(false),
+    /** "Create listing from a request": a WANTED response of this seller. Once published, the listing is shared in that chat. */
+    fromResponseId: z.string().uuid().nullish(),
   })
   .openapi('ListingInput');
 export type ListingInput = z.infer<typeof ListingInputSchema>;
@@ -55,7 +58,23 @@ export type SellerListing = z.infer<typeof SellerListingSchema>;
 export const SellerListingListSchema = z.object({ items: z.array(SellerListingSchema) }).openapi('SellerListingList');
 
 // ---------- buyer side: built from public fields only, so private rules and deal codes cannot appear ----------
-const PublicSellerSchema = z.object({ id: z.string(), name: z.string(), handle: z.string(), area: z.string(), city: z.string() });
+const PublicSellerSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  handle: z.string(),
+  area: z.string(),
+  city: z.string(),
+  /** Average stars to 1 decimal place; null with no reviews. Shown on every listing. */
+  rating: z.number().nullable(),
+  reviewCount: z.number().int(),
+});
+/** The seller card on a product page: declared times, categories and the public order record (never contact numbers). */
+const ProductSellerSchema = PublicSellerSchema.extend({
+  slaConfirmHours: z.number().int(),
+  slaShipDays: z.number().int(),
+  categories: z.array(z.string()),
+  record: SellerRecordSchema,
+});
 
 export const BuyerFeedItemSchema = z
   .object({
@@ -86,8 +105,9 @@ export const BuyerListingSchema = z
     media: z.array(ListingMediaSchema.omit({ mediaId: true, posterMediaId: true })),
     variants: z.array(z.object({ id: z.string(), label: z.string(), available: z.boolean(), low: z.boolean() })),
     bargaining: z.object({ mode: z.string(), acceptsOffers: z.boolean(), expiryMinutes: z.number().int() }),
-    checkout: z.object({ channel: z.enum(['DIRECT', 'WEBSITE']), productUrl: z.string().nullable() }),
-    seller: PublicSellerSchema,
+    /** `payMethods`: how this seller can be paid directly (UPI, BANK, LINK). Names only, never the details (O-3). Empty for website listings. */
+    checkout: z.object({ channel: z.enum(['DIRECT', 'WEBSITE']), productUrl: z.string().nullable(), payMethods: z.array(z.enum(['UPI', 'BANK', 'LINK'])) }),
+    seller: ProductSellerSchema,
   })
   .openapi('BuyerListing');
 export type BuyerListing = z.infer<typeof BuyerListingSchema>;

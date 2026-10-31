@@ -2,6 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { BuyerFeed, BuyerListing, ListingInput, SellerListing } from '@fayda/contracts';
 import {
   buyerListingView,
+  cleanPayment,
+  directMethods,
   cleanDeal,
   publishStockError,
   validateCheckout,
@@ -19,6 +21,8 @@ import { listingMedia, listingVariants, listings, media, sellerPaymentProfiles, 
 import { publicMediaUrl } from '../media/media.service.js';
 import type { NegotiationTouch } from '../negotiations/negotiation-events.js';
 import { NegotiationsService } from '../negotiations/negotiations.service.js';
+import { ChatService } from '../chat/chat.service.js';
+import { loadSellerStats, sellerRatings } from '../community/shared.js';
 
 type ListingRow = typeof listings.$inferSelect;
 type MediaItem = { mediaId: string; kind: 'image' | 'video'; url: string; posterMediaId: string | null; posterUrl: string | null };
@@ -41,6 +45,7 @@ export class ListingsService {
     @Inject(DbService) private readonly database: DbService,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(NegotiationsService) private readonly negotiations: NegotiationsService,
+    @Inject(ChatService) private readonly chat: ChatService,
   ) {}
 
   private get db() {
@@ -161,6 +166,9 @@ export class ListingsService {
       return rowId;
     });
     this.negotiations.publish(touched);
+    // "Create listing from a request": once it is live, show it in the chat with the buyer who wanted it. A response that is not
+    // WANTED, not this seller's, or already used simply does nothing; the listing itself is saved either way.
+    if (input.fromResponseId) await this.chat.shareListingFromResponse(seller.id, input.fromResponseId, id);
     return this.getForSeller(userId, id);
   }
 
@@ -315,7 +323,7 @@ export class ListingsService {
       .limit(take + 1);
     const page = rows.slice(0, take);
     const ids = page.map((r) => r.id);
-    const [mediaBy, variantsBy] = await Promise.all([this.mediaOf(ids), this.variantsOf(ids)]);
+    const [mediaBy, variantsBy, ratings] = await Promise.all([this.mediaOf(ids), this.variantsOf(ids), sellerRatings(this.db, [...new Set(page.map((r) => r.sellerId))])]);
     const items = page.map((r) => {
       const m = mediaBy.get(r.id) ?? [];
       const first = m[0];
@@ -329,7 +337,7 @@ export class ListingsService {
         acceptsOffers: r.bargainMode !== 'BUY_NOW',
         coverUrl: first ? (first.kind === 'image' ? first.url : first.posterUrl) : null,
         hasVideo: m.some((x) => x.kind === 'video'),
-        seller: { id: r.sellerId, name: r.sellerName, handle: r.sellerHandle, area: r.sellerArea, city: r.sellerCity },
+        seller: { id: r.sellerId, name: r.sellerName, handle: r.sellerHandle, area: r.sellerArea, city: r.sellerCity, rating: ratings.get(r.sellerId)?.rating ?? null, reviewCount: ratings.get(r.sellerId)?.reviewCount ?? 0 },
       };
     });
     const last = page[page.length - 1];
@@ -344,13 +352,17 @@ export class ListingsService {
         sellerHandle: sellers.handle,
         sellerArea: sellers.area,
         sellerCity: sellers.city,
+        sellerCategories: sellers.categories,
+        sellerConfirmHours: sellers.slaConfirmHours,
+        sellerShipDays: sellers.slaShipDays,
       })
       .from(listings)
       .innerJoin(sellers, eq(sellers.id, listings.sellerId))
       .where(and(eq(listings.id, listingId), eq(listings.status, 'ACTIVE')))
       .limit(1);
     if (!row) throw new AppError(404, 'NOT_FOUND', 'This listing is not available.');
-    const [mediaBy, variantsBy] = await Promise.all([this.mediaOf([listingId]), this.variantsOf([listingId])]);
+    const [mediaBy, variantsBy, stats] = await Promise.all([this.mediaOf([listingId]), this.variantsOf([listingId]), loadSellerStats(this.db, [row.l.sellerId])]);
+    const record = stats.get(row.l.sellerId)!;
     const variants = variantsBy.get(listingId) ?? [];
     const l = row.l;
     const publicListing: PublicListing = {
@@ -368,10 +380,24 @@ export class ListingsService {
       variants,
     };
     const view = buyerListingView(publicListing, Object.fromEntries(variants.map((v) => [v.id, v.stock])));
+    const [pay] = l.channel === 'DIRECT' ? await this.db.select().from(sellerPaymentProfiles).where(eq(sellerPaymentProfiles.sellerId, l.sellerId)).limit(1) : [];
     return {
       ...view,
+      checkout: { ...view.checkout, payMethods: pay ? directMethods(cleanPayment(pay)) : [] },
       media: (mediaBy.get(listingId) ?? []).map((m) => ({ kind: m.kind, url: m.url, posterUrl: m.posterUrl })),
-      seller: { id: l.sellerId, name: row.sellerName, handle: row.sellerHandle, area: row.sellerArea, city: row.sellerCity },
+      seller: {
+        id: l.sellerId,
+        name: row.sellerName,
+        handle: row.sellerHandle,
+        area: row.sellerArea,
+        city: row.sellerCity,
+        rating: record.rating,
+        reviewCount: record.reviewCount,
+        slaConfirmHours: row.sellerConfirmHours,
+        slaShipDays: row.sellerShipDays,
+        categories: row.sellerCategories,
+        record,
+      },
     };
   }
 }

@@ -3,11 +3,11 @@ import type { Readable } from 'node:stream';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Media, MediaIntent, MediaIntentInput } from '@fayda/contracts';
 import { validateMediaIntent, type Clock } from '@fayda/domain';
-import { and, count, eq, inArray, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, ne, sql } from 'drizzle-orm';
 import { AppError } from '../common/app-error.js';
 import { CLOCK } from '../common/clock.js';
 import { DbService } from '../db/db.service.js';
-import { media, sellers } from '../db/schema.js';
+import { buyerProfiles, media, sellers } from '../db/schema.js';
 import { SweepRunner, type SweepTask } from '../scheduler/sweep-runner.js';
 import { DiskMediaStorage, MEDIA_STORAGE, UploadSizeError, contentMatchesMime } from './media-storage.js';
 
@@ -19,6 +19,11 @@ const PENDING_GRACE_MS = 60 * 60_000;
 const ORPHAN_AFTER_MS = 24 * 3_600_000;
 
 type MediaRow = typeof media.$inferSelect;
+
+const APP_PURPOSES: Record<'buyer' | 'seller', readonly MediaRow['purpose'][]> = {
+  seller: ['LISTING', 'UPI_QR', 'REQUEST', 'CHAT'],
+  buyer: ['REVIEW', 'REQUEST', 'CHAT'],
+};
 
 const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 const sameHash = (a: string, b: string): boolean => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -52,14 +57,21 @@ export class MediaService implements SweepTask {
       purpose: row.purpose,
       status: row.status,
       size: row.size,
-      url: row.status === 'READY' && row.purpose === 'LISTING' ? publicMediaUrl(row.id) : null,
+      url: row.status === 'READY' && row.purpose !== 'UPI_QR' ? publicMediaUrl(row.id) : null,
     };
   }
 
   /** Step 1 of an upload: check the limits, record the file as PENDING and say where to send it. */
-  async createIntent(userId: string, input: MediaIntentInput): Promise<MediaIntent> {
-    const [seller] = await this.db.select({ id: sellers.id }).from(sellers).where(eq(sellers.userId, userId)).limit(1);
-    if (!seller) throw new AppError(403, 'NO_SELLER', 'Set up your shop first.');
+  async createIntent(userId: string, input: MediaIntentInput, app: 'buyer' | 'seller' = 'seller'): Promise<MediaIntent> {
+    if (app === 'seller') {
+      const [seller] = await this.db.select({ id: sellers.id }).from(sellers).where(eq(sellers.userId, userId)).limit(1);
+      if (!seller) throw new AppError(403, 'NO_SELLER', 'Set up your shop first.');
+    } else {
+      const [buyer] = await this.db.select({ id: buyerProfiles.userId }).from(buyerProfiles).where(eq(buyerProfiles.userId, userId)).limit(1);
+      if (!buyer) throw new AppError(403, 'NO_PROFILE', 'Finish your profile first.');
+    }
+    // Each app may upload only for its own purposes: reviews are the buyer's, listings and the UPI QR are the seller's.
+    if (!APP_PURPOSES[app].includes(input.purpose as MediaRow['purpose'])) throw new AppError(400, 'VALIDATION', 'Check the file.', { purpose: 'This app can’t upload for that purpose.' });
     const errors = validateMediaIntent(input);
     if (Object.keys(errors).length) throw new AppError(400, 'VALIDATION', 'Check the file.', errors);
     const [pending] = await this.db.select({ n: count() }).from(media).where(and(eq(media.ownerUserId, userId), eq(media.status, 'PENDING')));
@@ -73,7 +85,7 @@ export class MediaService implements SweepTask {
       id,
       ownerUserId: userId,
       kind: input.kind as 'image' | 'video',
-      purpose: input.purpose as 'LISTING' | 'UPI_QR',
+      purpose: input.purpose as MediaRow['purpose'],
       mime: input.mime,
       declaredSize: input.size,
       durationSec: input.durationSec == null ? null : Math.round(input.durationSec),
@@ -124,7 +136,7 @@ export class MediaService implements SweepTask {
   }
 
   /** A ready file the seller owns, for attaching to a listing or a payment profile. */
-  async requireOwnedReady(userId: string, id: string, purpose: 'LISTING' | 'UPI_QR', kind?: 'image' | 'video'): Promise<MediaRow> {
+  async requireOwnedReady(userId: string, id: string, purpose: MediaRow['purpose'], kind?: 'image' | 'video'): Promise<MediaRow> {
     const [row] = await this.db.select().from(media).where(and(eq(media.id, id), eq(media.ownerUserId, userId))).limit(1);
     if (!row || row.purpose !== purpose || (kind && row.kind !== kind)) throw new AppError(400, 'VALIDATION', 'Check the file.', { media: 'One of the files is not valid. Upload it again.' });
     if (row.status !== 'READY') throw new AppError(409, 'MEDIA_NOT_READY', 'One of the files has not finished uploading.');
@@ -133,7 +145,7 @@ export class MediaService implements SweepTask {
 
   /** What the public download route needs, or null when the file is not public. */
   async publicFile(id: string): Promise<{ mime: string; size: number; storageKey: string } | null> {
-    const [row] = await this.db.select().from(media).where(and(eq(media.id, id), eq(media.status, 'READY'), eq(media.purpose, 'LISTING'))).limit(1);
+    const [row] = await this.db.select().from(media).where(and(eq(media.id, id), eq(media.status, 'READY'), ne(media.purpose, 'UPI_QR'))).limit(1);
     return row?.size ? { mime: row.mime, size: row.size, storageKey: row.storageKey } : null;
   }
 
@@ -158,7 +170,11 @@ export class MediaService implements SweepTask {
       where (m.status = 'PENDING' and m.created_at < ${new Date(now - PENDING_GRACE_MS).toISOString()}::timestamptz)
          or (m.status = 'READY' and m.ready_at < ${new Date(now - ORPHAN_AFTER_MS).toISOString()}::timestamptz
              and not exists (select 1 from listing_media lm where lm.media_id = m.id or lm.poster_media_id = m.id)
-             and not exists (select 1 from seller_payment_profiles sp where sp.upi_qr_media_id = m.id))
+             and not exists (select 1 from seller_payment_profiles sp where sp.upi_qr_media_id = m.id)
+             and not exists (select 1 from review_media x where x.media_id = m.id)
+             and not exists (select 1 from request_media x where x.media_id = m.id)
+             and not exists (select 1 from response_media x where x.media_id = m.id)
+             and not exists (select 1 from chat_messages x where x.media_id = m.id))
       limit 100`);
     const ids = stale.map((r) => r.id);
     if (!ids.length) return 0;

@@ -12,6 +12,7 @@ import {
   invalidate,
   invalidationsForListingChange,
   lastBySide,
+  markPurchased,
   latest,
   scheduleAutomation,
   startNegotiation,
@@ -38,7 +39,7 @@ import { and, count, desc, eq, gt, inArray, lte } from 'drizzle-orm';
 import { AppError, statusForCode } from '../common/app-error.js';
 import { CLOCK } from '../common/clock.js';
 import { DbService } from '../db/db.service.js';
-import { listingMedia, listingVariants, listings, media, negotiations, notifications, reservations, sellers, users } from '../db/schema.js';
+import { listingMedia, listingVariants, listings, media, negotiations, notifications, orders, reservations, sellers, users } from '../db/schema.js';
 import { publicMediaUrl } from '../media/media.service.js';
 import { SweepRunner, type SweepTask } from '../scheduler/sweep-runner.js';
 import { NegotiationEvents, type NegotiationTouch } from './negotiation-events.js';
@@ -492,6 +493,46 @@ export class NegotiationsService implements SweepTask {
     for (const v of vs) await this.closeIfSoldOut(tx, v.id, v.stock, null, now, touched);
   }
 
+  // ---------- used by OrdersService, inside its own transaction ----------
+  /**
+   * Locks the negotiation (the caller has already locked the size row, I-15), fires anything already due so a lapsed
+   * agreement is seen as lapsed, and reports what an order may be placed against.
+   */
+  async lockAgreementForPurchase(
+    tx: Tx,
+    id: string,
+    now: number,
+    touched: NegotiationTouch[],
+  ): Promise<{ buyerUserId: string; listingId: string; variantId: string; status: Negotiation['status']; price: Paise | null; dealAccess: DealAccess | null } | null> {
+    const [row] = await tx.select().from(negotiations).where(eq(negotiations.id, id)).for('update');
+    if (!row) return null;
+    const c = await this.context(tx, row);
+    await this.stepDue(tx, c, now, touched);
+    return {
+      buyerUserId: c.n.buyerId,
+      listingId: c.n.listingId,
+      variantId: c.n.variantId,
+      status: c.n.status,
+      price: c.n.agreement?.price ?? null,
+      dealAccess: c.n.agreement?.dealAccess ?? null,
+    };
+  }
+
+  /** The agreement is used up by an order: the negotiation becomes PURCHASED and its held unit is consumed. */
+  async completePurchase(tx: Tx, id: string, now: number, touched: NegotiationTouch[]): Promise<void> {
+    const [row] = await tx.select().from(negotiations).where(eq(negotiations.id, id)).for('update');
+    if (!row) throw new AppError(404, 'NOT_FOUND', 'Negotiation not found.');
+    const c = await this.context(tx, row);
+    await this.persist(tx, c, markPurchased(c.n, now));
+    await tx.update(reservations).set({ status: 'CONSUMED' }).where(and(eq(reservations.negotiationId, id), eq(reservations.status, 'ACTIVE')));
+    touched.push(this.touch(c));
+  }
+
+  /** After an order takes a unit: if the size has no free unit left, the other open offers on it close (SOLD_OUT). */
+  async closeOffersIfSoldOut(tx: Tx, variantId: string, stock: number, exceptId: string | null, now: number, touched: NegotiationTouch[]): Promise<void> {
+    await this.closeIfSoldOut(tx, variantId, stock, exceptId, now, touched);
+  }
+
   publish(touched: NegotiationTouch[]): void {
     this.events.emit(touched);
   }
@@ -519,9 +560,12 @@ export class NegotiationsService implements SweepTask {
     ]);
     const lBy = new Map(ls.map((l) => [l.id, l]));
     const vBy = new Map(vs.map((v) => [v.id, v.label]));
+    const negIds = rows.map((r) => r.n.id);
+    const placed = negIds.length ? await this.db.select({ id: orders.id, negotiationId: orders.negotiationId }).from(orders).where(inArray(orders.negotiationId, negIds)) : [];
+    const orderBy = new Map(placed.map((o) => [o.negotiationId as string, o.id]));
     return rows.map((r) => {
       const l = lBy.get(r.n.listingId)!;
-      return { ...r, listing: l, variantLabel: vBy.get(r.n.variantId) ?? 'Removed size', coverUrl: covers.get(l.id) ?? null };
+      return { ...r, orderId: orderBy.get(r.n.id) ?? null, listing: l, variantLabel: vBy.get(r.n.variantId) ?? 'Removed size', coverUrl: covers.get(l.id) ?? null };
     });
   }
 
@@ -530,6 +574,7 @@ export class NegotiationsService implements SweepTask {
     const view = buyerNegotiationView(n, x.listing.channel);
     return {
       ...view,
+      orderId: x.orderId,
       listing: { id: x.listing.id, title: x.listing.title, price: x.listing.pricePaise, coverUrl: x.coverUrl, variantLabel: x.variantLabel, sellerName: x.sellerName },
     };
   }

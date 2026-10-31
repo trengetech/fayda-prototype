@@ -3,12 +3,15 @@ import { formatRupees } from '@fayda/domain';
 import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
+
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
-import { bargainingLabel, NOT_YET, sizeNote } from '../../src/listing-view';
+import { bargainingLabel, sizeNote } from '../../src/listing-view';
+import { openExternal } from '../../src/orders';
+import { ratingLine } from '../../src/stars';
 import { MediaCarousel } from '../../src/media-carousel';
 import { OfferSheet } from '../../src/offer-sheet';
 
-/** The product page: media, price, sizes and the bargaining label. Make offer works; Buy is shown but does not work yet (orders arrive in M3.4). */
+/** The product page: media, price, sizes, seller card and the bargaining label. Buy opens checkout (direct) or the seller's website; Make offer opens the offer sheet. */
 export default function ListingScreen() {
   const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -16,6 +19,7 @@ export default function ListingScreen() {
   const l = q.data;
   const router = useRouter();
   const [offering, setOffering] = useState(false);
+  const [siteNote, setSiteNote] = useState<string | null>(null);
 
   return (
     <ScrollView
@@ -42,7 +46,12 @@ export default function ListingScreen() {
               <AppText weight="extrabold" size={18}>{formatRupees(l.price)}</AppText>
               {l.soldOut ? <Badge label="Sold out" tone="danger" /> : <Badge label={bargainingLabel(l.bargaining)} tone={l.bargaining.acceptsOffers ? 'accent' : 'info'} />}
             </View>
-            <AppText tone="muted" size={13}>{l.seller.name} · {l.seller.area}, {l.seller.city}</AppText>
+            <Card>
+              <AppText weight="bold">{l.seller.name}</AppText>
+              <AppText tone="muted" size={13}>{l.seller.area}, {l.seller.city} · {ratingLine(l.seller.rating, l.seller.reviewCount)}</AppText>
+              <AppText tone="muted" size={13}>Confirms payment within {l.seller.slaConfirmHours === 1 ? '1 hour' : `${l.seller.slaConfirmHours} hours`} · ships within {l.seller.slaShipDays === 1 ? '1 day' : `${l.seller.slaShipDays} days`}</AppText>
+              <AppText tone="muted" size={12}>{l.seller.record.completed} of {l.seller.record.orders} orders delivered · {l.seller.record.cancelled} cancelled · {l.seller.record.expired} not confirmed in time</AppText>
+            </Card>
 
             <Card>
               <AppText weight="bold">Sizes</AppText>
@@ -62,9 +71,18 @@ export default function ListingScreen() {
             {l.description ? <AppText>{l.description}</AppText> : null}
 
             <Card>
-              <Button title="Buy" disabled onPress={() => {}} />
+              {l.checkout.channel === 'WEBSITE' ? (
+                <Button
+                  title="Buy on the seller’s website"
+                  disabled={l.soldOut || !l.checkout.productUrl}
+                  onPress={() => void openExternal(l.checkout.productUrl ?? '').then((ok) => setSiteNote(ok ? null : 'The website could not be opened. Try again from your browser.'))}
+                />
+              ) : (
+                <Button title="Buy" disabled={l.soldOut} onPress={() => router.push(`/checkout?listingId=${l.id}` as never)} />
+              )}
               {l.bargaining.acceptsOffers && !l.soldOut ? <Button title="Make offer" variant="outline" onPress={() => setOffering((o) => !o)} /> : null}
-              <AppText tone="muted" size={12}>{NOT_YET}</AppText>
+              {l.checkout.channel === 'WEBSITE' ? <AppText tone="muted" size={12}>This seller sells on their own website. Fayda does not handle that purchase. To use an agreed price, make an offer and use the code you get.</AppText> : <AppText tone="muted" size={12}>You pay the seller directly. Fayda does not handle payments or delivery.</AppText>}
+              {siteNote ? <AppText tone="danger" size={12} accessibilityRole="alert">{siteNote}</AppText> : null}
             </Card>
             {offering && l.bargaining.acceptsOffers ? <OfferSheet listing={l} onSent={(nid) => { setOffering(false); router.push(`/negotiation/${nid}` as never); }} /> : null}
           </View>

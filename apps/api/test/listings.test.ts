@@ -257,7 +257,8 @@ describe('what buyers can see', () => {
       for (const secret of ['SECRETCODE', 'secretupi', 'autoAccept', 'autoDecline', 'autoCounter', 'dealCodes', '"rules"', '111100', '133300', '77700', 'upi']) expect(text, secret).not.toContain(secret);
     }
     expect(detail.body.bargaining).toEqual({ mode: 'BOTH', acceptsOffers: true, expiryMinutes: 1440 });
-    expect(detail.body.checkout).toEqual({ channel: 'WEBSITE', productUrl: 'https://shop.example/p' });
+    // A website listing offers no direct payment methods, and never says what the seller's payment details are.
+    expect(detail.body.checkout).toEqual({ channel: 'WEBSITE', productUrl: 'https://shop.example/p', payMethods: [] });
     expect(detail.body.variants.map((v: Json) => Object.keys(v).sort())).toEqual([['available', 'id', 'label', 'low'], ['available', 'id', 'label', 'low']]);
     expect(detail.body.seller).toMatchObject({ name: 'Sana Studio', handle: 'sanastudio' });
   });

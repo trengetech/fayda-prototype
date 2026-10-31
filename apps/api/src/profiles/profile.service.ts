@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { AppAudience, BuyerProfile, BuyerProfileInput, PaymentInput, ProfileStatus, SellerProfile, SellerShopInput } from '@fayda/contracts';
+import { MAX_ADDRESSES, type AddressInput, type AppAudience, type BuyerProfile, type BuyerProfileInput, type NewAddress, type PaymentInput, type ProfileStatus, type SellerProfile, type SellerShopInput } from '@fayda/contracts';
 import {
   RULES,
   missingBuyerFields,
@@ -12,13 +12,14 @@ import {
   validateSellerShop,
   type Clock,
 } from '@fayda/domain';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, count, eq, ne } from 'drizzle-orm';
 import { AppError } from '../common/app-error.js';
 import { CLOCK } from '../common/clock.js';
 import { DbService } from '../db/db.service.js';
 import { MediaService } from '../media/media.service.js';
 import { buyerAddresses, buyerProfiles, sellerPaymentProfiles, sellers, users } from '../db/schema.js';
 
+type Tx = Parameters<Parameters<DbService['db']['transaction']>[0]>[0];
 const ms = (d: Date | null): number | null => (d ? d.getTime() : null);
 const invalid = (fields: Record<string, string>): AppError => new AppError(400, 'VALIDATION', 'Check the highlighted fields.', fields);
 
@@ -103,6 +104,67 @@ export class ProfileService {
     if (Object.keys(c.errors).length) throw invalid(c.errors);
     await this.db.update(buyerProfiles).set({ contactPhone: c.clean.phone, contactWhatsapp: c.clean.whatsapp }).where(eq(buyerProfiles.userId, userId));
     return this.getBuyer(userId);
+  }
+
+  // ---------- buyer addresses ----------
+  /** Cleans an address after the domain check; throws the field errors as they are. */
+  private cleanAddress(a: { name: string; line1: string; line2: string; pin: string; city: string; state: string }) {
+    const errors = validateAddress(a);
+    if (Object.keys(errors).length) throw invalid(errors);
+    return { name: a.name.trim(), line1: a.line1.trim(), line2: a.line2.trim(), pin: a.pin.trim(), city: a.city.trim(), state: a.state.trim() };
+  }
+
+  /**
+   * Runs one change to a buyer's addresses under a lock on their profile row, so two taps at once cannot go past the limit or
+   * leave the default pointing at a deleted address.
+   */
+  private async changeAddresses(userId: string, fn: (tx: Tx, profile: typeof buyerProfiles.$inferSelect) => Promise<void>): Promise<BuyerProfile> {
+    await this.db.transaction(async (tx) => {
+      const [p] = await tx.select().from(buyerProfiles).where(eq(buyerProfiles.userId, userId)).for('update');
+      if (!p) throw new AppError(403, 'NO_PROFILE', 'Complete your profile first.');
+      await fn(tx, p);
+    });
+    return this.getBuyer(userId);
+  }
+
+  async addAddress(userId: string, input: NewAddress): Promise<BuyerProfile> {
+    const row = this.cleanAddress(input);
+    return this.changeAddresses(userId, async (tx, p) => {
+      const [n] = await tx.select({ n: count() }).from(buyerAddresses).where(eq(buyerAddresses.userId, userId));
+      if ((n?.n ?? 0) >= MAX_ADDRESSES) throw new AppError(400, 'VALIDATION', `You can save up to ${MAX_ADDRESSES} addresses. Delete one first.`, { address: `You can save up to ${MAX_ADDRESSES} addresses.` });
+      const [made] = await tx.insert(buyerAddresses).values({ userId, ...row }).returning({ id: buyerAddresses.id });
+      if (!p.defaultAddressId || input.makeDefault) await tx.update(buyerProfiles).set({ defaultAddressId: made!.id }).where(eq(buyerProfiles.userId, userId));
+    });
+  }
+
+  async updateAddress(userId: string, id: string, input: AddressInput): Promise<BuyerProfile> {
+    const row = this.cleanAddress(input);
+    return this.changeAddresses(userId, async (tx) => {
+      const done = await tx.update(buyerAddresses).set(row).where(and(eq(buyerAddresses.id, id), eq(buyerAddresses.userId, userId))).returning({ id: buyerAddresses.id });
+      if (!done.length) throw new AppError(404, 'NOT_FOUND', 'Address not found.');
+    });
+  }
+
+  async deleteAddress(userId: string, id: string): Promise<BuyerProfile> {
+    return this.changeAddresses(userId, async (tx, p) => {
+      const all = await tx.select({ id: buyerAddresses.id }).from(buyerAddresses).where(eq(buyerAddresses.userId, userId)).orderBy(buyerAddresses.createdAt);
+      if (!all.some((a) => a.id === id)) throw new AppError(404, 'NOT_FOUND', 'Address not found.');
+      if (all.length === 1) throw new AppError(409, 'LAST_ADDRESS', 'You need at least one delivery address. Add another first, or edit this one.');
+      // Orders keep their own copy of the address, so removing one never changes an order.
+      await tx.delete(buyerAddresses).where(and(eq(buyerAddresses.id, id), eq(buyerAddresses.userId, userId)));
+      if (p.defaultAddressId === id) {
+        const next = all.find((a) => a.id !== id)!;
+        await tx.update(buyerProfiles).set({ defaultAddressId: next.id }).where(eq(buyerProfiles.userId, userId));
+      }
+    });
+  }
+
+  async setDefaultAddress(userId: string, id: string): Promise<BuyerProfile> {
+    return this.changeAddresses(userId, async (tx) => {
+      const [a] = await tx.select({ id: buyerAddresses.id }).from(buyerAddresses).where(and(eq(buyerAddresses.id, id), eq(buyerAddresses.userId, userId))).limit(1);
+      if (!a) throw new AppError(404, 'NOT_FOUND', 'Address not found.');
+      await tx.update(buyerProfiles).set({ defaultAddressId: id }).where(eq(buyerProfiles.userId, userId));
+    });
   }
 
   // ---------- seller ----------

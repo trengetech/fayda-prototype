@@ -6,3 +6,6 @@ import { configure } from '@testing-library/react-native';
 // can take several seconds, so the defaults (5 s per test, 1 s per findBy) fail by timing, not by a real fault.
 jest.setTimeout(20_000);
 configure({ asyncUtilTimeout: 5_000 });
+
+// The clipboard is native; tests read what was copied from this mock (`jest.requireMock('expo-clipboard').setStringAsync`).
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true) }));

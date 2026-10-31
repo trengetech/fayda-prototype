@@ -18,7 +18,12 @@ export const AddressInputSchema = z
     state: z.string().max(60),
   })
   .openapi('AddressInput');
+export type AddressInput = z.infer<typeof AddressInputSchema>;
 export const AddressSchema = AddressInputSchema.extend({ id: z.string() }).openapi('Address');
+/** Adds a delivery address. The first address is always the default; `makeDefault` moves the default to this one. */
+export const NewAddressSchema = AddressInputSchema.extend({ makeDefault: z.boolean().nullish() }).openapi('NewAddress');
+export type NewAddress = z.infer<typeof NewAddressSchema>;
+export const MAX_ADDRESSES = 10;
 
 // ---------- buyer ----------
 export const BuyerProfileInputSchema = z

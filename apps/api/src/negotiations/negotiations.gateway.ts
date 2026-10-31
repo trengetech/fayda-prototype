@@ -26,6 +26,7 @@ export class NegotiationsGateway implements OnGatewayInit, OnGatewayConnection, 
   @WebSocketServer() server!: Server;
   private readonly log = new Logger('Realtime');
   private unsubscribe: (() => void) | null = null;
+  private unsubscribeEvents: (() => void) | null = null;
 
   constructor(
     @Inject(TokenService) private readonly tokens: TokenService,
@@ -43,6 +44,13 @@ export class NegotiationsGateway implements OnGatewayInit, OnGatewayConnection, 
       );
     });
     this.unsubscribe = this.events.subscribe((touches) => this.fanOut(touches));
+    this.unsubscribeEvents = this.events.subscribeEvents((events) => {
+      if (!this.server) return;
+      for (const e of events) {
+        if (e.buyerUserId) this.server.to(roomFor('buyer', e.buyerUserId)).emit(e.name, e.payload);
+        if (e.sellerUserId) this.server.to(roomFor('seller', e.sellerUserId)).emit(e.name, e.payload);
+      }
+    });
   }
 
   handleConnection(socket: AuthedSocket): void {
@@ -52,6 +60,7 @@ export class NegotiationsGateway implements OnGatewayInit, OnGatewayConnection, 
 
   onModuleDestroy(): void {
     this.unsubscribe?.();
+    this.unsubscribeEvents?.();
   }
 
   private async authenticate(socket: AuthedSocket): Promise<boolean> {

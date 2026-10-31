@@ -1,5 +1,12 @@
 import { io } from 'socket.io-client';
-import type { NegotiationEventPayload } from '@fayda/contracts/schemas';
+import type { ChatEventPayload, NegotiationEventPayload, OrderEventPayload, RequestEventPayload } from '@fayda/contracts/schemas';
+
+/** Everything the socket can say. Each carries ids only. */
+export type RealtimeEvent =
+  | ({ name: 'negotiation.updated' } & NegotiationEventPayload)
+  | ({ name: 'order.updated' } & OrderEventPayload)
+  | ({ name: 'chat.updated' } & ChatEventPayload)
+  | ({ name: 'request.updated' } & RequestEventPayload);
 
 export interface RealtimeOptions {
   baseUrl: string;
@@ -9,6 +16,8 @@ export interface RealtimeOptions {
   refreshAccessToken: () => Promise<string | null>;
   /** A negotiation this person is part of changed. Refetch it. */
   onUpdate: (e: NegotiationEventPayload) => void;
+  /** Any event, including orders, chat and requests (negotiation events arrive here too). */
+  onEvent?: (e: RealtimeEvent) => void;
   /** The socket (re)connected. Updates may have been missed while it was down, so refetch what is on screen. */
   onConnect?: () => void;
 }
@@ -30,7 +39,13 @@ export function startRealtime(opts: RealtimeOptions): { close(): void } {
     refusedOnce = false;
     opts.onConnect?.();
   });
-  socket.on('negotiation.updated', (e: NegotiationEventPayload) => opts.onUpdate(e));
+  socket.on('negotiation.updated', (e: NegotiationEventPayload) => {
+    opts.onUpdate(e);
+    opts.onEvent?.({ name: 'negotiation.updated', ...e });
+  });
+  socket.on('order.updated', (e: OrderEventPayload) => opts.onEvent?.({ name: 'order.updated', ...e }));
+  socket.on('chat.updated', (e: ChatEventPayload) => opts.onEvent?.({ name: 'chat.updated', ...e }));
+  socket.on('request.updated', (e: RequestEventPayload) => opts.onEvent?.({ name: 'request.updated', ...e }));
   socket.on('connect_error', (err) => {
     // A refused token ends automatic retries (the server said no), so refresh once and connect again by hand.
     if (err.message !== 'UNAUTHENTICATED' || refusedOnce) return;

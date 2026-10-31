@@ -5,6 +5,3 @@ export const bargainingLabel = (b: BuyerListing['bargaining']): string => (b.acc
 
 export type SizeNote = 'Sold out' | 'Few left' | null;
 export const sizeNote = (v: BuyerListing['variants'][number]): SizeNote => (!v.available ? 'Sold out' : v.low ? 'Few left' : null);
-
-/** The honest reason the Buy button does nothing yet. Offers work; buying at a price arrives with orders. */
-export const NOT_YET = 'Buying is not available yet. You can make an offer on listings that take them.';

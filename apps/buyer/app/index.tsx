@@ -1,4 +1,4 @@
-import { NetworkError, useBuyerNegotiations, useHealth, useMeta } from '@fayda/api-client';
+import { NetworkError, useBuyerNegotiations, useBuyerOrders, useHealth, useMeta, useThreads } from '@fayda/api-client';
 import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
 import { Link, useRouter } from 'expo-router';
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
@@ -12,6 +12,8 @@ export default function StatusScreen() {
   const health = useHealth();
   const meta = useMeta();
   const replies = (useBuyerNegotiations().data?.items ?? []).filter((n) => n.canRespond).length;
+  const orderUnread = useBuyerOrders().data?.unread ?? 0;
+  const messageUnread = useThreads('buyer').data?.unread ?? 0;
   const refetch = () => void Promise.all([health.refetch(), meta.refetch()]);
   const error = health.error ?? meta.error;
   const loading = (health.isPending || meta.isPending) && !error;
@@ -27,6 +29,12 @@ export default function StatusScreen() {
       <AccountCard />
       <Button title="Browse listings" onPress={() => router.push('/feed')} />
       <Button title={replies ? `My offers (${replies} to answer)` : 'My offers'} variant="outline" onPress={() => router.push('/offers' as never)} />
+      <Button title={orderUnread ? `My orders (${orderUnread} new ${orderUnread === 1 ? 'message' : 'messages'})` : 'My orders'} variant="outline" onPress={() => router.push('/orders' as never)} />
+      <Button title={messageUnread ? `Messages (${messageUnread} new)` : 'Messages'} variant="outline" onPress={() => router.push('/messages' as never)} />
+      <Button title="Your requests" variant="outline" onPress={() => router.push('/requests' as never)} />
+      <Button title="Delivery addresses" variant="ghost" onPress={() => router.push('/addresses' as never)} />
+      <Button title="Contact for orders" variant="ghost" onPress={() => router.push('/contact' as never)} />
+      <Button title="User agreement" variant="ghost" onPress={() => router.push('/agreement' as never)} />
 
       {loading ? (
         <Card>

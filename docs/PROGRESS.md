@@ -109,6 +109,49 @@ Decisions D11 to D18 are merged into `docs/DECISIONS.md`. Founder choices: revie
 
 Next, when you are ready: M3.1 needs your answers on dev OTP, separate sessions per app, and `jose` plus `@fastify/rate-limit`.
 
+## M3.4: orders, chat, reviews, requests (31 Oct 2026): built, tested, deployed and emulator-checked; not yet run on a physical phone
+
+Founder decisions used: complete scope (orders plus chat, reviews and buyer requests, D18); order numbers must be extendable and never run out (I-17); an agreement that lapses without an order only frees its unit; a paused listing refuses an order. Branch `m3.4-orders`.
+
+### What was built
+- **Database (migration 0006, applied to the test database only):** `orders` (with a bigint identity `seq` from 100001, snapshots of price, address and listing, unique per agreement), `chat_threads`, `chat_messages`, `reviews`, `review_media`, `buyer_requests`, `request_media`, `request_responses`, `response_media`; `notifications` gained order, thread and request ids; media purposes now include REVIEW, REQUEST and CHAT.
+- **API:**
+  - Orders: buyer place, list, read, payment QR (own PLACED UPI order only); seller list, read, confirm, ship, deliver, cancel; seller record (own and public). Placement takes a unit, or consumes an agreement's reservation and marks the negotiation `PURCHASED`; a website deal records an order with no address; the sweep expires unconfirmed orders at 48 h and restocks once; a lazy check does the same on read.
+  - Chat (both apps): threads, messages with a retry-safe `clientKey`, read marks, unread counts; an order thread is created with the order.
+  - Reviews: one per order, only after `CONFIRMED`, editable; public shop reviews without buyer surnames or phones.
+  - Requests: create (reach counted by category, buyer's own shop excluded), respond (one per seller), want (opens a chat) or decline, close, 7-day expiry; a listing published from a wanted response is posted into that chat.
+  - Buyer media uploads (`/v1/buyer/media/*`); realtime `order.updated`, `chat.updated`, `request.updated` (ids only).
+  - The buyer listing now carries seller rating, declared times, categories and public record, and `checkout.payMethods` (names only); a negotiation carries its `orderId` once purchased.
+- **api-client:** methods, hooks, query keys and realtime invalidation for all of the above.
+- **Buyer app:** checkout, order screen (view-only; payment card with order number, UPI deep link with the no-UPI-app case, QR, bank, link; contact card; review form), My orders, Messages and chat, Requests (form, list, detail), contact and agreement screens, seller card with rating.
+- **Seller app:** Orders (four tabs, confirm, optional shipment, deliver, cancel with reason, contact card), Messages and chat (share a listing), Requests (New and Responded, respond with a photo, create a listing from a request), Shop (what buyers see, public record, reviews).
+
+### Tests: 496 passing (typecheck and lint clean, all 9 packages)
+domain 70, contracts 14, api 176 (against the real `fayda-test` database), api-client 39, ui 6, buyer 97, seller 93. The apps ran against fake servers only.
+- New API tests: orders 32, chat 9, reviews 12, requests 14 (and others unchanged).
+- **Break-it checks** (recipe in CLAUDE.md): orders, 12 deliberate breaks, all caught (size-row lock, restock on out-of-stock, payment shown after confirm, contact after close, agreed price ignored, agreement not used up, paused listing, another buyer reads an order, QR to any buyer, offers not closed when sold out, stock not taken). Only the two-buyer race catches a missing size-row lock; the agreement-versus-plain-buy race passes without it. Community, 11 breaks, 10 caught; the miss (dropping `status = 'OPEN'` from the request expiry query) behaves the same, but closed requests could fill the 100-row sweep batch. The seller app's cancel-reason guard was also broken and caught.
+
+### Checked on the Android emulator against the live API (31 Oct 2026)
+- A script on the live API: placed an order (a retry with the same key returned the same order), payment details shown while `PLACED` and hidden after confirm, contact numbers only while open, order chat thread, a message, a review after confirm, the public seller record, request reach, and cancel with "Out of stock" (no restock).
+- Buyer app (new APK): home shows My orders, Messages, Your requests, Delivery addresses; the product page shows ★ rating, declared times and the public record; Buy and Make offer both enabled; checkout offered only UPI (the only method that seller has), the saved address and "Add or change address"; placing the order made **FD-100002**; the payment card showed the order number, UPI ID, the seller's private QR (loaded through the order-scoped route), "Pay in a UPI app" (with no UPI app on the emulator it showed the handled message with the UPI ID and note), and one-tap Copy ("Copied", and Android's clipboard bubble showed the text).
+- Seller app (new APK): home showed "1 order needs confirming" and "1 unread message"; the Orders tabs and counts were right; the order screen showed the address, contact card and confirm countdown; "Payment received" moved it to CONFIRMED with "Add shipment details" and "Mark delivered" next.
+- **Found on the emulator, fixed:** the order row's status label squeezed the title and number into a narrow column (seller; the buyer row had the same pattern). Labels now sit under the text. Tests could not see this.
+- **Second emulator round (1 Nov 2026):** checked by hand on the live API: shipment details (seller saves, buyer sees courier and tracking), review (4 stars posted; the seller's rating moved to 4.5 from 2 reviews), order chat both ways with the unread badge, the address editor (validation, bad PIN rejected, add, make default, delete with confirm, deleting the default moves it, the only address cannot be deleted), buyer request (photo required, "Send to 1 seller" reach count), seller sees it and replies with a photo, buyer sees the reply and photo.
+- **Found on the emulator, fixed (1 Nov):** every buyer photo upload (chat, review, request) failed with "check your connection". The buyer picker re-encodes (quality 0.8) while the app declared the picker's size for the original, so the API correctly answered 400 UPLOAD_MISMATCH. The app now measures and names the file it actually sends. Two tests added (one fails on the old logic); confirmed on the emulator with a new build. The seller picker uses quality 1 and was not affected. Not yet confirmed on a physical phone.
+- Seen, not fixed: after a form field is corrected, its old validation message stays until the next Save (address form). One shipment save timed out once (8 s) and worked on retry, taken as emulator network noise.
+- Not exercised by hand: a second device, real UPI apps, WhatsApp, Call, a photo from a real camera.
+
+### Not done (honest list)
+- **Deployed 31 Oct 2026** after your go-ahead: migration 0006 is on the dev database and the API (with the address endpoints) is on the VM, healthy.
+- **Not tried on a physical phone.** UPI intents with a real UPI app, WhatsApp, Call, the photo copy when creating a listing from a request, and review photo upload are untested on a device.
+- Website Buy now at list price creates no order and no visit counter exists (O-5).
+- **Added after review:** an address editor (add, edit, delete, make default, up to 10; checkout links to it) and one-tap copy with `expo-clipboard` ("Copied" shown). Clipboard and the editor are tested with mocks and fake servers, not on a device.
+- Review, request and chat photos are not access-controlled (I-19).
+- The seller record reads every order of the seller per product-page view; fine now, needs an aggregate later.
+- Messages sent in the same millisecond have no guaranteed order.
+- CI has not run on this branch (PR needed).
+- The shipment contract uses `courier`/`trackingNo`; the domain uses `carrier`/`trackingId`; the API and the seller app map between them.
+
 ## M3.3: bargaining (31 Oct 2026): approved by the founder; emulator-tested; phone test still to do
 
 Branch `m3.3-bargaining`; pull request into `dev` opened by the founder, CI clean. Founder decisions used: **two listing modes** (`BUY_NOW`, `BOTH`), bargaining always private, no public offers (DECISIONS B-1); **offer expiry per listing: 30 min, 1 h, 3 h, 6 h, 24 h** (offers only). Socket.IO 4.8.4 added (TECH_STACK).

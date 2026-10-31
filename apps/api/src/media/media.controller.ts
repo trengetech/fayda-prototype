@@ -24,3 +24,23 @@ export class MediaController {
     return this.media.complete(who.userId, id);
   }
 }
+
+/** The buyer's side of an upload (review and request photos, chat photos). Same three steps as the seller's. */
+@Controller('buyer/media')
+@UseGuards(AuthGuard)
+@Audience('buyer')
+export class BuyerMediaController {
+  constructor(@Inject(MediaService) private readonly media: MediaService) {}
+
+  @Post('intents')
+  @HttpCode(201)
+  intent(@Auth() who: AccessClaims, @Body(new ZodPipe(MediaIntentInputSchema)) body: MediaIntentInput): Promise<MediaIntent> {
+    return this.media.createIntent(who.userId, body, 'buyer');
+  }
+
+  @Post(':id/complete')
+  @HttpCode(200)
+  complete(@Auth() who: AccessClaims, @Param('id', new ParseUUIDPipe()) id: string): Promise<Media> {
+    return this.media.complete(who.userId, id);
+  }
+}

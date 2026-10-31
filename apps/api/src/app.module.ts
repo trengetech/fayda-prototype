@@ -13,12 +13,20 @@ import { CLOCK } from './common/clock.js';
 import { BuyerCatalogController, SellerListingsController } from './listings/listings.controller.js';
 import { ListingsService } from './listings/listings.service.js';
 import { BuyerNegotiationsController, SellerNegotiationsController } from './negotiations/negotiations.controller.js';
+import { BuyerOrdersController, PublicShopsController, SellerOrdersController } from './orders/orders.controller.js';
+import { OrdersService } from './orders/orders.service.js';
 import { NegotiationEvents } from './negotiations/negotiation-events.js';
 import { NegotiationsGateway } from './negotiations/negotiations.gateway.js';
 import { NegotiationsService } from './negotiations/negotiations.service.js';
-import { MediaController } from './media/media.controller.js';
+import { BuyerMediaController, MediaController } from './media/media.controller.js';
 import { DiskMediaStorage, MEDIA_STORAGE } from './media/media-storage.js';
 import { MediaService } from './media/media.service.js';
+import { ChatService } from './chat/chat.service.js';
+import { BuyerChatController, SellerChatController } from './chat/chat.controller.js';
+import { BuyerReviewsController, SellerReviewsController, ShopReviewsController } from './reviews/reviews.controller.js';
+import { ReviewsService } from './reviews/reviews.service.js';
+import { BuyerRequestsController, SellerRequestsController } from './requests/requests.controller.js';
+import { RequestsService } from './requests/requests.service.js';
 import { IdempotencyService } from './common/idempotency.service.js';
 import { APP_CONFIG, type AppConfig } from './config.js';
 import { DbService } from './db/db.service.js';
@@ -31,7 +39,7 @@ export class AppModule {
     return {
       module: AppModule,
       imports: [ScheduleModule.forRoot()],
-      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController, SellerListingsController, BuyerCatalogController, BuyerNegotiationsController, SellerNegotiationsController],
+      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController, BuyerMediaController, SellerListingsController, BuyerCatalogController, BuyerNegotiationsController, SellerNegotiationsController, BuyerOrdersController, SellerOrdersController, PublicShopsController, BuyerChatController, SellerChatController, BuyerReviewsController, SellerReviewsController, ShopReviewsController, BuyerRequestsController, SellerRequestsController],
       providers: [
         { provide: APP_CONFIG, useValue: config },
         { provide: CLOCK, useValue: clock },
@@ -45,12 +53,16 @@ export class AppModule {
         ListingsService,
         NegotiationEvents,
         NegotiationsService,
+        ChatService,
+        ReviewsService,
+        RequestsService,
+        OrdersService,
         NegotiationsGateway,
         AuthService,
         AuthGuard,
         { provide: AUTH_VERIFIER, useClass: DevOtpVerifier },
       ],
-      exports: [DbService, IdempotencyService, SweepRunner, CLOCK, APP_CONFIG, MediaService, NegotiationsService, NegotiationEvents],
+      exports: [DbService, IdempotencyService, SweepRunner, CLOCK, APP_CONFIG, MediaService, NegotiationsService, NegotiationEvents, ChatService, ReviewsService, RequestsService, OrdersService],
     };
   }
 }

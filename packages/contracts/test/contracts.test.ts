@@ -38,14 +38,21 @@ describe('OpenAPI', () => {
     expect(doc.openapi).toBe('3.1.0');
     expect(Object.keys(doc.paths ?? {}).sort()).toEqual(
       [
-        '/v1/auth/logout', '/v1/auth/otp/request', '/v1/auth/otp/verify', '/v1/auth/refresh',
-        '/v1/buyer/feed', '/v1/buyer/listings/{id}', '/v1/buyer/listings/{id}/offers', '/v1/buyer/profile', '/v1/buyer/profile/contact',
-        '/v1/buyer/negotiations', '/v1/buyer/negotiations/{id}', '/v1/buyer/negotiations/{id}/accept', '/v1/buyer/negotiations/{id}/counter',
-        '/v1/buyer/negotiations/{id}/decline', '/v1/buyer/negotiations/{id}/withdraw',
-        '/v1/health', '/v1/me', '/v1/media/upload/{id}', '/v1/media/{id}', '/v1/meta',
-        '/v1/seller/listings', '/v1/seller/listings/{id}', '/v1/seller/listings/{id}/status',
-        '/v1/seller/negotiations', '/v1/seller/negotiations/{id}', '/v1/seller/negotiations/{id}/accept', '/v1/seller/negotiations/{id}/counter',
-        '/v1/seller/negotiations/{id}/decline', '/v1/seller/media/intents', '/v1/seller/media/{id}/complete', '/v1/seller/payment', '/v1/seller/profile',
+        '/v1/auth/logout', '/v1/auth/otp/request', '/v1/auth/otp/verify', '/v1/auth/refresh', '/v1/buyer/addresses', '/v1/buyer/addresses/{id}', '/v1/buyer/addresses/{id}/default', '/v1/buyer/feed', '/v1/buyer/listings/{id}',
+        '/v1/buyer/listings/{id}/offers', '/v1/buyer/negotiations', '/v1/buyer/negotiations/{id}', '/v1/buyer/negotiations/{id}/accept',
+        '/v1/buyer/negotiations/{id}/counter', '/v1/buyer/negotiations/{id}/decline', '/v1/buyer/negotiations/{id}/withdraw',
+        '/v1/buyer/orders', '/v1/buyer/orders/{id}', '/v1/buyer/orders/{id}/payment-qr', '/v1/buyer/orders/{id}/review',
+        '/v1/buyer/profile', '/v1/buyer/profile/contact', '/v1/buyer/requests', '/v1/buyer/requests/reach', '/v1/buyer/requests/{id}',
+        '/v1/buyer/requests/{id}/close', '/v1/buyer/responses/{id}/decline', '/v1/buyer/responses/{id}/want', '/v1/buyer/threads',
+        '/v1/buyer/threads/{id}', '/v1/buyer/threads/{id}/messages', '/v1/buyer/threads/{id}/read', '/v1/health', '/v1/me',
+        '/v1/media/upload/{id}', '/v1/media/{id}', '/v1/meta', '/v1/seller/listings', '/v1/seller/listings/{id}',
+        '/v1/seller/listings/{id}/status', '/v1/seller/media/intents', '/v1/seller/media/{id}/complete', '/v1/seller/negotiations',
+        '/v1/seller/negotiations/{id}', '/v1/seller/negotiations/{id}/accept', '/v1/seller/negotiations/{id}/counter',
+        '/v1/seller/negotiations/{id}/decline', '/v1/seller/orders', '/v1/seller/orders/{id}', '/v1/seller/orders/{id}/cancel',
+        '/v1/seller/orders/{id}/confirm', '/v1/seller/orders/{id}/deliver', '/v1/seller/orders/{id}/ship', '/v1/seller/payment',
+        '/v1/seller/profile', '/v1/seller/record', '/v1/seller/requests', '/v1/seller/requests/{id}/responses', '/v1/seller/reviews',
+        '/v1/seller/threads', '/v1/seller/threads/{id}', '/v1/seller/threads/{id}/messages', '/v1/seller/threads/{id}/read',
+        '/v1/shops/{id}/record', '/v1/shops/{id}/reviews',
       ].sort(),
     );
   });
@@ -75,7 +82,7 @@ describe('listing and media contracts', () => {
     expect(MediaIntentSchema.safeParse({ ...base, upload: { method: 'POST', url: '/x', headers: {} } }).success).toBe(false);
   });
   it('strips anything a buyer schema does not name, so private fields cannot slip through', () => {
-    const seller = { id: 's', name: 'n', handle: 'h', area: 'a', city: 'c' };
+    const seller = { id: 's', name: 'n', handle: 'h', area: 'a', city: 'c', rating: null, reviewCount: 0 };
     const parsed = BuyerFeedSchema.parse({ items: [{ id: 'l', title: 't', price: 1, category: 'c', soldOut: false, acceptsOffers: true, coverUrl: null, hasVideo: false, seller, rules: { autoAcceptAt: 1 }, dealCodes: { accept: 'X' } }], nextCursor: null });
     expect(JSON.stringify(parsed)).not.toMatch(/rules|dealCodes|autoAccept/);
   });
