@@ -14,13 +14,13 @@ const config: ExpoConfig = {
   name: v.name,
   slug: 'fayda-seller',
   scheme: 'faydaseller',
-  version: '0.0.1',
+  version: '0.1.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
   android: {
     package: `com.fayda.seller${v.suffix}`,
-    versionCode: 1,
+    versionCode: 2,
     adaptiveIcon: { foregroundImage: './assets/icon.png', backgroundColor: '#111318' },
   },
   plugins: [

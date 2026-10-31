@@ -1,6 +1,6 @@
 # Progress
 
-**Where we are (31 Oct 2026):** the chat/contact/reviews/requests update (`docs/updates/`) has its pure rules built and tested in `packages/domain` (see "Update 2026-10-31" below); the API, database and app parts wait for M3.1 to M3.4. Before that: M3.0a done. M3.0b built and tested on an Android emulator; waiting for the founder to try the APKs on a real phone. M3.1 (identity) not started.
+**Where we are (31 Oct 2026): M3.1 (identity and profiles) is built and tested, awaiting your review.** The sign-in and onboarding parts of the chat/reviews/requests update are inside it; the chat, review and request screens and API wait for M3.4. Earlier note: the chat/contact/reviews/requests update (`docs/updates/`) has its pure rules built and tested in `packages/domain` (see "Update 2026-10-31" below); the API, database and app parts wait for M3.1 to M3.4. Before that: M3.0a done. M3.0b built and tested on an Android emulator; waiting for the founder to try the APKs on a real phone. M3.1 (identity) not started.
 
 ## M3.0a — Backend foundation (31 Oct 2026): built, awaiting your review
 
@@ -108,3 +108,36 @@ Decisions D11 to D18 are merged into `docs/DECISIONS.md`. Founder choices: revie
 | 1 to 8, 10 | **Not started** (need M3.1 to M3.4) |
 
 Next, when you are ready: M3.1 needs your answers on dev OTP, separate sessions per app, and `jose` plus `@fastify/rate-limit`.
+
+## M3.1: identity and profiles (31 Oct 2026): built, tested on an emulator, awaiting review
+
+Founder decisions used: dev OTP now; a separate session per app; `jose` and `@fastify/rate-limit` approved (D18, TECH_STACK).
+
+### What was built
+- **API (live on the VM):** `POST /v1/auth/otp/request`, `/auth/otp/verify`, `/auth/refresh`, `/auth/logout`, `GET /v1/me`; buyer `GET/PUT /v1/buyer/profile`, `PATCH /v1/buyer/profile/contact`; seller `GET/PUT /v1/seller/profile`, `PUT /v1/seller/payment`. Tables: `users` (unique phone), `sessions`, `buyer_profiles`, `buyer_addresses`, `sellers`, `seller_payment_profiles` (migration 0001, applied to dev and test).
+- **Sign-in:** the dev code `123456` behind an `AuthVerifier` interface; `/v1/meta` reports it as simulated and both apps say so on the code screen and in the banner. One user per phone number in both apps; one session per app per sign-in. Access token 15 minutes (HS256, `jose`); refresh token 90 days, stored hashed, rotating; replaying an old refresh token revokes the session. Logout ends the session at once. The API checks the session on every call. `/v1/buyer/*` and `/v1/seller/*` reject the other app's token (403 `WRONG_APP`).
+- **Limits:** 20 requests a minute per client address on `/v1/auth/*` (400 for everything else), and 5 wrong codes lock a number for 5 minutes.
+- **Profiles:** buyer name, address, contact phone or WhatsApp, and the user agreement (version `draft-2026-10`); seller step 1 and 2 (shop, categories, Maps link, optional Google and social links, contact, declared confirm and ship times) and step 3 (payment details and the Code of Conduct). Missing fields are reported as `profile.missing`, so an older account is asked for them rather than locked out.
+- **Apps:** sign-in, session restore from the Android Keystore, route gate (signed out, finish profile, home), buyer onboarding with the agreement dialog, seller 3-step onboarding with the Code of Conduct dialog, account card with Sign out. Offline at start shows "Can't reach the server" with Try again, not a sign-out.
+
+### Tests: 143 passing (typecheck and lint clean)
+domain 58, contracts 8, api 38, api-client 14, ui 6, buyer 14, seller 15. API tests run against the real `fayda-test` database. Checked by breaking the audience check and the session check on purpose: 3 tests failed, then passed once restored.
+
+### Acceptance (brief criteria 1 and 2, 10; M3.1 done-when)
+| # | Criterion | Result |
+|---|---|---|
+| 1 | A new buyer cannot finish sign-up without the agreement and a phone or WhatsApp number | **Pass** (API test, app test; on the emulator the form submitted only with the agreement ticked) |
+| 2 | A new seller cannot finish onboarding without a category, a valid Maps link, a contact number and both declared times; invalid Google, Instagram or Facebook links are rejected | **Pass** (API and app tests). Not clicked through end to end on a device |
+| 10 | Older accounts are asked for the new fields, not locked out | **Pass** (API test: a profile row without the new fields signs in and reports what is missing) |
+| M3.1 | Same number is the same user in both apps | **Pass** (API test; on the emulator the seller app accepted the buyer's number and showed seller onboarding) |
+| M3.1 | Dev-OTP sign-in in both apps | **Pass** on the emulator against the VM (buyer fully; seller to the start of onboarding) |
+| M3.1 | Session survives closing the app | **Pass** (buyer: force-stopped, reopened, signed in with no code) |
+| M3.1 | Seller payment step includes a **UPI QR upload and check** | **Not built.** It needs the media upload-intent flow and a QR-decoding library, which needs your approval (CLAUDE.md). Payment currently takes UPI ID, bank, payment link or website |
+
+### Known limits
+- **Not done on a physical phone**; emulator only, driven with scripted taps. The seller's steps 2 and 3 were not clicked through on the device (covered by app tests that use a fake server).
+- Wrong-code counts are kept in the API's memory. That is fine for one process; before running two, move them to the database.
+- A lost network reply during a token refresh makes the app sign out (the retry replays the old token, which is treated as theft). Rare, and safe.
+- Forms check shape on the phone and leave the detailed rules to the server, which sends field messages that the forms show.
+- The agreement and Code of Conduct texts are drafts and are labelled as such.
+- Test accounts `9000000001` and `9000000002` exist in the dev database.
