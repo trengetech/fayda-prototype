@@ -27,6 +27,9 @@ export interface SessionManager {
   signOut(): Promise<void>;
   /** Re-reads what is still missing from the profile (after saving a step). */
   refreshProfile(): Promise<void>;
+  /** For the real-time socket, which sets its own header: the current access token, and a way to renew it. */
+  getAccessToken(): string | null;
+  refreshAccessToken(): Promise<string | null>;
 }
 
 export interface SessionOptions {
@@ -109,6 +112,8 @@ export function createSessionManager(opts: SessionOptions): SessionManager {
       }
       await endSession();
     },
+    getAccessToken: () => accessToken,
+    refreshAccessToken: refreshAccess,
     async refreshProfile() {
       const me = await client.me();
       store.setState({ user: me.user, profile: me.profile });

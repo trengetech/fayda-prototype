@@ -1,4 +1,4 @@
-import { ApiProvider, SessionProvider, useSession } from '@fayda/api-client';
+import { ApiProvider, SessionProvider, useRealtime, useSession } from '@fayda/api-client';
 import { AppText, Button, PrototypeBanner, ThemeProvider, fontAssets, useTheme } from '@fayda/ui';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
@@ -16,6 +16,7 @@ void SplashScreen.preventAutoHideAsync();
 function Routes() {
   const { colors } = useTheme();
   const { status, profile } = useSession();
+  useRealtime();
   useEffect(() => {
     void sessionManager.restore();
   }, []);
@@ -40,6 +41,8 @@ function Routes() {
         <Stack.Screen name="index" />
         <Stack.Screen name="feed" />
         <Stack.Screen name="listing/[id]" />
+        <Stack.Screen name="offers" />
+        <Stack.Screen name="negotiation/[id]" />
         <Stack.Screen name="gallery" />
       </Stack.Protected>
     </Stack>

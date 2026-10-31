@@ -22,6 +22,20 @@
       "when": 1793426016449,
       "tag": "0002_bumpy_ultragirl",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793436599601,
+      "tag": "0003_smiling_thundra",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793436606677,
+      "tag": "0004_neat_william_stryker",
+      "breakpoints": true
     }
   ]
 }

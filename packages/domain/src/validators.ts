@@ -1,5 +1,5 @@
 import { isWholeRupees, type Paise } from './money.js';
-import { BARGAIN_MODES, CATEGORIES, IMAGE_MIMES, MEDIA_PURPOSES, RULES, VIDEO_MIMES } from './rules.js';
+import { BARGAIN_MODES, CATEGORIES, IMAGE_MIMES, MEDIA_PURPOSES, OFFER_EXPIRY_MINUTES, RULES, VIDEO_MIMES } from './rules.js';
 import type { BargainMode, DealAccess, DealCodes, PayMethod, PrivateRules } from './types.js';
 
 const PHONE_RE = /^[6-9]\d{9}$/;
@@ -193,7 +193,7 @@ export interface ListingDraft {
   price?: Paise;
   media?: unknown[];
   variants?: { id?: string; label?: string; stock?: number }[];
-  bargaining?: { mode?: string; expiryHours?: number };
+  bargaining?: { mode?: string; expiryMinutes?: number };
   /** Paise, whole rupees; null/undefined means "not set". */
   rules?: { autoAcceptAt?: Paise | null; autoDeclineBelow?: Paise | null; autoCounterAt?: Paise | null };
 }
@@ -223,15 +223,14 @@ export function validateListingDraft(d: ListingDraft): { errors: Record<string, 
   });
   const b = d.bargaining ?? {};
   if (!(BARGAIN_MODES as readonly string[]).includes(b.mode ?? '')) e.mode = 'Choose how buyers can bargain.';
-  const exp = Number(b.expiryHours);
-  if (!Number.isInteger(exp) || exp < RULES.MIN_EXPIRY_HOURS || exp > RULES.MAX_EXPIRY_HOURS)
-    e.expiryHours = `Choose ${RULES.MIN_EXPIRY_HOURS}–${RULES.MAX_EXPIRY_HOURS} hours.`;
+  if (!(OFFER_EXPIRY_MINUTES as readonly number[]).includes(Number(b.expiryMinutes)))
+    e.expiryMinutes = 'Choose how long an offer stays open: 30 minutes, 1, 3, 6 or 24 hours.';
   const r = d.rules ?? {};
   const A = r.autoAcceptAt ?? null;
   const D = r.autoDeclineBelow ?? null;
   const C = r.autoCounterAt ?? null;
   const mode = b.mode as BargainMode | undefined;
-  if (mode !== 'FIXED' && priceOk) {
+  if (mode === 'BOTH' && priceOk) {
     (
       [
         ['autoAcceptAt', A],
@@ -250,9 +249,9 @@ export function validateListingDraft(d: ListingDraft): { errors: Record<string, 
       e.autoCounterAt = 'Must be above the auto-decline amount.';
   }
   const rules: PrivateRules =
-    mode === 'FIXED'
-      ? { autoAcceptAt: null, autoDeclineBelow: null, autoCounterAt: null }
-      : { autoAcceptAt: A, autoDeclineBelow: D, autoCounterAt: C };
+    mode === 'BOTH'
+      ? { autoAcceptAt: A, autoDeclineBelow: D, autoCounterAt: C }
+      : { autoAcceptAt: null, autoDeclineBelow: null, autoCounterAt: null };
   return { errors: e, rules };
 }
 
@@ -273,7 +272,7 @@ export function validateCheckout(i: CheckoutInput): Record<string, string> {
     e.channel = 'Add a UPI ID, QR code, bank account or payment link in your shop settings first.';
   else if (channel === 'WEBSITE') {
     if (!isHttps(i.productUrl)) e.productUrl = 'Enter the full https:// link to this product on your website.';
-    if (i.mode && i.mode !== 'FIXED') {
+    if (i.mode === 'BOTH') {
       if (i.rules.autoAcceptAt != null) {
         const m = validateDealAccess(i.dealCodes?.accept, 'Code for your automatic price');
         if (m) e.acceptCode = m;

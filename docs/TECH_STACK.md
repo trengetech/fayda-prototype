@@ -28,6 +28,9 @@ Checked against the npm registry on 31 Oct 2026. **Installed** means it is in th
 | `@asteasolutions/zod-to-openapi` | 9.1.0 | Needs Zod 4. Generates OpenAPI 3.1 from the same schemas the API validates with. |
 | reflect-metadata / rxjs | 0.2.2 / 7.8.2 | Nest peers. |
 
+| `socket.io` / `@nestjs/websockets` / `@nestjs/platform-socket.io` | 4.8.4 / 12.3.2 / 12.3.2 | Real-time negotiation updates (M3.3). Nest packages match the other Nest 12.3.2 packages; peers checked on 31 Oct 2026. |
+| `socket.io-client` | 4.8.4 | In `packages/api-client` (both apps use it through the client) and in API tests. WebSocket transport only. |
+
 **Not used:** `nestjs-zod` 5.5.0 supports Nest 10 and 11 only. A small `ZodPipe` replaces it.
 
 ## Mobile and client (verified, not installed — 3.0b)

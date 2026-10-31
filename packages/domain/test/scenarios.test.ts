@@ -33,7 +33,7 @@ function setup(rules: NonNullable<Draft['rules']> = {}, opts: Setup = {}) {
     price: 2500,
     media: [{ kind: 'photo' }],
     variants: [{ label: 'M', stock: opts.stock ?? 1 }],
-    bargaining: { mode: opts.mode ?? 'BOTH', expiryHours: 24 },
+    bargaining: { mode: opts.mode ?? 'BOTH', expiryMinutes: 1440 },
     rules,
     checkout: opts.checkout,
     dealCodes: opts.dealCodes,
@@ -75,7 +75,7 @@ describe('negotiation rules', () => {
   });
 
   it('Fixed-price listings refuse offers; sellers cannot offer on their own listing', () => {
-    expect(offer(setup({}, { mode: 'FIXED' }), 'b1', 2000).code).toBe('FIXED_PRICE');
+    expect(offer(setup({}, { mode: 'BUY_NOW' }), 'b1', 2000).code).toBe('FIXED_PRICE');
     const t = setup();
     expect(offer(t, t.seller, 2000).code).toBe('OWN_LISTING');
   });
@@ -278,7 +278,7 @@ describe('agreements, checkout and stock', () => {
     expect(t.run({ type: 'listing.save', userId: t.seller, listingId: t.listingId, draft: edit({ price: 2100 }) }).ok).toBe(true);
     expect(t.neg(a).closeReason).toBe('PRICE_DROPPED');
     expect(t.neg(b).status).toBe('OPEN');
-    expect(t.run({ type: 'listing.save', userId: t.seller, listingId: t.listingId, draft: edit({ price: 2100, bargaining: { mode: 'FIXED', expiryHours: 24 } }) }).ok).toBe(true);
+    expect(t.run({ type: 'listing.save', userId: t.seller, listingId: t.listingId, draft: edit({ price: 2100, bargaining: { mode: 'BUY_NOW', expiryMinutes: 1440 } }) }).ok).toBe(true);
     expect(t.neg(b).closeReason).toBe('FIXED_PRICE');
     expect(t.run({ type: 'listing.save', userId: t.seller, listingId: t.listingId, draft: edit({ price: 2100 }) }).ok).toBe(true);
     const c = offer(t, t.b2, 1800).negotiationId as string;
@@ -289,7 +289,7 @@ describe('agreements, checkout and stock', () => {
 
 describe('validation', () => {
   it('Listing rule validation: decline < accept ≤ counter < list price', () => {
-    const base = { title: 'Kurta', category: 'Ethnic wear', price: 250000, media: [{}], variants: [{ label: 'M', stock: 1 }], bargaining: { mode: 'BOTH', expiryHours: 24 } };
+    const base = { title: 'Kurta', category: 'Ethnic wear', price: 250000, media: [{}], variants: [{ label: 'M', stock: 1 }], bargaining: { mode: 'BOTH', expiryMinutes: 1440 } };
     const rules = (r: Record<string, number>) => validateListingDraft({ ...base, rules: Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v * 100])) }).errors;
     expect(rules({ autoDeclineBelow: 2300, autoAcceptAt: 2200 }).autoDeclineBelow).toBeTruthy();
     expect(rules({ autoAcceptAt: 2200, autoCounterAt: 2100 }).autoCounterAt).toBeTruthy();
@@ -322,7 +322,7 @@ describe('validation', () => {
   it('Direct-pay listing requires a direct payment method on the seller profile', () => {
     const w = new World();
     w.addSeller('web', { website: 'https://web.example.com' });
-    const d: Draft = { title: 'Kurta', category: 'Ethnic wear', price: 2500, media: [{}], variants: [{ label: 'M', stock: 1 }], bargaining: { mode: 'BOTH', expiryHours: 24 }, rules: {} };
+    const d: Draft = { title: 'Kurta', category: 'Ethnic wear', price: 2500, media: [{}], variants: [{ label: 'M', stock: 1 }], bargaining: { mode: 'BOTH', expiryMinutes: 1440 }, rules: {} };
     const save = (draft: Draft) => w.exec({ type: 'listing.save', userId: 'web', publish: true, draft }, NOW) as { ok: boolean; fields?: Record<string, string> };
     expect(save({ ...d, checkout: { channel: 'DIRECT' } }).fields?.channel).toBeTruthy();
     expect(save({ ...d, checkout: { channel: 'WEBSITE', productUrl: 'web.example.com/x' } }).fields?.productUrl).toBeTruthy();

@@ -1,17 +1,21 @@
 import { useBuyerListing } from '@fayda/api-client';
 import { formatRupees } from '@fayda/domain';
 import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
 import { bargainingLabel, NOT_YET, sizeNote } from '../../src/listing-view';
 import { MediaCarousel } from '../../src/media-carousel';
+import { OfferSheet } from '../../src/offer-sheet';
 
-/** The product page: media, price, sizes and the bargaining label. Buy and Make offer are shown but do not work yet. */
+/** The product page: media, price, sizes and the bargaining label. Make offer works; Buy is shown but does not work yet (orders arrive in M3.4). */
 export default function ListingScreen() {
   const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const q = useBuyerListing(id ?? null);
   const l = q.data;
+  const router = useRouter();
+  const [offering, setOffering] = useState(false);
 
   return (
     <ScrollView
@@ -59,9 +63,10 @@ export default function ListingScreen() {
 
             <Card>
               <Button title="Buy" disabled onPress={() => {}} />
-              <Button title="Make offer" variant="outline" disabled={true} onPress={() => {}} />
+              {l.bargaining.acceptsOffers && !l.soldOut ? <Button title="Make offer" variant="outline" onPress={() => setOffering((o) => !o)} /> : null}
               <AppText tone="muted" size={12}>{NOT_YET}</AppText>
             </Card>
+            {offering && l.bargaining.acceptsOffers ? <OfferSheet listing={l} onSent={(nid) => { setOffering(false); router.push(`/negotiation/${nid}` as never); }} /> : null}
           </View>
         </>
       )}

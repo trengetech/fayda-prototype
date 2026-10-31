@@ -4,15 +4,18 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { HttpException } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module.js';
 import { ProblemFilter } from './common/problem.filter.js';
 import { registerMediaRoutes } from './media/media-routes.js';
 import type { AppConfig } from './config.js';
+import type { Clock } from '@fayda/domain';
 
-export async function createApp(config: AppConfig): Promise<NestFastifyApplication> {
+/** `clock` is for tests, which move time by hand to check timers (5 s counters, 24 h expiry) without waiting. */
+export async function createApp(config: AppConfig, clock?: Clock): Promise<NestFastifyApplication> {
   // trustProxy: Caddy terminates TLS and forwards the real client address.
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule.register(config), new FastifyAdapter({ trustProxy: true }), {
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule.register(config, clock), new FastifyAdapter({ trustProxy: true }), {
     logger: config.environment === 'test' ? false : ['log', 'warn', 'error'],
   });
   await app.register(helmet);
@@ -25,6 +28,7 @@ export async function createApp(config: AppConfig): Promise<NestFastifyApplicati
   });
   await app.register(cors, { origin: config.corsOrigins.length ? config.corsOrigins : false });
   await registerMediaRoutes(app);
+  app.useWebSocketAdapter(new IoAdapter(app));
   app.setGlobalPrefix('v1');
   app.useGlobalFilters(new ProblemFilter());
   app.enableShutdownHooks();

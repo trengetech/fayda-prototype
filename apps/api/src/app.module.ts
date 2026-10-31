@@ -1,6 +1,6 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
-import { systemClock } from '@fayda/domain';
+import { systemClock, type Clock } from '@fayda/domain';
 import { AUTH_VERIFIER, DevOtpVerifier } from './auth/auth-verifier.js';
 import { AuthController } from './auth/auth.controller.js';
 import { AuthGuard } from './auth/auth.guard.js';
@@ -12,6 +12,10 @@ import { SellerController } from './profiles/seller.controller.js';
 import { CLOCK } from './common/clock.js';
 import { BuyerCatalogController, SellerListingsController } from './listings/listings.controller.js';
 import { ListingsService } from './listings/listings.service.js';
+import { BuyerNegotiationsController, SellerNegotiationsController } from './negotiations/negotiations.controller.js';
+import { NegotiationEvents } from './negotiations/negotiation-events.js';
+import { NegotiationsGateway } from './negotiations/negotiations.gateway.js';
+import { NegotiationsService } from './negotiations/negotiations.service.js';
 import { MediaController } from './media/media.controller.js';
 import { DiskMediaStorage, MEDIA_STORAGE } from './media/media-storage.js';
 import { MediaService } from './media/media.service.js';
@@ -23,14 +27,14 @@ import { SystemController } from './system/system.controller.js';
 
 @Module({})
 export class AppModule {
-  static register(config: AppConfig): DynamicModule {
+  static register(config: AppConfig, clock: Clock = systemClock): DynamicModule {
     return {
       module: AppModule,
       imports: [ScheduleModule.forRoot()],
-      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController, SellerListingsController, BuyerCatalogController],
+      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController, SellerListingsController, BuyerCatalogController, BuyerNegotiationsController, SellerNegotiationsController],
       providers: [
         { provide: APP_CONFIG, useValue: config },
-        { provide: CLOCK, useValue: systemClock },
+        { provide: CLOCK, useValue: clock },
         DbService,
         IdempotencyService,
         SweepRunner,
@@ -39,11 +43,14 @@ export class AppModule {
         { provide: MEDIA_STORAGE, useFactory: () => new DiskMediaStorage(config.uploadsDir) },
         MediaService,
         ListingsService,
+        NegotiationEvents,
+        NegotiationsService,
+        NegotiationsGateway,
         AuthService,
         AuthGuard,
         { provide: AUTH_VERIFIER, useClass: DevOtpVerifier },
       ],
-      exports: [DbService, IdempotencyService, SweepRunner, CLOCK, APP_CONFIG, MediaService],
+      exports: [DbService, IdempotencyService, SweepRunner, CLOCK, APP_CONFIG, MediaService, NegotiationsService, NegotiationEvents],
     };
   }
 }

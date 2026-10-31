@@ -27,7 +27,7 @@ describe('toInput', () => {
   });
 
   it('sends rules in paise with blanks as null, and deal codes only for website listings', () => {
-    const direct = toInput(filled({ mode: 'PRIVATE', autoAcceptAt: '1200', autoCounterAt: '', autoDeclineBelow: '800', acceptValue: 'X' }), [photo], true);
+    const direct = toInput(filled({ mode: 'BOTH', autoAcceptAt: '1200', autoCounterAt: '', autoDeclineBelow: '800', acceptValue: 'X' }), [photo], true);
     expect(direct.rules).toEqual({ autoAcceptAt: 120000, autoCounterAt: null, autoDeclineBelow: 80000 });
     expect(direct.dealCodes).toBeNull();
     const web = toInput(filled({ mode: 'BOTH', channel: 'WEBSITE', productUrl: ' https://s.example/p ', autoAcceptAt: '1200', acceptType: 'LINK', acceptValue: ' https://s.example/p?c=1 ', counterValue: '' }), [photo], true);
@@ -44,13 +44,13 @@ describe('fromListing', () => {
   const saved: SellerListing = {
     id: 'l1', status: 'ACTIVE', title: 'Kurta', description: 'D', category: 'Ethnic wear', price: 150000,
     media: [{ mediaId: 'm1', kind: 'image', url: '/v1/media/m1', posterMediaId: null, posterUrl: null }, { mediaId: 'm2', kind: 'video', url: '/v1/media/m2', posterMediaId: 'p2', posterUrl: '/v1/media/p2' }],
-    variants: [{ id: 'v1', label: 'M', stock: 3 }], bargaining: { mode: 'BOTH', expiryHours: 48 },
+    variants: [{ id: 'v1', label: 'M', stock: 3 }], bargaining: { mode: 'BOTH', expiryMinutes: 360 },
     rules: { autoAcceptAt: 110000, autoDeclineBelow: null, autoCounterAt: 130000 }, checkout: { channel: 'WEBSITE', productUrl: 'https://s.example/p' },
     dealCodes: { accept: { type: 'CODE', value: 'A1B' }, counter: null }, publishedAt: 1, updatedAt: 2,
   };
   it('round-trips through the form back to the same request', () => {
     const { values, media } = fromListing(saved);
-    expect(values).toMatchObject({ price: '1500', autoAcceptAt: '1100', autoCounterAt: '1300', autoDeclineBelow: '', acceptValue: 'A1B', mode: 'BOTH', expiryHours: 48 });
+    expect(values).toMatchObject({ price: '1500', autoAcceptAt: '1100', autoCounterAt: '1300', autoDeclineBelow: '', acceptValue: 'A1B', mode: 'BOTH', expiryMinutes: 360 });
     expect(media.map((m) => m.previewUri)).toEqual(['/v1/media/m1', '/v1/media/p2']); // a video previews as its poster
     const back = toInput(values, media, false);
     expect(back).toMatchObject({ price: 150000, rules: { autoAcceptAt: 110000, autoCounterAt: 130000, autoDeclineBelow: null } });

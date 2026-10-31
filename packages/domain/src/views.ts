@@ -12,7 +12,6 @@ export interface BuyerNegotiationView {
   id: string;
   status: Negotiation['status'];
   statusLabel: string;
-  visibility: Negotiation['visibility'];
   closeReason: string | null;
   closeText: string | null;
   variantId: string;
@@ -52,7 +51,6 @@ export function buyerNegotiationView(n: Negotiation, channel: Channel): BuyerNeg
     id: n.id,
     status: n.status,
     statusLabel: statusLabel(n),
-    visibility: n.visibility,
     closeReason: publicReason(n.closeReason),
     closeText: n.closeReason ? (CLOSE_TEXT[n.closeReason] ?? null) : null,
     variantId: n.variantId,
@@ -95,7 +93,7 @@ export interface PublicListing {
   price: Paise;
   status: string;
   mode: string;
-  expiryHours: number;
+  expiryMinutes: number;
   channel: Channel;
   productUrl: string | null;
   variants: { id: string; label: string; stock: number }[];
@@ -108,7 +106,7 @@ export interface BuyerListingView {
   price: Paise;
   soldOut: boolean;
   variants: { id: string; label: string; available: boolean; low: boolean }[];
-  bargaining: { mode: string; acceptsOffers: boolean; expiryHours: number };
+  bargaining: { mode: string; acceptsOffers: boolean; expiryMinutes: number };
   checkout: { channel: Channel; productUrl: string | null };
 }
 export function buyerListingView(l: PublicListing, availableByVariant: Record<string, number>): BuyerListingView {
@@ -124,7 +122,7 @@ export function buyerListingView(l: PublicListing, availableByVariant: Record<st
     price: l.price,
     soldOut: !variants.some((v) => v.available),
     variants,
-    bargaining: { mode: l.mode, acceptsOffers: l.mode !== 'FIXED', expiryHours: l.expiryHours },
+    bargaining: { mode: l.mode, acceptsOffers: l.mode !== 'BUY_NOW', expiryMinutes: l.expiryMinutes },
     checkout: { channel: l.channel, productUrl: l.channel === 'WEBSITE' ? l.productUrl : null },
   };
 }

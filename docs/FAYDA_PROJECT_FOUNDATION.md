@@ -132,6 +132,8 @@ This is the most important business logic in the product. It is specified here s
 
 ### 3.1 Listing bargaining modes
 
+> **Superseded 31 Oct 2026 (DECISIONS B-1):** there are now two modes, `BUY_NOW` and `BOTH`, and bargaining is always private. The table below is the original design and is kept for history.
+
 | Mode | Buyer can |
 |---|---|
 | `FIXED` | Buy at list price only |

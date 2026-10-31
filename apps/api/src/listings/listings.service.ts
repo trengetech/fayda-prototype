@@ -17,6 +17,8 @@ import { CLOCK } from '../common/clock.js';
 import { DbService } from '../db/db.service.js';
 import { listingMedia, listingVariants, listings, media, sellerPaymentProfiles, sellers } from '../db/schema.js';
 import { publicMediaUrl } from '../media/media.service.js';
+import type { NegotiationTouch } from '../negotiations/negotiation-events.js';
+import { NegotiationsService } from '../negotiations/negotiations.service.js';
 
 type ListingRow = typeof listings.$inferSelect;
 type MediaItem = { mediaId: string; kind: 'image' | 'video'; url: string; posterMediaId: string | null; posterUrl: string | null };
@@ -38,6 +40,7 @@ export class ListingsService {
   constructor(
     @Inject(DbService) private readonly database: DbService,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(NegotiationsService) private readonly negotiations: NegotiationsService,
   ) {}
 
   private get db() {
@@ -83,15 +86,15 @@ export class ListingsService {
 
     const now = new Date(this.clock.now());
     const website = input.checkout.channel === 'WEBSITE';
-    const withCodes = website && input.bargaining.mode !== 'FIXED';
+    const withCodes = website && input.bargaining.mode === 'BOTH';
     const channel = input.checkout.channel as 'DIRECT' | 'WEBSITE';
     const fields = {
       title: input.title.trim(),
       description: (input.description ?? '').trim(),
       category: input.category,
       pricePaise: input.price,
-      bargainMode: input.bargaining.mode as 'FIXED' | 'PRIVATE' | 'PUBLIC' | 'BOTH',
-      expiryHours: input.bargaining.expiryHours,
+      bargainMode: input.bargaining.mode as 'BUY_NOW' | 'BOTH',
+      expiryMinutes: input.bargaining.expiryMinutes,
       channel,
       productUrl: website ? (input.checkout.productUrl ?? '').trim() : null,
       autoAcceptAt: rules.autoAcceptAt,
@@ -102,6 +105,7 @@ export class ListingsService {
       updatedAt: now,
     };
 
+    const touched: NegotiationTouch[] = [];
     const id = await this.db.transaction(async (tx) => {
       let current: ListingRow | undefined;
       if (listingId) {
@@ -140,9 +144,23 @@ export class ListingsService {
         }
       }
       const drop = [...known].filter((x) => !kept.has(x));
+      // Offers on a size that is going away close first (and are kept, since negotiations have no link to the size row).
+      if (current) {
+        const clockNow = this.clock.now();
+        await this.negotiations.onListingChanged(
+          tx,
+          rowId,
+          { oldPrice: current.pricePaise, newPrice: fields.pricePaise, oldMode: current.bargainMode, newMode: fields.bargainMode, removedVariantIds: drop, paused: false },
+          clockNow,
+          touched,
+        );
+      }
       if (drop.length) await tx.delete(listingVariants).where(inArray(listingVariants.id, drop));
+      // A size whose stock was lowered to what is already held, or to zero, can no longer honour open offers.
+      if (current) await this.negotiations.closeSoldOutSizes(tx, rowId, this.clock.now(), touched);
       return rowId;
     });
+    this.negotiations.publish(touched);
     return this.getForSeller(userId, id);
   }
 
@@ -175,6 +193,7 @@ export class ListingsService {
 
   async setStatus(userId: string, listingId: string, status: 'ACTIVE' | 'PAUSED'): Promise<SellerListing> {
     const seller = await this.requireSeller(userId);
+    const touched: NegotiationTouch[] = [];
     await this.db.transaction(async (tx) => {
       const [l] = await tx.select().from(listings).where(and(eq(listings.id, listingId), eq(listings.sellerId, seller.id))).for('update');
       if (!l) throw new AppError(404, 'NOT_FOUND', 'Listing not found.');
@@ -185,7 +204,11 @@ export class ListingsService {
       }
       const now = new Date(this.clock.now());
       await tx.update(listings).set({ status, updatedAt: now, publishedAt: l.publishedAt ?? now }).where(eq(listings.id, l.id));
+      if (status === 'PAUSED') {
+        await this.negotiations.onListingChanged(tx, l.id, { oldPrice: l.pricePaise, newPrice: l.pricePaise, oldMode: l.bargainMode, newMode: l.bargainMode, removedVariantIds: [], paused: true }, now.getTime(), touched);
+      }
     });
+    this.negotiations.publish(touched);
     return this.getForSeller(userId, listingId);
   }
 
@@ -254,7 +277,7 @@ export class ListingsService {
       price: l.pricePaise,
       media: mediaBy.get(l.id) ?? [],
       variants: variantsBy.get(l.id) ?? [],
-      bargaining: { mode: l.bargainMode, expiryHours: l.expiryHours },
+      bargaining: { mode: l.bargainMode, expiryMinutes: l.expiryMinutes },
       rules: { autoAcceptAt: l.autoAcceptAt, autoDeclineBelow: l.autoDeclineBelow, autoCounterAt: l.autoCounterAt },
       checkout: { channel: l.channel, productUrl: l.productUrl },
       dealCodes: { accept: l.dealAccept ?? null, counter: l.dealCounter ?? null },
@@ -303,7 +326,7 @@ export class ListingsService {
         price: r.pricePaise,
         category: r.category,
         soldOut: stock < 1,
-        acceptsOffers: r.bargainMode !== 'FIXED',
+        acceptsOffers: r.bargainMode !== 'BUY_NOW',
         coverUrl: first ? (first.kind === 'image' ? first.url : first.posterUrl) : null,
         hasVideo: m.some((x) => x.kind === 'video'),
         seller: { id: r.sellerId, name: r.sellerName, handle: r.sellerHandle, area: r.sellerArea, city: r.sellerCity },
@@ -339,7 +362,7 @@ export class ListingsService {
       price: l.pricePaise,
       status: l.status,
       mode: l.bargainMode,
-      expiryHours: l.expiryHours,
+      expiryMinutes: l.expiryMinutes,
       channel: l.channel,
       productUrl: l.productUrl,
       variants,

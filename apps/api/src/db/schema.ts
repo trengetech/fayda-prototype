@@ -1,5 +1,5 @@
 import { index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
-import type { DealAccess } from '@fayda/domain';
+import type { DealAccess, Negotiation } from '@fayda/domain';
 
 /**
  * Replays the stored response when a client retries a mutating request with the same Idempotency-Key.
@@ -155,8 +155,9 @@ export const listings = pgTable(
     description: text('description').notNull().default(''),
     category: text('category').notNull(),
     pricePaise: integer('price_paise').notNull(),
-    bargainMode: text('bargain_mode', { enum: ['FIXED', 'PRIVATE', 'PUBLIC', 'BOTH'] }).notNull(),
-    expiryHours: integer('expiry_hours').notNull(),
+    bargainMode: text('bargain_mode', { enum: ['BUY_NOW', 'BOTH'] }).notNull(),
+    /** How long a bargaining offer on this listing stays open: 30, 60, 180, 360 or 1440 minutes. */
+    expiryMinutes: integer('expiry_minutes').notNull().default(1440),
     channel: text('channel', { enum: ['DIRECT', 'WEBSITE'] }).notNull(),
     productUrl: text('product_url'),
     // Seller-only. These columns are never selected by a buyer query; buyer responses are built from buyer schemas.
@@ -194,4 +195,67 @@ export const listingVariants = pgTable(
     stock: integer('stock').notNull(),
   },
   (t) => [index('listing_variants_listing_idx').on(t.listingId)],
+);
+
+// ---------- bargaining ----------
+/**
+ * One negotiation, stored as the domain aggregate: offers and events are JSON because a negotiation has at most 6 offers
+ * and is always read and written whole. `nextDueAt` is the earliest moment something is due (automatic counter or decline,
+ * offer expiry, agreement lapse); the 1 s sweep and the lazy check on read both use it. `offers` holds private fields
+ * (pending automatic replies), so it is never returned directly: buyer responses are built from `buyerNegotiationView`.
+ */
+export const negotiations = pgTable(
+  'negotiations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    listingId: uuid('listing_id').notNull().references(() => listings.id),
+    /** No foreign key: a size the seller removes closes its negotiations (SOLD_OUT) and then disappears. */
+    variantId: uuid('variant_id').notNull(),
+    buyerUserId: uuid('buyer_user_id').notNull().references(() => users.id),
+    sellerId: uuid('seller_id').notNull().references(() => sellers.id),
+    status: text('status', { enum: ['OPEN', 'AGREED', 'PURCHASED', 'LAPSED', 'CLOSED'] }).notNull(),
+    closeReason: text('close_reason'),
+    offers: jsonb('offers').$type<Negotiation['offers']>().notNull(),
+    events: jsonb('events').$type<Negotiation['events']>().notNull(),
+    agreement: jsonb('agreement').$type<Negotiation['agreement']>(),
+    nextDueAt: timestamp('next_due_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    index('negotiations_buyer_idx').on(t.buyerUserId, t.updatedAt),
+    index('negotiations_seller_idx').on(t.sellerId, t.status, t.updatedAt),
+    index('negotiations_listing_idx').on(t.listingId, t.status),
+    index('negotiations_due_idx').on(t.nextDueAt),
+  ],
+);
+
+/** One unit of a size held for a buyer while an agreement is open. Counted against stock until it is released or used. */
+export const reservations = pgTable(
+  'reservations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    negotiationId: uuid('negotiation_id').notNull().references(() => negotiations.id),
+    variantId: uuid('variant_id').notNull(),
+    status: text('status', { enum: ['ACTIVE', 'CONSUMED', 'RELEASED'] }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('reservations_variant_idx').on(t.variantId, t.status, t.expiresAt), index('reservations_negotiation_idx').on(t.negotiationId)],
+);
+
+/** What the domain says someone should be told. Written now, shown in the notification centres in M3.7. */
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    app: text('app', { enum: ['buyer', 'seller'] }).notNull(),
+    code: text('code').notNull(),
+    params: jsonb('params').$type<Record<string, string | number>>(),
+    negotiationId: uuid('negotiation_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    readAt: timestamp('read_at', { withTimezone: true }),
+  },
+  (t) => [index('notifications_user_idx').on(t.userId, t.app, t.createdAt)],
 );

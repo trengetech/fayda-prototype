@@ -33,7 +33,7 @@ const body = (mediaIds: string[], over: Record<string, unknown> = {}) => ({
   price: rupees(1500),
   media: mediaIds.map((mediaId) => ({ mediaId })),
   variants: [{ label: 'M', stock: 3 }, { label: 'L', stock: 2 }],
-  bargaining: { mode: 'FIXED', expiryHours: 24 },
+  bargaining: { mode: 'BUY_NOW', expiryMinutes: 1440 },
   checkout: { channel: 'DIRECT' },
   publish: false,
   ...over,
@@ -66,10 +66,10 @@ describe('saving listings', () => {
     const m = await photo(t);
     const bad = await call('POST', '/v1/seller/listings', {
       token: t,
-      body: body([m], { title: 'x', category: 'Toys', price: 12345, variants: [], bargaining: { mode: 'HAGGLE', expiryHours: 1 } }),
+      body: body([m], { title: 'x', category: 'Toys', price: 12345, variants: [], bargaining: { mode: 'HAGGLE', expiryMinutes: 45 } }),
     });
     expect(bad.status).toBe(400);
-    expect(Object.keys(bad.body.fields).sort()).toEqual(['category', 'expiryHours', 'mode', 'price', 'title', 'variants']);
+    expect(Object.keys(bad.body.fields).sort()).toEqual(['category', 'expiryMinutes', 'mode', 'price', 'title', 'variants']);
     const noMedia = await call('POST', '/v1/seller/listings', { token: t, body: body([]) });
     expect(noMedia.body.fields.media).toMatch(/at least one/);
   });
@@ -78,10 +78,10 @@ describe('saving listings', () => {
     const t = await makeSeller(call, '9876500203');
     const m = await photo(t);
     const rules = { autoAcceptAt: rupees(1200), autoCounterAt: rupees(1100), autoDeclineBelow: rupees(1300) };
-    const r = await call('POST', '/v1/seller/listings', { token: t, body: body([m], { bargaining: { mode: 'PRIVATE', expiryHours: 24 }, rules }) });
+    const r = await call('POST', '/v1/seller/listings', { token: t, body: body([m], { bargaining: { mode: 'BOTH', expiryMinutes: 1440 }, rules }) });
     expect(r.body.fields.autoDeclineBelow).toMatch(/lower than your lowest/);
     expect(r.body.fields.autoCounterAt).toMatch(/at or above your lowest/);
-    const ok = await call('POST', '/v1/seller/listings', { token: t, body: body([m], { bargaining: { mode: 'PRIVATE', expiryHours: 24 }, rules: { autoAcceptAt: rupees(1100), autoCounterAt: rupees(1300), autoDeclineBelow: rupees(800) } }) });
+    const ok = await call('POST', '/v1/seller/listings', { token: t, body: body([m], { bargaining: { mode: 'BOTH', expiryMinutes: 1440 }, rules: { autoAcceptAt: rupees(1100), autoCounterAt: rupees(1300), autoDeclineBelow: rupees(800) } }) });
     expect(ok.status).toBe(201);
     expect(ok.body.rules).toEqual({ autoAcceptAt: rupees(1100), autoCounterAt: rupees(1300), autoDeclineBelow: rupees(800) });
     // A fixed-price listing keeps no private rules even if the app sends some.
@@ -217,7 +217,7 @@ describe('where buyers complete the purchase', () => {
     const t = await makeSeller(call, '9876500216');
     const m = await photo(t);
     const site = { channel: 'WEBSITE', productUrl: 'https://shop.example/p' };
-    const mode = { mode: 'PRIVATE', expiryHours: 24 };
+    const mode = { mode: 'BOTH', expiryMinutes: 1440 };
     const rules = { autoAcceptAt: rupees(1200), autoCounterAt: rupees(1300) };
     const missing = await call('POST', '/v1/seller/listings', { token: t, body: body([m], { checkout: site, bargaining: mode, rules }) });
     expect(Object.keys(missing.body.fields).sort()).toEqual(['acceptCode', 'counterCode']);
@@ -238,7 +238,7 @@ describe('what buyers can see', () => {
       token: t,
       body: body([m], {
         publish: true,
-        bargaining: { mode: 'BOTH', expiryHours: 24 },
+        bargaining: { mode: 'BOTH', expiryMinutes: 1440 },
         rules: { autoAcceptAt: rupees(1111), autoCounterAt: rupees(1333), autoDeclineBelow: rupees(777) },
         checkout: { channel: 'WEBSITE', productUrl: 'https://shop.example/p' },
         dealCodes: { accept: { type: 'CODE', value: 'SECRETCODE1' }, counter: { type: 'CODE', value: 'SECRETCODE2' } },
@@ -256,7 +256,7 @@ describe('what buyers can see', () => {
       const text = JSON.stringify(payload);
       for (const secret of ['SECRETCODE', 'secretupi', 'autoAccept', 'autoDecline', 'autoCounter', 'dealCodes', '"rules"', '111100', '133300', '77700', 'upi']) expect(text, secret).not.toContain(secret);
     }
-    expect(detail.body.bargaining).toEqual({ mode: 'BOTH', acceptsOffers: true, expiryHours: 24 });
+    expect(detail.body.bargaining).toEqual({ mode: 'BOTH', acceptsOffers: true, expiryMinutes: 1440 });
     expect(detail.body.checkout).toEqual({ channel: 'WEBSITE', productUrl: 'https://shop.example/p' });
     expect(detail.body.variants.map((v: Json) => Object.keys(v).sort())).toEqual([['available', 'id', 'label', 'low'], ['available', 'id', 'label', 'low']]);
     expect(detail.body.seller).toMatchObject({ name: 'Sana Studio', handle: 'sanastudio' });

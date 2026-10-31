@@ -1,4 +1,5 @@
 import { ApiProvider, SessionProvider, createSessionManager, type SecureStorage, type SessionManager } from '@fayda/api-client';
+import type { SellerNegotiation } from '@fayda/contracts/schemas';
 import { ThemeProvider } from '@fayda/ui';
 import { render } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
@@ -44,7 +45,15 @@ export function fakeApi(routes: Record<string, Route>, fetchFn: jest.Mock) {
 export const sellerListing = (over: Record<string, unknown> = {}) => ({
   id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', status: 'DRAFT', title: 'Cotton kurta', description: 'Block print', category: 'Ethnic wear', price: 150000,
   media: [{ mediaId: 'm1', kind: 'image', url: '/v1/media/m1', posterMediaId: null, posterUrl: null }],
-  variants: [{ id: 'v1', label: 'M', stock: 3 }], bargaining: { mode: 'FIXED', expiryHours: 24 },
+  variants: [{ id: 'v1', label: 'M', stock: 3 }], bargaining: { mode: 'BUY_NOW', expiryMinutes: 1440 },
   rules: { autoAcceptAt: null, autoDeclineBelow: null, autoCounterAt: null }, checkout: { channel: 'DIRECT', productUrl: null },
   dealCodes: { accept: null, counter: null }, publishedAt: null, updatedAt: 1, ...over,
+});
+
+export const sellerNegotiation = (over: Partial<SellerNegotiation> = {}): SellerNegotiation => ({
+  id: 'n1', listing: { id: 'l1', title: 'Cotton kurta', price: 150000, coverUrl: '/v1/media/m1', variantLabel: 'M', sellerName: 'Kiran Studio', channel: 'DIRECT' },
+  buyerName: 'Asha Buyer', status: 'OPEN' as const, closeReason: null,
+  offers: [{ id: 'o1', by: 'BUYER' as const, amount: 100000, status: 'PENDING', at: 1, expiresAt: Date.now() + 3_600_000, dealAccess: null }],
+  agreement: null as SellerNegotiation['agreement'], needsReply: true, canCounter: true, counterBounds: { minExclusive: 100000, maxExclusive: 150000 } as SellerNegotiation['counterBounds'],
+  pendingExpiresAt: Date.now() + 3_600_000, updatedAt: 1, ...over,
 });
