@@ -6,3 +6,7 @@ export * from './validators.js';
 export * from './negotiation.js';
 export * from './orders.js';
 export * from './views.js';
+export * from './profiles.js';
+export * from './chat.js';
+export * from './reviews.js';
+export * from './requests.js';

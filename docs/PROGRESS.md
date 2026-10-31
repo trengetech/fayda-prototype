@@ -1,6 +1,6 @@
 # Progress
 
-**Where we are:** M3.0a done. M3.0b built and tested on an Android emulator; waiting for the founder to try the APKs on a real phone. M3.1 (identity) not started.
+**Where we are (31 Oct 2026):** the chat/contact/reviews/requests update (`docs/updates/`) has its pure rules built and tested in `packages/domain` (see "Update 2026-10-31" below); the API, database and app parts wait for M3.1 to M3.4. Before that: M3.0a done. M3.0b built and tested on an Android emulator; waiting for the founder to try the APKs on a real phone. M3.1 (identity) not started.
 
 ## M3.0a — Backend foundation (31 Oct 2026): built, awaiting your review
 
@@ -91,3 +91,20 @@ Notes: `forceExit` is set in `jest.config.mjs` because `ApiProvider` owns its `Q
 - `dev` builds allow plain-HTTP API addresses; `prod` builds will not.
 - Android only; iOS not attempted.
 - Builds need this Mac (Android SDK, JDK 17). EAS cloud builds are not set up.
+
+## Update 2026-10-31 (chat, contact, reviews, requests): domain rules done, rest pending
+
+Decisions D11 to D18 are merged into `docs/DECISIONS.md`. Founder choices: reviews only for orders that reached `CONFIRMED`; no separate M3.4b (the work goes into M3.1 and M3.4); `expo-image-picker` approved; the auth answers (dev OTP, sessions, `jose`, `@fastify/rate-limit`) come later.
+
+**Built (packages/domain, pure, no I/O):** `profiles.ts` (Maps, Google profile and social link checks; contact; buyer onboarding; seller reach: categories, links, contact, declared times; `missingBuyerFields` and `missingSellerFields` for the "complete your profile, don't lock out" rule; `publicSellerProfile` allow-list that cannot carry phone numbers), `chat.ts` (who may write, listing cards by the seller only, unread counts, contact visible only on open orders), `reviews.ts` (CONFIRMED rule, stars, low-rating reason, average rating), `requests.ts` (validation, reach, one response per seller, want or decline, close, 7-day expiry, listing shared from a wanted response), `buyAgain` and `sellerStats` rating in `orders.ts`.
+
+**Tests:** domain 56 pass (23 new, in `test/community.test.ts`, covering the brief's 7 new prototype tests; they test the pure functions, not a persistence harness). Checked by breaking the CONFIRMED rule and the open-order contact rule: 2 tests failed, then passed once restored.
+
+**Not built yet:** database tables and migrations, API endpoints, Socket.IO, the app screens, and contract tests that scan real HTTP payloads (criterion 8). The brief's acceptance criteria 1 to 7 need two physical phones and so cannot be checked until those exist.
+
+| Brief criterion | Status |
+|---|---|
+| 9: domain tests ported and passing | **Pass** (as pure-function tests; the older 26 prototype tests still pass) |
+| 1 to 8, 10 | **Not started** (need M3.1 to M3.4) |
+
+Next, when you are ready: M3.1 needs your answers on dev OTP, separate sessions per app, and `jose` plus `@fastify/rate-limit`.

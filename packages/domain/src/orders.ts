@@ -3,6 +3,7 @@ import { CANCEL_REASONS, RULES, type CancelReason } from './rules.js';
 import { hasShipment, validateShipment, type PaymentProfile, type Shipment, type ShipmentInput } from './validators.js';
 import { fail, type Channel, type DealAccess, type Notice, type PayMethod, type Result } from './types.js';
 import { directMethods } from './validators.js';
+import { ratingSummary } from './reviews.js';
 
 export type OrderStatus = 'PLACED' | 'CONFIRMED' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED' | 'EXPIRED';
 
@@ -179,8 +180,11 @@ export interface SellerStats {
   cancelled: number;
   expired: number;
   medianConfirmMs: number | null;
+  /** Average star rating to 1 decimal place, or null with no reviews. */
+  rating: number | null;
+  reviewCount: number;
 }
-export function sellerStats(orders: readonly Order[]): SellerStats {
+export function sellerStats(orders: readonly Order[], ratings: readonly number[] = []): SellerStats {
   const times = orders
     .filter((o) => o.confirmedAt != null)
     .map((o) => (o.confirmedAt as number) - o.createdAt)
@@ -192,8 +196,23 @@ export function sellerStats(orders: readonly Order[]): SellerStats {
     cancelled: orders.filter((o) => o.status === 'CANCELLED').length,
     expired: orders.filter((o) => o.status === 'EXPIRED').length,
     medianConfirmMs: times.length ? (times[Math.floor((times.length - 1) / 2)] as number) : null,
+    ...ratingSummary(ratings),
   };
 }
 
 /** O-3: seller payment details are visible only to the buyer of a direct order that is still PLACED. */
 export const buyerMaySeePayment = (o: Pick<Order, 'status' | 'channel'>): boolean => o.status === 'PLACED' && o.channel === 'DIRECT';
+
+export type BuyAgain =
+  | { listingId: string; channel: Channel; /** Set when the order's size is in stock: go straight to checkout. */ variantId: string | null; anyAvailable: boolean }
+  | null;
+/** Buy again is offered only while the listing is ACTIVE. Website listings always open the product page. */
+export function buyAgain(l: { id: string; status: string; channel: Channel } | null, variantId: string, availableByVariant: Record<string, number>): BuyAgain {
+  if (!l || l.status !== 'ACTIVE') return null;
+  return {
+    listingId: l.id,
+    channel: l.channel,
+    variantId: l.channel === 'DIRECT' && (availableByVariant[variantId] ?? 0) > 0 ? variantId : null,
+    anyAvailable: Object.values(availableByVariant).some((n) => n > 0),
+  };
+}

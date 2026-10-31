@@ -1,4 +1,4 @@
-import { HOUR } from './clock.js';
+import { DAY, HOUR } from './clock.js';
 
 /** Provisional policy values (see docs/DECISIONS.md). Money is in paise. */
 export const RULES = Object.freeze({
@@ -15,7 +15,17 @@ export const RULES = Object.freeze({
   MIN_PRICE_PAISE: 50 * 100,
   MAX_PRICE_PAISE: 1_000_000 * 100,
   MAX_MEDIA_PER_LISTING: 6,
+  REQUEST_OPEN_MS: 7 * DAY,
+  MAX_MEDIA_PER_REVIEW: 4,
+  MAX_MEDIA_PER_REQUEST: 4,
+  MAX_MESSAGE_CHARS: 1000,
+  LOW_RATING_MAX: 2,
+  LOW_RATING_MIN_TEXT: 10,
+  AGREEMENT_VERSION: 'draft-2026-10',
 });
+
+export const CONFIRM_HOURS_OPTIONS = [1, 2, 4, 6, 12, 24, 48] as const;
+export const SHIP_DAYS_OPTIONS = [1, 2, 3, 5, 7] as const;
 
 export const CATEGORIES = ['Ethnic wear', 'Western wear', 'Menswear', 'Accessories', 'Footwear'] as const;
 export const BARGAIN_MODES = ['FIXED', 'PRIVATE', 'PUBLIC', 'BOTH'] as const;

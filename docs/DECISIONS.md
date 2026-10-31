@@ -15,7 +15,7 @@ Status as of 30 Oct 2026. **Approved** = founder decided. **Implemented, awaitin
 | D7 | Each listing chooses a channel: **Pay me directly** (Fayda order) or **My website** (product URL). | Approved |
 | D8 | Website deals: a **pre-set code or link** for the auto-accept price (and the auto-counter price if used). The seller enters a **code or link manually** whenever they accept or counter by hand. | Approved |
 | D9 | Home feed is full-screen vertical reels with a Buy + Make offer pair. | Implemented, awaiting confirmation (B29) |
-| D10 | Reviews/ratings, report/block, push notifications: not built yet. | Open |
+| D10 | Report/block and push notifications: not built yet. (Reviews are decided: see D15.) | Open |
 
 ## Bargaining
 
@@ -40,6 +40,21 @@ Status as of 30 Oct 2026. **Approved** = founder decided. **Implemented, awaitin
 | O-5 | Website **Buy now** at list price creates **no order** (Fayda can't see the seller's site); it is counted as a website visit only. | Implemented, awaiting confirmation |
 | O-6 | Unconfirmed orders expire after **48 h**, restock, and count against the seller's public record. | Provisional value |
 | O-7 | Public seller record: delivered / total, median time to confirm, cancelled, unconfirmed. | Approved |
+
+## Chat, contact, reviews, requests (update 31 Oct 2026, from `docs/updates/`)
+
+| # | Decision | Status |
+|---|---|---|
+| D11 | In-app chat per order and per wanted request response. Text, photos, listing cards. | Approved |
+| D12 | Contact for open orders: chat is always available; seller and buyer each give a phone and/or WhatsApp, shown to the other party **only while the order is `PLACED`, `CONFIRMED` or `SHIPPED`**, and never in any public payload. | Approved (the brief asks the founder to confirm that "both sides" is the intended reading) |
+| D13 | Seller onboarding is 3 steps: shop and categories; location and contact (required Google Maps link, optional Google profile and Instagram/Facebook, phone and/or WhatsApp, declared confirm and ship times); payment. | Approved |
+| D14 | Order page: Contact seller, declared and actual confirm time, Buy again. | Approved |
+| D15 | Reviews: one per order, editable, 1 to 5 stars (2 or fewer needs a reason of 10+ characters), up to 4 photos or videos. Rating shown on every listing; reviews public on the seller profile. **A buyer can review only an order that reached `CONFIRMED`** (founder, 31 Oct 2026; the brief said "any time after placement"). A later cancellation does not remove the right to review. | Approved |
+| D16 | Buyer user agreement (disputes are with the seller, Fayda doesn't resolve them; check reviews; honest feedback or ban) required at sign-up; ban right also in the seller Code of Conduct. Version `draft-2026-10`. | Approved; text is a draft pending legal review |
+| D17 | Buyer requests by category with a photo, seller photo responses, "I want this" opens a chat, the new listing is shared in that chat automatically. Requests close after 7 days. | Approved; the 7-day window is provisional |
+| D18 | No separate milestone for this update: the onboarding fields go into M3.1, and chat, reviews and requests are built inside M3.4 (Orders), with Socket.IO. `expo-image-picker` approved for photos and videos. | Approved (founder, 31 Oct 2026) |
+
+**Open:** Should a listing created from a request be visible only to that buyer? (Currently public.) Seller replies to reviews. An admin or moderation tool for bans. An area-level location option for home sellers who don't want to share an exact address.
 
 ## Provisional values (approval pending)
 
