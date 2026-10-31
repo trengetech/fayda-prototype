@@ -4,7 +4,8 @@ import ListingScreen from '../app/listing/[id]';
 import { buyerListing, fakeApi, json, managerWith, problem, renderWith } from './utils';
 
 const mockPlayer = jest.fn();
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70' }) }));
+const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() };
+jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70' }) }));
 jest.mock('expo-video', () => {
   return {
     useVideoPlayer: (uri: string, setup?: (p: { play: () => void }) => void) => {
@@ -23,6 +24,7 @@ const serve = (l: object) => fakeApi({ [`GET /v1/buyer/listings/${ID}`]: () => j
 beforeEach(() => {
   fetchMock = jest.fn();
   mockPlayer.mockClear();
+  mockRouter.push.mockClear();
 });
 
 describe('buyer product page', () => {
@@ -78,16 +80,29 @@ describe('buyer product page', () => {
     expect(screen.queryByText('Open to offers')).not.toBeOnTheScreen();
   });
 
-  it('says Buy and Make offer are not available yet, and pressing them sends nothing', async () => {
+  it('says Buying is not available yet; Buy sends nothing, and Make offer is available on a listing that takes offers', async () => {
     serve(buyerListing());
     await renderWith(signedIn(), <ListingScreen />);
     await screen.findByText('Cotton kurta');
-    expect(screen.getByText(/not available yet/)).toBeOnTheScreen();
-    for (const name of ['Buy', 'Make offer']) {
-      expect(screen.getByRole('button', { name })).toBeDisabled();
-      await act(async () => void fireEvent.press(screen.getByText(name)));
-    }
+    expect(screen.getByText(/Buying is not available yet/)).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Buy' })).toBeDisabled();
+    await act(async () => void fireEvent.press(screen.getByText('Buy')));
+    expect(screen.getByRole('button', { name: 'Make offer' })).toBeEnabled();
     expect(fetchMock).toHaveBeenCalledTimes(1); // only the page load
+  });
+
+  it('has no Make offer on a fixed-price listing', async () => {
+    serve(buyerListing({ bargaining: { mode: 'BUY_NOW', acceptsOffers: false, expiryMinutes: 1440 } }));
+    await renderWith(signedIn(), <ListingScreen />);
+    await screen.findByText('Cotton kurta');
+    expect(screen.queryByText('Make offer')).not.toBeOnTheScreen();
+  });
+
+  it('has no Make offer on a listing that is sold out', async () => {
+    serve(buyerListing({ soldOut: true, variants: [{ id: 'v1', label: 'M', available: false, low: false }] }));
+    await renderWith(signedIn(), <ListingScreen />);
+    await screen.findByText('Sizes');
+    expect(screen.queryByText('Make offer')).not.toBeOnTheScreen();
   });
 
   it('shows a video’s cover first, and mounts one player with the resolved address only after Play', async () => {

@@ -34,7 +34,7 @@ import {
   type PrivateRules,
   type Side,
 } from '@fayda/domain';
-import { and, count, desc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, inArray, lte } from 'drizzle-orm';
 import { AppError, statusForCode } from '../common/app-error.js';
 import { CLOCK } from '../common/clock.js';
 import { DbService } from '../db/db.service.js';
@@ -155,7 +155,7 @@ export class NegotiationsService implements SweepTask {
   }
 
   private touch(c: Pick<Loaded, 'n' | 'sellerUserId'>): NegotiationTouch {
-    return { negotiationId: c.n.id, listingId: c.n.listingId, userIds: [c.n.buyerId, c.sellerUserId] };
+    return { negotiationId: c.n.id, listingId: c.n.listingId, buyerUserId: c.n.buyerId, sellerUserId: c.sellerUserId };
   }
 
   /** Locks the size row (so two people cannot take the last unit), then reads how many units are still free. */
@@ -601,16 +601,5 @@ export class NegotiationsService implements SweepTask {
     const rows = await this.rowsFor(and(eq(negotiations.id, id), eq(negotiations.sellerId, sellerId)));
     if (!rows.length) throw new AppError(404, 'NOT_FOUND', 'Negotiation not found.');
     return this.sellerShape((await this.cards(rows))[0]!);
-  }
-
-  /** Open negotiations per listing, for the seller's listing list. */
-  async openCountsForSeller(userId: string): Promise<Map<string, number>> {
-    const sellerId = await this.sellerIdOf(userId);
-    const rows = await this.db
-      .select({ listingId: negotiations.listingId, n: sql<number>`count(*)::int` })
-      .from(negotiations)
-      .where(and(eq(negotiations.sellerId, sellerId), eq(negotiations.status, 'OPEN')))
-      .groupBy(negotiations.listingId);
-    return new Map(rows.map((r) => [r.listingId, r.n]));
   }
 }

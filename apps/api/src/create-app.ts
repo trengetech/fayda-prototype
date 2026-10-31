@@ -4,6 +4,7 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { HttpException } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module.js';
 import { ProblemFilter } from './common/problem.filter.js';
@@ -27,6 +28,7 @@ export async function createApp(config: AppConfig, clock?: Clock): Promise<NestF
   });
   await app.register(cors, { origin: config.corsOrigins.length ? config.corsOrigins : false });
   await registerMediaRoutes(app);
+  app.useWebSocketAdapter(new IoAdapter(app));
   app.setGlobalPrefix('v1');
   app.useGlobalFilters(new ProblemFilter());
   app.enableShutdownHooks();

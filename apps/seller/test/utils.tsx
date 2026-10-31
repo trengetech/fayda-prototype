@@ -1,4 +1,5 @@
 import { ApiProvider, SessionProvider, createSessionManager, type SecureStorage, type SessionManager } from '@fayda/api-client';
+import type { SellerNegotiation } from '@fayda/contracts/schemas';
 import { ThemeProvider } from '@fayda/ui';
 import { render } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
@@ -47,4 +48,12 @@ export const sellerListing = (over: Record<string, unknown> = {}) => ({
   variants: [{ id: 'v1', label: 'M', stock: 3 }], bargaining: { mode: 'BUY_NOW', expiryMinutes: 1440 },
   rules: { autoAcceptAt: null, autoDeclineBelow: null, autoCounterAt: null }, checkout: { channel: 'DIRECT', productUrl: null },
   dealCodes: { accept: null, counter: null }, publishedAt: null, updatedAt: 1, ...over,
+});
+
+export const sellerNegotiation = (over: Partial<SellerNegotiation> = {}): SellerNegotiation => ({
+  id: 'n1', listing: { id: 'l1', title: 'Cotton kurta', price: 150000, coverUrl: '/v1/media/m1', variantLabel: 'M', sellerName: 'Kiran Studio', channel: 'DIRECT' },
+  buyerName: 'Asha Buyer', status: 'OPEN' as const, closeReason: null,
+  offers: [{ id: 'o1', by: 'BUYER' as const, amount: 100000, status: 'PENDING', at: 1, expiresAt: Date.now() + 3_600_000, dealAccess: null }],
+  agreement: null as SellerNegotiation['agreement'], needsReply: true, canCounter: true, counterBounds: { minExclusive: 100000, maxExclusive: 150000 } as SellerNegotiation['counterBounds'],
+  pendingExpiresAt: Date.now() + 3_600_000, updatedAt: 1, ...over,
 });

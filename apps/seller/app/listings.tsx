@@ -1,4 +1,4 @@
-import { useApiClient, useSellerListings, useSetListingStatus } from '@fayda/api-client';
+import { useApiClient, useSellerListings, useSellerNegotiations, useSetListingStatus } from '@fayda/api-client';
 import type { SellerListing } from '@fayda/contracts/schemas';
 import { formatRupees } from '@fayda/domain';
 import { AppText, Badge, Button, Card, ChipGroup, FieldError, useTheme } from '@fayda/ui';
@@ -27,7 +27,7 @@ export const coverOf = (l: SellerListing): string | null => {
   return m ? (m.kind === 'image' ? m.url : m.posterUrl) : null;
 };
 
-function Row({ l, onOpen }: { l: SellerListing; onOpen: () => void }) {
+function Row({ l, onOpen, openOffers }: { l: SellerListing; onOpen: () => void; openOffers: number }) {
   const { colors } = useTheme();
   const client = useApiClient();
   const setStatus = useSetListingStatus();
@@ -45,7 +45,7 @@ function Row({ l, onOpen }: { l: SellerListing; onOpen: () => void }) {
         <View style={{ flex: 1, gap: 2 }}>
           <AppText weight="bold" numberOfLines={1}>{l.title}</AppText>
           <AppText>{formatRupees(l.price)}</AppText>
-          <AppText tone="muted" size={12}>{stock} in stock{l.bargaining.mode === 'BOTH' ? ' · takes offers' : ''}</AppText>
+          <AppText tone="muted" size={12}>{stock} in stock{l.bargaining.mode === 'BOTH' ? ' · takes offers' : ''}{openOffers ? ` · ${openOffers} open` : ''}</AppText>
         </View>
         <Badge label={badge.label} tone={badge.tone} />
       </Pressable>
@@ -70,6 +70,9 @@ export default function ListingsScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const listings = useSellerListings();
+  const negotiations = useSellerNegotiations();
+  const openBy = new Map<string, number>();
+  for (const n of negotiations.data?.items ?? []) if (n.status === 'OPEN') openBy.set(n.listing.id, (openBy.get(n.listing.id) ?? 0) + 1);
   const [filter, setFilter] = useState<Filter>('All');
   const want = STATUS_OF[filter];
   const items = (listings.data ?? []).filter((l) => !want || l.status === want);
@@ -96,7 +99,7 @@ export default function ListingsScreen() {
           <Button title="Try again" onPress={() => void listings.refetch()} />
         </Card>
       ) : items.length ? (
-        items.map((l) => <Row key={l.id} l={l} onOpen={() => open(`/listing/${l.id}`)} />)
+        items.map((l) => <Row key={l.id} l={l} openOffers={openBy.get(l.id) ?? 0} onOpen={() => open(`/listing/${l.id}`)} />)
       ) : (
         <Card>
           <AppText weight="bold">{filter === 'All' ? 'Nothing here yet' : `No ${filter.toLowerCase()}`}</AppText>

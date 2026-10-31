@@ -51,3 +51,21 @@ export const buyerListing = (over: Record<string, unknown> = {}) => ({
   variants: [{ id: 'v1', label: 'M', available: true, low: false }],
   bargaining: { mode: 'BOTH', acceptsOffers: true, expiryMinutes: 1440 }, checkout: { channel: 'DIRECT', productUrl: null }, seller, ...over,
 });
+
+export const buyerNegotiation = (over: Record<string, unknown> = {}) => ({
+  id: 'n1', listing: { id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', title: 'Cotton kurta', price: 150000, coverUrl: '/v1/media/m1', variantLabel: 'M', sellerName: 'Kiran Studio' },
+  status: 'OPEN', statusLabel: 'Waiting for seller', closeReason: null, closeText: null, variantId: 'v1',
+  offers: [{ id: 'o1', side: 'ME', amount: 100000, status: 'PENDING', at: 1, expiresAt: Date.now() + 3_600_000 }], events: [],
+  pendingExpiresAt: Date.now() + 3_600_000, agreement: null, channel: 'DIRECT', canRespond: false, canCounter: false, canWithdraw: true, counterBounds: null,
+  offersLeft: 5, updatedAt: 1, ...over,
+});
+/** The seller has countered at ₹1,400. */
+export const sellerCountered = (over: Record<string, unknown> = {}) =>
+  buyerNegotiation({
+    statusLabel: 'Seller countered', canRespond: true, canCounter: true, canWithdraw: false, counterBounds: { minExclusive: 100000, maxExclusive: 140000 }, offersLeft: 4,
+    offers: [
+      { id: 'o1', side: 'ME', amount: 100000, status: 'COUNTERED', at: 1, expiresAt: 9 },
+      { id: 'o2', side: 'SELLER', amount: 140000, status: 'PENDING', at: 2, expiresAt: Date.now() + 3_600_000 },
+    ],
+    ...over,
+  });

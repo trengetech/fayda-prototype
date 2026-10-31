@@ -1,4 +1,4 @@
-import { NetworkError, useHealth, useMeta } from '@fayda/api-client';
+import { NetworkError, useHealth, useMeta, useSellerNegotiations } from '@fayda/api-client';
 import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
 import { Link, useRouter } from 'expo-router';
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
@@ -11,6 +11,7 @@ export default function StatusScreen() {
   const router = useRouter();
   const health = useHealth();
   const meta = useMeta();
+  const waiting = useSellerNegotiations().data?.needsReply ?? 0;
   const refetch = () => void Promise.all([health.refetch(), meta.refetch()]);
   const error = health.error ?? meta.error;
   const loading = (health.isPending || meta.isPending) && !error;
@@ -24,7 +25,8 @@ export default function StatusScreen() {
       <AppText weight="extrabold" size={20}>Fayda {APP_LABEL}</AppText>
       <AppText tone="muted" size={12}>API: {API_URL}</AppText>
       <AccountCard />
-      <Button title="My listings" size="lg" onPress={() => router.push('/listings' as never)} />
+      <Button title={waiting ? `Offers (${waiting} need a reply)` : 'Offers'} size="lg" onPress={() => router.push('/offers' as never)} />
+      <Button title="My listings" size="lg" variant="outline" onPress={() => router.push('/listings' as never)} />
 
       {loading ? (
         <Card>

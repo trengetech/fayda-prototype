@@ -14,6 +14,7 @@ import { BuyerCatalogController, SellerListingsController } from './listings/lis
 import { ListingsService } from './listings/listings.service.js';
 import { BuyerNegotiationsController, SellerNegotiationsController } from './negotiations/negotiations.controller.js';
 import { NegotiationEvents } from './negotiations/negotiation-events.js';
+import { NegotiationsGateway } from './negotiations/negotiations.gateway.js';
 import { NegotiationsService } from './negotiations/negotiations.service.js';
 import { MediaController } from './media/media.controller.js';
 import { DiskMediaStorage, MEDIA_STORAGE } from './media/media-storage.js';
@@ -44,6 +45,7 @@ export class AppModule {
         ListingsService,
         NegotiationEvents,
         NegotiationsService,
+        NegotiationsGateway,
         AuthService,
         AuthGuard,
         { provide: AUTH_VERIFIER, useClass: DevOtpVerifier },

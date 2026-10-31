@@ -1,8 +1,9 @@
 import type { ListingInput } from '@fayda/contracts/schemas';
 import { QueryClient, QueryClientProvider, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import { createApiClient, type ApiClient, type DealAccessInput } from './client';
+import { startRealtime } from './realtime';
 import type { SessionManager, SessionState } from './session';
 
 const ClientContext = createContext<ApiClient | null>(null);
@@ -160,4 +161,26 @@ export function useSessionManager(): SessionManager {
 
 export function useSession(): SessionState {
   return useStore(useSessionManager().store);
+}
+
+/**
+ * Live updates: while signed in, a change to any negotiation refreshes the negotiation screens and the product page's
+ * availability. Mount it once, inside both providers. If the socket is down the screens still work; they just refresh on use.
+ */
+export function useRealtime(): void {
+  const manager = useSessionManager();
+  const qc = useQueryClient();
+  const status = useSession().status;
+  useEffect(() => {
+    if (status !== 'signedIn') return;
+    const refresh = () => void qc.invalidateQueries({ queryKey: [NEGOTIATIONS_KEY] }).then(() => qc.invalidateQueries({ queryKey: ['buyer-listing'] }));
+    const rt = startRealtime({
+      baseUrl: manager.client.baseUrl,
+      getAccessToken: manager.getAccessToken,
+      refreshAccessToken: manager.refreshAccessToken,
+      onUpdate: refresh,
+      onConnect: refresh,
+    });
+    return () => rt.close();
+  }, [status, manager, qc]);
 }

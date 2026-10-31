@@ -4,8 +4,9 @@ import { Injectable } from '@nestjs/common';
 export interface NegotiationTouch {
   negotiationId: string;
   listingId: string;
-  /** Users to tell: the buyer and the seller's user. */
-  userIds: string[];
+  /** Who to tell: the buyer (in the buyer app) and the seller's user (in the seller app). */
+  buyerUserId: string;
+  sellerUserId: string;
 }
 
 type Listener = (touches: NegotiationTouch[]) => void;
