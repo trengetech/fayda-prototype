@@ -10,7 +10,7 @@ M3.0 is split (DECISIONS I-4). This is the first half. **M3.0 as a whole is not 
 
 | # | Criterion | Result |
 |---|---|---|
-| 1 | `pnpm install`, `pnpm typecheck`, `pnpm lint`, `pnpm test` pass | **Pass** locally (5 tasks each). CI is deferred (I-3). Not tested from a clean clone, because there is no remote. |
+| 1 | `pnpm install`, `pnpm typecheck`, `pnpm lint`, `pnpm test` pass | **Pass** locally (5 tasks each). **CI added 31 Oct 2026** (GitHub Actions, I-3): green on its first PR, which also confirms a clean-clone install. |
 | 2 | Migrations apply; `/v1/health` reports the database and returns 503 when it is down; `/v1/meta` lists providers with `simulated`; both validate against the Zod contracts; OpenAPI is generated from them | **Pass.** `pnpm db:migrate` applied to `fayda-dev`; the built API served 200 on health and meta against it. The 503 case is covered by a test that fails the ping. Compose is replaced by cloud Supabase (I-1). |
 | 5 | ₹ formatter from paise, unit tested, plus contract schemas | **Pass** (5 + 7 tests) |
 | 7 | TECH_STACK, ARCHITECTURE, PROGRESS written | **Pass** |
@@ -42,7 +42,7 @@ Supabase's transaction pooler hangs on concurrent queries with postgres.js's def
 - No sweep task is registered; no mutating endpoint uses idempotency yet.
 - The API runs on the Oracle VM against `fayda-dev` (see below). Its `/v1/meta` reports `environment: development` (set with `APP_ENV` on the VM; `NODE_ENV` stays `production`).
 - The database password was pasted in chat several times. Founder decision (31 Oct 2026): not resetting it for now. Dev and test hold no real data.
-- No remote git, no CI. A local repository exists with nothing committed.
+- Git remote and CI are now in place (private repo `trengetech/fayda-prototype`, default branch `dev`; I-3). CI runs typecheck, lint and test only: no deploys and no APK builds.
 - Free-tier risks (Supabase pause, Oracle idle reclaim) are unverified (I-8).
 
 ### Decisions
