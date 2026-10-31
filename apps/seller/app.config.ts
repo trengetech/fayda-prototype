@@ -26,6 +26,7 @@ const config: ExpoConfig = {
   plugins: [
     'expo-router',
     'expo-font',
+    'expo-secure-store',
     // Plain-HTTP API addresses (a laptop on the local network) are allowed in dev and staging builds only.
     ['expo-build-properties', { android: { usesCleartextTraffic: variant !== 'prod' } }],
   ],
