@@ -5,7 +5,8 @@ import { buyerListing, fakeApi, json, managerWith, problem, renderWith } from '.
 
 const mockPlayer = jest.fn();
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() };
-jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70' }) }));
+let mockParams: Record<string, string> = { id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70' };
+jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => mockParams }));
 jest.mock('expo-video', () => {
   return {
     useVideoPlayer: (uri: string, setup?: (p: { play: () => void }) => void) => {
@@ -25,6 +26,7 @@ beforeEach(() => {
   fetchMock = jest.fn();
   mockPlayer.mockClear();
   mockRouter.push.mockClear();
+  mockParams = { id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70' };
 });
 
 describe('buyer product page', () => {
@@ -32,6 +34,28 @@ describe('buyer product page', () => {
     fetchMock.mockImplementation(() => new Promise(() => {}));
     await renderWith(signedIn(), <ListingScreen />);
     expect(await screen.findByText('Loading…')).toBeOnTheScreen();
+  });
+
+  it('the seller’s name opens their shop page', async () => {
+    serve(buyerListing());
+    await renderWith(signedIn(), <ListingScreen />);
+    await act(async () => void fireEvent.press(await screen.findByLabelText('Open shop Kiran Studio')));
+    expect(mockRouter.push).toHaveBeenCalledWith('/shop/kiranstudio');
+  });
+
+  it('opens the offer sheet straight away when it is reached from a reel’s Make offer, and not otherwise', async () => {
+    serve(buyerListing());
+    mockParams = { id: ID, offer: '1' };
+    await renderWith(signedIn(), <ListingScreen />);
+    await screen.findByText('Cotton kurta');
+    expect(screen.getByLabelText('Your offer')).toBeOnTheScreen();
+  });
+
+  it('shows no tag line for a listing without tags', async () => {
+    serve(buyerListing({ tags: [] }));
+    await renderWith(signedIn(), <ListingScreen />);
+    await screen.findByText('Cotton kurta');
+    expect(screen.queryByText(/^#/)).not.toBeOnTheScreen();
   });
 
   it('shows the error, and Try again recovers', async () => {
@@ -50,7 +74,8 @@ describe('buyer product page', () => {
     await renderWith(signedIn(), <ListingScreen />);
     expect(await screen.findByText('Cotton kurta')).toBeOnTheScreen();
     expect(screen.getByText('₹1,500')).toBeOnTheScreen();
-    expect(screen.getByText('Kiran Studio')).toBeOnTheScreen();
+    expect(screen.getByText('Kiran Studio ›')).toBeOnTheScreen();
+    expect(screen.getByText('#cotton  #summerwear')).toBeOnTheScreen();
     expect(screen.getByText('Madhapur, Hyderabad · ★ 4.5 (12)')).toBeOnTheScreen();
     expect(screen.getByText(/Confirms payment within 4 hours · ships within 2 days/)).toBeOnTheScreen();
     expect(screen.getByText('Block print, soft cotton.')).toBeOnTheScreen();

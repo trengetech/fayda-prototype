@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { Readable } from 'node:stream';
 import { Inject, Injectable } from '@nestjs/common';
 import type { ChatMessageView, ChatThread, ChatThreadList, SendMessage } from '@fayda/contracts';
 import { formatOrderNumber, mayShareFromResponse, validateMessage, type Clock } from '@fayda/domain';
@@ -7,7 +8,8 @@ import { AppError } from '../common/app-error.js';
 import { CLOCK } from '../common/clock.js';
 import { checkOwnedMedia, firstName, listingCovers, mediaRefs } from '../community/shared.js';
 import { DbService } from '../db/db.service.js';
-import { buyerRequests, chatMessages, chatThreads, listings, notifications, orders, requestResponses, sellers, users } from '../db/schema.js';
+import { MediaService } from '../media/media.service.js';
+import { buyerRequests, chatMessages, chatThreads, listings, media, notifications, orders, requestResponses, sellers, users } from '../db/schema.js';
 import { NegotiationEvents, type RealtimeEvent } from '../negotiations/negotiation-events.js';
 import { throwFail } from '../negotiations/negotiations.service.js';
 
@@ -21,6 +23,10 @@ export const MAX_THREAD_MESSAGES = 200;
 /** Messages written in the same millisecond: the system line ("Order placed") always sorts before a person's reply. */
 const NEWEST_FIRST_TIE = sql`(${chatMessages.from} = 'SYSTEM') asc`;
 
+/** A chat photo is private to the thread: its address is an audience route that checks membership, never the public media route (I-19). */
+export const chatPhotoUrl = (side: Side, mediaId: string): string => `/v1/${side === 'BUYER' ? 'buyer' : 'seller'}/threads/photos/${mediaId}`;
+const chatPhotoRef = <T extends { id: string; url: string }>(ref: T | undefined, side: Side): T | null => (ref ? { ...ref, url: chatPhotoUrl(side, ref.id) } : null);
+
 /**
  * Chat. This file holds the part other modules call: creating a thread inside their own transaction, and reading
  * unread counts. Sending, reading and listing messages are added here by the chat work (M3.4, Gate 2).
@@ -31,6 +37,7 @@ export class ChatService {
     @Inject(DbService) protected readonly database: DbService,
     @Inject(CLOCK) protected readonly clock: Clock,
     @Inject(NegotiationEvents) protected readonly events: NegotiationEvents,
+    @Inject(MediaService) private readonly mediaService: MediaService,
   ) {}
 
   protected get db(): Db {
@@ -102,6 +109,22 @@ export class ChatService {
   }
 
   // ---------- reading ----------
+  /**
+   * The bytes of a chat photo, for a member of the thread it was sent in. A person who is not in that thread, a photo
+   * that was never sent, and a photo that does not exist all give the same 404, so the route reveals nothing.
+   */
+  async photo(userId: string, side: Side, mediaId: string): Promise<{ mime: string; size: number; stream: Readable }> {
+    const [row] = await this.db
+      .select({ mime: media.mime, size: media.size, storageKey: media.storageKey })
+      .from(chatMessages)
+      .innerJoin(chatThreads, eq(chatThreads.id, chatMessages.threadId))
+      .innerJoin(media, eq(media.id, chatMessages.mediaId))
+      .where(and(eq(chatMessages.mediaId, mediaId), eq(media.purpose, 'CHAT'), eq(media.status, 'READY'), eq(side === 'BUYER' ? chatThreads.buyerUserId : chatThreads.sellerUserId, userId)))
+      .limit(1);
+    if (!row?.size) throw new AppError(404, 'NOT_FOUND', 'Not found.');
+    return { mime: row.mime, size: row.size, stream: this.mediaService.openFile(row.storageKey) };
+  }
+
   /** The thread if this person is part of it, in this app. Anyone else gets "not found", so ids reveal nothing. */
   private async mine(q: Q, userId: string, side: Side, id: string, lock = false): Promise<ThreadRow> {
     const base = q.select().from(chatThreads).where(and(eq(chatThreads.id, id), eq(side === 'BUYER' ? chatThreads.buyerUserId : chatThreads.sellerUserId, userId))).limit(1);
@@ -185,7 +208,7 @@ export class ChatService {
         from: m.from === 'SYSTEM' ? 'SYSTEM' : m.from === side ? 'ME' : 'OTHER',
         type: m.type,
         text: m.text,
-        media: m.mediaId ? (refs.get(m.mediaId) ?? null) : null,
+        media: m.mediaId ? chatPhotoRef(refs.get(m.mediaId), side) : null,
         listing: l ? { id: l.id, title: l.title, price: l.price, coverUrl: covers.get(l.id) ?? null } : null,
         at: m.createdAt.getTime(),
       };

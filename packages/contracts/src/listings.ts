@@ -16,6 +16,8 @@ export const ListingInputSchema = z
     category: z.string().max(60),
     price: PaiseSchema,
     media: z.array(z.object({ mediaId: z.string().uuid(), posterMediaId: z.string().uuid().nullish() })).max(20),
+    /** Search keywords; cleaned and checked by `validateTags` in `packages/domain`. Omit to keep the current tags. */
+    tags: z.array(z.string().max(60)).max(30).nullish(),
     variants: z.array(z.object({ id: z.string().uuid().nullish(), label: z.string().max(60), stock: z.number() })).max(30),
     bargaining: z.object({ mode: z.string().max(10), expiryMinutes: z.number() }),
     rules: z.object({ autoAcceptAt: PaiseSchema.nullish(), autoDeclineBelow: PaiseSchema.nullish(), autoCounterAt: PaiseSchema.nullish() }).nullish(),
@@ -43,6 +45,7 @@ export const SellerListingSchema = z
     description: z.string(),
     category: z.string(),
     price: PaiseSchema,
+    tags: z.array(z.string()),
     media: z.array(ListingMediaSchema),
     variants: z.array(z.object({ id: z.string(), label: z.string(), stock: z.number().int() })),
     bargaining: z.object({ mode: z.string(), expiryMinutes: z.number().int() }),
@@ -87,6 +90,12 @@ export const BuyerFeedItemSchema = z
     /** A photo to show on the card: the first photo, or the poster of the first video. */
     coverUrl: z.string().nullable(),
     hasVideo: z.boolean(),
+    /** The first video, for a reel: its file and poster. Null on a photo-only listing. */
+    video: z.object({ url: z.string(), posterUrl: z.string().nullable() }).nullable(),
+    /** Whether the signed-in buyer follows this seller. */
+    following: z.boolean(),
+    /** True when the signed-in person owns this shop (they can't follow or buy from it). */
+    ownShop: z.boolean(),
     seller: PublicSellerSchema,
   })
   .openapi('BuyerFeedItem');
@@ -100,6 +109,7 @@ export const BuyerListingSchema = z
     title: z.string(),
     description: z.string(),
     category: z.string(),
+    tags: z.array(z.string()),
     price: PaiseSchema,
     soldOut: z.boolean(),
     media: z.array(ListingMediaSchema.omit({ mediaId: true, posterMediaId: true })),

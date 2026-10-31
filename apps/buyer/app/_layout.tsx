@@ -40,6 +40,9 @@ function Routes() {
       <Stack.Protected guard={complete}>
         <Stack.Screen name="index" />
         <Stack.Screen name="feed" />
+        <Stack.Screen name="search" />
+        <Stack.Screen name="shop/[handle]" />
+        <Stack.Screen name="follows" />
         <Stack.Screen name="listing/[id]" />
         <Stack.Screen name="offers" />
         <Stack.Screen name="negotiation/[id]" />

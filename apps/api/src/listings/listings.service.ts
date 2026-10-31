@@ -8,6 +8,7 @@ import {
   publishStockError,
   validateCheckout,
   validateListingDraft,
+  validateTags,
   type Clock,
   type ListingDraft,
   type PaymentProfile,
@@ -17,10 +18,11 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { AppError } from '../common/app-error.js';
 import { CLOCK } from '../common/clock.js';
 import { DbService } from '../db/db.service.js';
-import { listingMedia, listingVariants, listings, media, sellerPaymentProfiles, sellers } from '../db/schema.js';
+import { follows, listingMedia, listingVariants, listings, media, sellerPaymentProfiles, sellers } from '../db/schema.js';
 import { publicMediaUrl } from '../media/media.service.js';
 import type { NegotiationTouch } from '../negotiations/negotiation-events.js';
 import { NegotiationsService } from '../negotiations/negotiations.service.js';
+import { andAll, encodeFeedCursor, feedAfter, feedConditions, feedOrder, type FeedRequest } from './feed-query.js';
 import { ChatService } from '../chat/chat.service.js';
 import { loadSellerStats, sellerRatings } from '../community/shared.js';
 
@@ -30,14 +32,6 @@ type MediaItem = { mediaId: string; kind: 'image' | 'video'; url: string; poster
 const invalid = (fields: Record<string, string>): AppError => new AppError(400, 'VALIDATION', 'Check the highlighted fields.', fields);
 const FEED_PAGE = 20;
 export const MAX_FEED_PAGE = 50;
-
-const encodeCursor = (publishedAt: Date, id: string): string => Buffer.from(`${publishedAt.getTime()}:${id}`).toString('base64url');
-function decodeCursor(cursor: string): { at: Date; id: string } {
-  const [ms, id] = Buffer.from(cursor, 'base64url').toString().split(':');
-  const at = new Date(Number(ms));
-  if (!id || Number.isNaN(at.getTime()) || !/^[0-9a-f-]{36}$/.test(id)) throw new AppError(400, 'VALIDATION', 'That page marker is not valid.');
-  return { at, id };
-}
 
 @Injectable()
 export class ListingsService {
@@ -73,6 +67,7 @@ export class ListingsService {
       category: input.category,
       price: input.price,
       media: input.media,
+      ...(input.tags ? { tags: input.tags } : {}),
       variants: input.variants.map((v) => ({ ...(v.id ? { id: v.id } : {}), label: v.label, stock: v.stock })),
       bargaining: input.bargaining,
       rules: { autoAcceptAt: input.rules?.autoAcceptAt ?? null, autoDeclineBelow: input.rules?.autoDeclineBelow ?? null, autoCounterAt: input.rules?.autoCounterAt ?? null },
@@ -97,6 +92,8 @@ export class ListingsService {
       title: input.title.trim(),
       description: (input.description ?? '').trim(),
       category: input.category,
+      // Omitted tags keep what the listing has; sent tags replace them (cleaned the same way the check cleaned them).
+      ...(input.tags ? { tags: validateTags(input.tags).tags } : {}),
       pricePaise: input.price,
       bargainMode: input.bargaining.mode as 'BUY_NOW' | 'BOTH',
       expiryMinutes: input.bargaining.expiryMinutes,
@@ -282,6 +279,7 @@ export class ListingsService {
       title: l.title,
       description: l.description,
       category: l.category,
+      tags: l.tags,
       price: l.pricePaise,
       media: mediaBy.get(l.id) ?? [],
       variants: variantsBy.get(l.id) ?? [],
@@ -299,9 +297,10 @@ export class ListingsService {
    * Live listings, newest first. Only public columns are read, and the response is built from buyer schemas, so private
    * rules and deal codes cannot appear. Until offers exist (M3.3) every unit in stock is available.
    */
-  async feed(cursor: string | undefined, limit = FEED_PAGE): Promise<BuyerFeed> {
+  async feed(req: FeedRequest, limit = FEED_PAGE): Promise<BuyerFeed> {
     const take = Math.min(Math.max(limit, 1), MAX_FEED_PAGE);
-    const after = cursor ? decodeCursor(cursor) : null;
+    const conditions = feedConditions(req);
+    if (req.cursor) conditions.push(feedAfter(req.sort, req.cursor));
     const rows = await this.db
       .select({
         id: listings.id,
@@ -311,6 +310,7 @@ export class ListingsService {
         bargainMode: listings.bargainMode,
         publishedAt: listings.publishedAt,
         sellerId: sellers.id,
+        sellerUserId: sellers.userId,
         sellerName: sellers.name,
         sellerHandle: sellers.handle,
         sellerArea: sellers.area,
@@ -318,15 +318,25 @@ export class ListingsService {
       })
       .from(listings)
       .innerJoin(sellers, eq(sellers.id, listings.sellerId))
-      .where(and(eq(listings.status, 'ACTIVE'), after ? sql`(${listings.publishedAt}, ${listings.id}) < (${after.at.toISOString()}::timestamptz, ${after.id}::uuid)` : undefined))
-      .orderBy(desc(listings.publishedAt), desc(listings.id))
+      .where(andAll(conditions))
+      .orderBy(...feedOrder(req.sort))
       .limit(take + 1);
     const page = rows.slice(0, take);
     const ids = page.map((r) => r.id);
-    const [mediaBy, variantsBy, ratings] = await Promise.all([this.mediaOf(ids), this.variantsOf(ids), sellerRatings(this.db, [...new Set(page.map((r) => r.sellerId))])]);
+    const sellerIds = [...new Set(page.map((r) => r.sellerId))];
+    const [mediaBy, variantsBy, ratings, followed] = await Promise.all([
+      this.mediaOf(ids),
+      this.variantsOf(ids),
+      sellerRatings(this.db, sellerIds),
+      sellerIds.length
+        ? this.db.select({ id: follows.targetId }).from(follows).where(and(eq(follows.followerUserId, req.userId), eq(follows.targetType, 'SELLER'), inArray(follows.targetId, sellerIds)))
+        : Promise.resolve([] as { id: string }[]),
+    ]);
+    const following = new Set(followed.map((f) => f.id));
     const items = page.map((r) => {
       const m = mediaBy.get(r.id) ?? [];
       const first = m[0];
+      const video = m.find((x) => x.kind === 'video');
       const stock = (variantsBy.get(r.id) ?? []).reduce((t, v) => t + v.stock, 0);
       return {
         id: r.id,
@@ -336,12 +346,15 @@ export class ListingsService {
         soldOut: stock < 1,
         acceptsOffers: r.bargainMode !== 'BUY_NOW',
         coverUrl: first ? (first.kind === 'image' ? first.url : first.posterUrl) : null,
-        hasVideo: m.some((x) => x.kind === 'video'),
+        hasVideo: !!video,
+        video: video ? { url: video.url, posterUrl: video.posterUrl } : null,
+        following: following.has(r.sellerId),
+        ownShop: r.sellerUserId === req.userId,
         seller: { id: r.sellerId, name: r.sellerName, handle: r.sellerHandle, area: r.sellerArea, city: r.sellerCity, rating: ratings.get(r.sellerId)?.rating ?? null, reviewCount: ratings.get(r.sellerId)?.reviewCount ?? 0 },
       };
     });
     const last = page[page.length - 1];
-    return { items, nextCursor: rows.length > take && last?.publishedAt ? encodeCursor(last.publishedAt, last.id) : null };
+    return { items, nextCursor: rows.length > take && last ? encodeFeedCursor(req.sort, last) : null };
   }
 
   async getForBuyer(listingId: string): Promise<BuyerListing> {
@@ -383,6 +396,7 @@ export class ListingsService {
     const [pay] = l.channel === 'DIRECT' ? await this.db.select().from(sellerPaymentProfiles).where(eq(sellerPaymentProfiles.sellerId, l.sellerId)).limit(1) : [];
     return {
       ...view,
+      tags: l.tags,
       checkout: { ...view.checkout, payMethods: pay ? directMethods(cleanPayment(pay)) : [] },
       media: (mediaBy.get(listingId) ?? []).map((m) => ({ kind: m.kind, url: m.url, posterUrl: m.posterUrl })),
       seller: {

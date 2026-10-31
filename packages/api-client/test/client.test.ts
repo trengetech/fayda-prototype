@@ -50,12 +50,12 @@ describe('api client', () => {
 
 describe('media and listings', () => {
   const listing = {
-    id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', status: 'DRAFT', title: 'Kurta', description: '', category: 'Ethnic wear', price: 150000, media: [],
+    id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', status: 'DRAFT', title: 'Kurta', description: '', category: 'Ethnic wear', tags: [], price: 150000, media: [],
     variants: [{ id: 'v1', label: 'M', stock: 2 }], bargaining: { mode: 'BUY_NOW', expiryMinutes: 1440 },
     rules: { autoAcceptAt: null, autoDeclineBelow: null, autoCounterAt: null }, checkout: { channel: 'DIRECT', productUrl: null },
     dealCodes: { accept: null, counter: null }, publishedAt: null, updatedAt: 1,
   };
-  const input = { title: 'Kurta', category: 'Ethnic wear', price: 150000, media: [], variants: [{ label: 'M', stock: 2 }], bargaining: { mode: 'BUY_NOW', expiryMinutes: 1440 }, checkout: { channel: 'DIRECT' }, publish: false };
+  const input = { title: 'Kurta', category: 'Ethnic wear', tags: [], price: 150000, media: [], variants: [{ label: 'M', stock: 2 }], bargaining: { mode: 'BUY_NOW', expiryMinutes: 1440 }, checkout: { channel: 'DIRECT' }, publish: false };
   const authed = (f: typeof fetch) => createApiClient({ baseUrl: 'http://api.test', fetch: f, getAccessToken: () => 'tok' });
 
   it('sends the idempotency key and bearer token on a create, and parses the listing', async () => {
@@ -99,17 +99,45 @@ describe('media and listings', () => {
   });
   it('asks for the next feed page with the cursor, and parses the page', async () => {
     const seller = { id: 's1', name: 'Kiran Studio', handle: 'kiranstudio', area: 'Madhapur', city: 'Hyderabad', rating: null, reviewCount: 0 };
-    const item = { id: listing.id, title: 'Cotton kurta', price: 150000, category: 'Ethnic wear', soldOut: false, acceptsOffers: true, coverUrl: '/v1/media/m1', hasVideo: false, seller };
+    const item = { id: listing.id, title: 'Cotton kurta', price: 150000, category: 'Ethnic wear', soldOut: false, acceptsOffers: true, coverUrl: '/v1/media/m1', hasVideo: false, video: null, following: false, ownShop: false, seller };
     const urls: string[] = [];
     const c = authed(async (u) => { urls.push(String(u)); return json(200, { items: [item], nextCursor: 'abc' }); });
     expect((await c.getBuyerFeed()).nextCursor).toBe('abc');
-    await c.getBuyerFeed('abc', 5);
-    expect(urls).toEqual(['http://api.test/v1/buyer/feed', 'http://api.test/v1/buyer/feed?cursor=abc&limit=5']);
+    await c.getBuyerFeed({ cursor: 'abc', limit: 5 });
+    expect(urls).toEqual(['http://api.test/v1/buyer/feed', 'http://api.test/v1/buyer/feed?limit=5&cursor=abc']);
+  });
+
+  it('builds a stable feed address from search, filters and sort, leaving empty values out', async () => {
+    const urls: string[] = [];
+    const c = authed(async (u) => { urls.push(String(u)); return json(200, { items: [], nextCursor: null }); });
+    await c.getBuyerFeed({ scope: 'FOLLOWING', q: '  red   kurta ', category: 'Ethnic wear', minPrice: 50000, maxPrice: 0, size: '', acceptsOffers: false, sort: 'PRICE_LOW', cursor: 'c1', limit: 10 });
+    await c.getBuyerFeed({ sort: 'NEWEST', q: '' });
+    await c.getShopListings('anita.shop', { acceptsOffers: true });
+    expect(urls).toEqual([
+      'http://api.test/v1/buyer/feed?scope=FOLLOWING&q=red+kurta&category=Ethnic+wear&minPrice=50000&maxPrice=0&sort=PRICE_LOW&limit=10&cursor=c1',
+      'http://api.test/v1/buyer/feed?sort=NEWEST',
+      'http://api.test/v1/buyer/shops/anita.shop/listings?acceptsOffers=true',
+    ]);
+  });
+
+  it('follows and unfollows with PUT and DELETE, and reads shops and facets', async () => {
+    const calls: { url: string; method?: string }[] = [];
+    const bodies: Record<string, unknown> = {
+      '/v1/buyer/follows/sellers/s1': { following: true, followerCount: 3 },
+      '/v1/buyer/feed/facets': { categories: ['Ethnic wear'], sizes: ['m'], minPrice: 40000, maxPrice: 500000 },
+      '/v1/buyer/follows': { items: [{ id: 's1', name: 'Anita', handle: 'anita', area: 'Tolichowki', city: 'Hyderabad', followedAt: 1 }], nextCursor: null },
+    };
+    const c = authed(async (u, init) => { calls.push({ url: String(u), method: init?.method }); return json(200, bodies[new URL(String(u)).pathname]); });
+    expect(await c.followSeller('s1')).toEqual({ following: true, followerCount: 3 });
+    await c.unfollowSeller('s1');
+    expect((await c.getFeedFacets()).sizes).toEqual(['m']);
+    expect((await c.listFollows()).items[0]?.handle).toBe('anita');
+    expect(calls.map((x) => `${x.method ?? 'GET'} ${new URL(x.url).pathname}`)).toEqual(['PUT /v1/buyer/follows/sellers/s1', 'DELETE /v1/buyer/follows/sellers/s1', 'GET /v1/buyer/feed/facets', 'GET /v1/buyer/follows']);
   });
 
   it('drops a private field the buyer schema does not list', async () => {
     const seller = { id: 's1', name: 'Kiran Studio', handle: 'kiranstudio', area: 'Madhapur', city: 'Hyderabad', rating: null, reviewCount: 0, slaConfirmHours: 24, slaShipDays: 3, categories: ['Ethnic wear'], record: { orders: 0, completed: 0, confirmed: 0, cancelled: 0, expired: 0, medianConfirmMs: null, rating: null, reviewCount: 0 } };
-    const page = { id: listing.id, title: 'Cotton kurta', description: '', category: 'Ethnic wear', price: 150000, soldOut: false, media: [], variants: [{ id: 'v1', label: 'M', available: true, low: false }], bargaining: { mode: 'BOTH', acceptsOffers: true, expiryMinutes: 1440 }, checkout: { channel: 'DIRECT', productUrl: null, payMethods: ['UPI'] }, seller };
+    const page = { id: listing.id, title: 'Cotton kurta', description: '', category: 'Ethnic wear', tags: [], price: 150000, soldOut: false, media: [], variants: [{ id: 'v1', label: 'M', available: true, low: false }], bargaining: { mode: 'BOTH', acceptsOffers: true, expiryMinutes: 1440 }, checkout: { channel: 'DIRECT', productUrl: null, payMethods: ['UPI'] }, seller };
     const got = await authed(async () => json(200, { ...page, rules: { autoAcceptAt: 120000 } })).getBuyerListing(listing.id);
     expect(got).not.toHaveProperty('rules'); // the buyer schema drops anything it does not list
   });

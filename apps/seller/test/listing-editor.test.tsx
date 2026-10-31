@@ -75,6 +75,23 @@ describe('new listing', () => {
     expect(mockRouter.replace).toHaveBeenCalledWith('/listings');
   });
 
+  it('sends the tags as a clean list, and shows the server’s tag message beside the field', async () => {
+    const id = 'a1a1a1a1-0000-4000-8000-000000000001';
+    const bodies: Record<string, unknown>[] = [];
+    fakeApi({
+      'POST /v1/seller/media/intents': intentRoute(id),
+      [`POST /v1/seller/media/${id}/complete`]: completeRoute(id),
+      'POST /v1/seller/listings': (r) => { bodies.push(r.body as Record<string, unknown>); return bodies.length === 1 ? problem(400, 'VALIDATION', { tags: 'Up to 8 tags.' }) : json(sellerListing({ status: 'ACTIVE' }), 201); },
+    }, fetchMock);
+    await renderWith(signedIn(), <ListingScreen />);
+    await fillBasics();
+    await addPhoto(id);
+    await type('Tags', ' Cotton, #Summer wear ,, cotton ');
+    await press('Publish');
+    expect(await screen.findByText('Up to 8 tags.')).toBeOnTheScreen();
+    expect(bodies[0]).toMatchObject({ tags: ['cotton', 'summer wear'] });
+  });
+
   it('refuses a too-big photo on the phone, before any network call', async () => {
     fakeApi({}, fetchMock);
     mockPick.mockResolvedValueOnce({ canceled: false, assets: [photoAsset({ fileSize: 16_000_000, fileName: 'huge.jpg' })] });

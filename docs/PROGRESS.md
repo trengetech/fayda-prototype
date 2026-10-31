@@ -1,6 +1,6 @@
 # Progress
 
-**Where we are (31 Oct 2026): M3.3 (bargaining) is approved by the founder; its PR into `dev` is open and CI was clean. Two follow-ups are done on the same branch (break-it check, wrong-code counts in the database) and wait for review. Physical-phone tests for M3.1 to M3.3 are still to do (founder, later). Next milestone: M3.4 (orders).** Earlier note: the chat/contact/reviews/requests update (`docs/updates/`) has its pure rules built and tested in `packages/domain`; its API and screens wait for M3.4.
+**Where we are (1 Nov 2026): M3.5 (discovery) is built, tested and emulator-checked; its PR into `dev` follows this note. M3.6 to M3.8 are next, built one after the other with the same checks (the founder asked for them to run without waiting for approval).** M3.3 and M3.4 are merged. The physical-phone test of M3.3 and M3.4 is deferred by the founder.
 
 ## M3.0a — Backend foundation (31 Oct 2026): built, awaiting your review
 
@@ -108,6 +108,46 @@ Decisions D11 to D18 are merged into `docs/DECISIONS.md`. Founder choices: revie
 | 1 to 8, 10 | **Not started** (need M3.1 to M3.4) |
 
 Next, when you are ready: M3.1 needs your answers on dev OTP, separate sessions per app, and `jose` plus `@fastify/rate-limit`.
+
+## M3.5: discovery (1 Nov 2026): built, tested and emulator-checked; not yet run on a physical phone
+
+Branch `m3.5-discovery` from `dev`. Founder decisions used: access-checked chat photos first (I-19); search includes tags (I-24); a proper, expandable follows table now, not a stub (I-23); work order photo check, reels, search, shop pages.
+
+### What was built
+- **Chat photos are private (I-19).** `GET /v1/{buyer|seller}/threads/photos/:mediaId` streams a chat photo only to the two people in the thread it was sent in; anyone else, an unsent photo and a missing one all give the same 404. The public media route refuses chat photos and an unsent chat photo has no address. The apps load them with the bearer token (`getChatPhotoSource`).
+- **Database (migration 0007):** `listings.tags` (text array, GIN index), `listings_price_idx` for price sorting, and `follows` (follower, target type, target id; unique edge; indexes both ways).
+- **Domain (`packages/domain/src/discovery.ts`):** tag cleaning and checks, search-term parsing and LIKE escaping, feed filter checks, and the follow rules (not your own shop, at most 1,000). 10 tests.
+- **API:**
+  - `GET /v1/buyer/feed` now takes scope (For You or Following), search `q`, category, price range, size in stock, open to offers and sort (newest, price low to high, price high to low), with a keyset cursor that only fits its own sort. Each card carries the first video, `following` and `ownShop`. `GET /v1/buyer/feed/facets` lists categories, in-stock sizes and the price span.
+  - Shop pages: `GET /v1/buyer/shops/:handle` (public profile, order record, follower and listing counts; no contact or payment details) and `/shops/:handle/listings`.
+  - Follows: `PUT` and `DELETE /v1/buyer/follows/sellers/:id` (repeat-safe), `GET /v1/buyer/follows`. A per-person lock keeps the 1,000 limit exact when two taps race.
+  - Listing tags on create and edit (omit to keep, `[]` to clear), shown to buyers on the product page.
+- **api-client:** `getBuyerFeed(params)`, facets, shop, follow methods; hooks `useBuyerFeed(params)`, `useShop`, `useShopListings`, `useFollowedShops`, `useSetFollow` (flips at once, rolls back on refusal).
+- **Buyer app:** full-screen reels (one active `expo-video` player, the next one prepared, pause on background or when another screen covers it, tap to pause, Sound switch), For You and Following tabs, Buy and Make offer (the offer sheet opens straight away), Search with filters and sort, shop pages, "Shops you follow", seller name opens the shop from the product page, tags on the product page.
+- **Seller app:** a Tags field in the listing editor.
+
+### Tests: 570 passing (typecheck and lint clean, all 9 packages)
+domain 80, contracts 16, api 202 (real `fayda-test` database), api-client 44, ui 6, buyer 126, seller 96.
+- **Break-it check (recipe in CLAUDE.md), 11 breaks, all caught:** chat photo open to any signed-in person of the app; public route serving chat photos again; Following scope ignored; paused listings in the feed; search wildcards not escaped; size filter ignoring stock; a cursor from another sort accepted; own shop followable; no follow limit; the limit race without the per-person lock; one person's follows leaking into another's list. A twelfth idea, leaking a contact number through the shop page, is not a real break: the response schema drops fields it does not name (a contract test covers that). Whole run 581 s.
+- A first draft of the break-it runner ran single tests with `-t`; the discovery tests share state, so it was changed to run the whole file (about 50 s each).
+
+### Review of this diff before the pull request
+A separate review pass found 10 points; fixed: unfollow now takes the same per-person lock as follow; follower counts ignore a shop that no longer exists; price filters must be whole rupees; a failed follow reloads every card from the server instead of trusting the guess; facet queries run in parallel; a misplaced doc comment. Not changed, by choice and noted in `DECISIONS.md`: the unused GIN index and the scanning search (I-25), uncached facets, the polymorphic follow target without a foreign key (I-23), the sub-millisecond note on the cursor (comment added), and two small duplications (cursor helpers, the two chat photo handlers).
+
+### Checked on the Android emulator (1 Nov 2026, local API on the dev database, new APKs for both apps)
+- Buyer: signed in with the dev code; the reels fill the screen with the seller, price, label, Buy and Make offer; a video reel plays (frames change between samples) and swiping moves to the next; Follow flipped to "Following" at once and the shop page showed "1 follower"; the Following tab listed that shop's listings; the shop page showed the record, categories and map button; search found a listing by a tag ("wedding"), by shop handle and by a two-word tag ("summer wear"); a search with no match said so and offered "Ask sellers"; the seller's chat photo loaded in the order chat through the private route (the API log shows the request).
+- API on the same data: the thread's buyer and seller got the photo, no token got 401, another seller and the public route got 404.
+- Seller: the Tags field showed "cotton, summer wear" with its hint; adding a tag and saving stored `['cotton','summer wear','handloom']`.
+- **Found and fixed while testing:** nothing in the app; the sign-in limit (20 a minute) blocked my own seed script, so the local API ran with a higher limit for the test only.
+- Not exercised by hand: sound on (the emulator has no audio check here), the filters panel beyond the sort chip, backgrounding the app during a video, a second device, a mid-range phone.
+
+### Known limits
+- **For You is newest first, with no ranking** (I-26).
+- **Search scans** (I-25): fine for thousands of listings; trigram or full-text next.
+- Video preload behaviour and memory with two players are unverified on a real phone (I-27).
+- Following has no push or in-app notification until M3.7.
+- The follow target has no database foreign key (it is polymorphic, I-23).
+- Chat photos still stream through the API; R2 signed URLs come with the R2 move (I-10).
 
 ## M3.4: orders, chat, reviews, requests (31 Oct 2026): built, tested, deployed and emulator-checked; not yet run on a physical phone
 

@@ -1,7 +1,8 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, ParseUUIDPipe, Post, Res, UseGuards } from '@nestjs/common';
 import { ChatThreadListSchema, ChatThreadSchema, SendMessageSchema, type ChatThread, type ChatThreadList, type SendMessage } from '@fayda/contracts';
 import { Audience, Auth, AuthGuard } from '../auth/auth.guard.js';
 import type { AccessClaims } from '../auth/token.service.js';
+import type { FastifyReply } from 'fastify';
 import { ZodPipe } from '../common/zod-pipe.js';
 import { ChatService } from './chat.service.js';
 
@@ -17,6 +18,13 @@ export class BuyerChatController {
   @Get()
   async list(@Auth() who: AccessClaims): Promise<ChatThreadList> {
     return ChatThreadListSchema.parse(await this.chat.list(who.userId, 'BUYER'));
+  }
+
+  /** A photo sent in a chat: members of that chat only (I-19). Private, never cached by shared caches. */
+  @Get('photos/:mediaId')
+  async photo(@Auth() who: AccessClaims, @Param('mediaId', IdParam) mediaId: string, @Res() reply: FastifyReply): Promise<FastifyReply> {
+    const f = await this.chat.photo(who.userId, 'BUYER', mediaId);
+    return reply.header('content-type', f.mime).header('content-length', f.size).header('cache-control', 'private, max-age=3600').send(f.stream);
   }
 
   @Get(':id')
@@ -46,6 +54,13 @@ export class SellerChatController {
   @Get()
   async list(@Auth() who: AccessClaims): Promise<ChatThreadList> {
     return ChatThreadListSchema.parse(await this.chat.list(who.userId, 'SELLER'));
+  }
+
+  /** A photo sent in a chat: members of that chat only (I-19). Private, never cached by shared caches. */
+  @Get('photos/:mediaId')
+  async photo(@Auth() who: AccessClaims, @Param('mediaId', IdParam) mediaId: string, @Res() reply: FastifyReply): Promise<FastifyReply> {
+    const f = await this.chat.photo(who.userId, 'SELLER', mediaId);
+    return reply.header('content-type', f.mime).header('content-length', f.size).header('cache-control', 'private, max-age=3600').send(f.stream);
   }
 
   @Get(':id')

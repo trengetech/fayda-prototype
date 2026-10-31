@@ -228,6 +228,7 @@ function Editor({ existing, request }: { existing: SellerListing | null; request
       {tf('title', 'Title', { maxLength: 80 })}
       {tf('description', 'Description', { multiline: true, optional: true, maxLength: 600 })}
       <Controller control={form.control} name="category" render={({ field: f, fieldState }) => <ChipGroup label="Category" options={CATEGORY_NAMES} value={f.value ? [f.value as (typeof CATEGORY_NAMES)[number]] : []} onChange={(v) => f.onChange(v[0] ?? '')} error={fieldState.error?.message} />} />
+      {tf('tags', 'Tags', { optional: true, maxLength: 300, autoCapitalize: 'none', hint: 'Words buyers may search for, separated by commas, such as cotton, summer wear. Up to 8.' })}
       {tf('price', 'Price', { keyboardType: 'number-pad', prefix: '₹', maxLength: 8, hint: 'Whole rupees, from ₹50 to ₹10,00,000.' })}
 
       {/* Sizes */}

@@ -17,7 +17,7 @@ function Bubble({ m }: { m: ChatMessageView }) {
   const mine = m.from === 'ME';
   return (
     <View style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '85%', backgroundColor: mine ? colors.accentTint : colors.border, borderRadius: 14, padding: 10, gap: 6 }}>
-      {m.media ? <Image source={{ uri: client.resolveUrl(m.media.url) }} style={{ width: 200, height: 200, borderRadius: 10 }} accessibilityLabel="Photo in the chat" accessibilityIgnoresInvertColors /> : null}
+      {m.media ? <Image source={client.getChatPhotoSource(m.media.url)} style={{ width: 200, height: 200, borderRadius: 10 }} accessibilityLabel="Photo in the chat" accessibilityIgnoresInvertColors /> : null}
       {m.text ? <AppText selectable>{m.text}</AppText> : null}
       {m.listing ? (
         <View style={{ gap: 4 }}>

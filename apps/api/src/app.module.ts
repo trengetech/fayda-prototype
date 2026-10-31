@@ -12,6 +12,9 @@ import { SellerController } from './profiles/seller.controller.js';
 import { CLOCK } from './common/clock.js';
 import { BuyerCatalogController, SellerListingsController } from './listings/listings.controller.js';
 import { ListingsService } from './listings/listings.service.js';
+import { BuyerDiscoveryController } from './discovery/discovery.controller.js';
+import { DiscoveryService } from './discovery/discovery.service.js';
+import { FollowsService } from './discovery/follows.service.js';
 import { BuyerNegotiationsController, SellerNegotiationsController } from './negotiations/negotiations.controller.js';
 import { BuyerOrdersController, PublicShopsController, SellerOrdersController } from './orders/orders.controller.js';
 import { OrdersService } from './orders/orders.service.js';
@@ -39,7 +42,7 @@ export class AppModule {
     return {
       module: AppModule,
       imports: [ScheduleModule.forRoot()],
-      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController, BuyerMediaController, SellerListingsController, BuyerCatalogController, BuyerNegotiationsController, SellerNegotiationsController, BuyerOrdersController, SellerOrdersController, PublicShopsController, BuyerChatController, SellerChatController, BuyerReviewsController, SellerReviewsController, ShopReviewsController, BuyerRequestsController, SellerRequestsController],
+      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController, BuyerMediaController, SellerListingsController, BuyerCatalogController, BuyerDiscoveryController, BuyerNegotiationsController, SellerNegotiationsController, BuyerOrdersController, SellerOrdersController, PublicShopsController, BuyerChatController, SellerChatController, BuyerReviewsController, SellerReviewsController, ShopReviewsController, BuyerRequestsController, SellerRequestsController],
       providers: [
         { provide: APP_CONFIG, useValue: config },
         { provide: CLOCK, useValue: clock },
@@ -51,6 +54,8 @@ export class AppModule {
         { provide: MEDIA_STORAGE, useFactory: () => new DiskMediaStorage(config.uploadsDir) },
         MediaService,
         ListingsService,
+        DiscoveryService,
+        FollowsService,
         NegotiationEvents,
         NegotiationsService,
         ChatService,

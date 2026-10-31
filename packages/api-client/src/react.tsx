@@ -2,8 +2,8 @@ import type { AddressInput, CancelOrder, CreateRequest, ListingInput, NewAddress
 import { QueryClient, QueryClientProvider, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { useStore } from 'zustand';
-import { createApiClient, type ApiClient, type DealAccessInput } from './client';
-import { ALL_LIVE_KEYS, NEGOTIATIONS_KEY, ORDERS_KEY, PROFILE_KEY, RECORD_KEY, REQUESTS_KEY, REVIEWS_KEY, THREADS_KEY, invalidationFor, queryKeys } from './keys';
+import { createApiClient, feedQueryString, type ApiClient, type DealAccessInput, type FeedParams } from './client';
+import { ALL_LIVE_KEYS, FEED_KEY, FOLLOWS_KEY, SHOP_KEY, NEGOTIATIONS_KEY, ORDERS_KEY, PROFILE_KEY, RECORD_KEY, REQUESTS_KEY, REVIEWS_KEY, THREADS_KEY, invalidationFor, queryKeys } from './keys';
 import { startRealtime } from './realtime';
 import type { SessionManager, SessionState } from './session';
 
@@ -43,14 +43,84 @@ export function useSellerListings() {
   return useQuery({ queryKey: sellerListingsKey(client.baseUrl), queryFn: () => client.listSellerListings() });
 }
 
-/** The buyer feed, one page at a time: call `fetchNextPage` near the end of the list. */
-export function useBuyerFeed() {
+/**
+ * The buyer feed, one page at a time: call `fetchNextPage` near the end of the list. Every distinct set of params
+ * (scope, search, filters, sort) is its own cached list, so switching tabs does not refetch what is already loaded.
+ */
+export function useBuyerFeed(params: Omit<FeedParams, 'cursor'> = {}) {
   const client = useApiClient();
   return useInfiniteQuery({
-    queryKey: ['buyer-feed', client.baseUrl],
+    queryKey: queryKeys.feed(client.baseUrl, feedQueryString(params)),
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => client.getBuyerFeed(pageParam),
+    queryFn: ({ pageParam }) => client.getBuyerFeed({ ...params, ...(pageParam ? { cursor: pageParam } : {}) }),
     getNextPageParam: (last) => last.nextCursor,
+  });
+}
+
+export function useFeedFacets() {
+  const client = useApiClient();
+  return useQuery({ queryKey: [FEED_KEY, client.baseUrl, 'facets'], queryFn: () => client.getFeedFacets(), staleTime: 60_000 });
+}
+
+export function useShop(handle: string | null) {
+  const client = useApiClient();
+  return useQuery({ queryKey: queryKeys.shop(client.baseUrl, handle), queryFn: () => client.getShop(handle as string), enabled: !!handle });
+}
+
+export function useShopListings(handle: string | null, params: Omit<FeedParams, 'cursor' | 'scope'> = {}) {
+  const client = useApiClient();
+  return useInfiniteQuery({
+    queryKey: queryKeys.shopListings(client.baseUrl, handle, feedQueryString(params)),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => client.getShopListings(handle as string, { ...params, ...(pageParam ? { cursor: pageParam } : {}) }),
+    getNextPageParam: (last) => last.nextCursor,
+    enabled: !!handle,
+  });
+}
+
+export function useFollowedShops() {
+  const client = useApiClient();
+  return useInfiniteQuery({
+    queryKey: queryKeys.follows(client.baseUrl),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => client.listFollows(pageParam),
+    getNextPageParam: (last) => last.nextCursor,
+  });
+}
+
+type FeedPages = { pages: { items: { seller: { id: string }; following: boolean }[] }[]; pageParams: unknown[] };
+
+/**
+ * Follow or unfollow a shop. The heart/Follow button flips at once (every cached feed card and the shop page), the
+ * server's answer then replaces the guess, and a failure puts things back. Following lists are refetched either way.
+ */
+export function useSetFollow() {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  const flip = (sellerId: string, following: boolean) => {
+    qc.setQueriesData<FeedPages>({ queryKey: [FEED_KEY, client.baseUrl] }, (old) =>
+      old && 'pages' in old ? { ...old, pages: old.pages.map((p) => ({ ...p, items: p.items.map((i) => (i.seller.id === sellerId ? { ...i, following } : i)) })) } : old,
+    );
+    qc.setQueriesData<{ id: string; following: boolean; followerCount: number }>({ queryKey: [SHOP_KEY, client.baseUrl] }, (old) =>
+      old && 'followerCount' in old && old.id === sellerId ? { ...old, following, followerCount: Math.max(0, old.followerCount + (following === old.following ? 0 : following ? 1 : -1)) } : old,
+    );
+  };
+  return useMutation({
+    mutationFn: ({ sellerId, follow }: { sellerId: string; follow: boolean }) => (follow ? client.followSeller(sellerId) : client.unfollowSeller(sellerId)),
+    onMutate: ({ sellerId, follow }) => {
+      flip(sellerId, follow);
+      return { sellerId, follow };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx) flip(ctx.sellerId, !ctx.follow);
+      // The guess may not match what the server really holds (another tap, another device): reload every card from it.
+      void qc.invalidateQueries({ queryKey: [FEED_KEY, client.baseUrl] });
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: [FOLLOWS_KEY] });
+      void qc.invalidateQueries({ queryKey: [SHOP_KEY] });
+      void qc.invalidateQueries({ queryKey: [FEED_KEY, client.baseUrl], predicate: (q) => q.queryKey[2] !== 'facets' && typeof q.queryKey[2] === 'string' && q.queryKey[2].includes('scope=FOLLOWING') });
+    },
   });
 }
 

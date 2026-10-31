@@ -140,6 +140,42 @@ describe('chat: sending', () => {
     expect((await send(s.buyer, 'buyer', s.order.threadId, { text: 'x'.repeat(1000) })).status).toBe(201);
   });
 
+  it('a chat photo is served only to the two people in that chat (I-19)', async () => {
+    const s = await setup();
+    const photo = await upload(call, s.buyer, 'buyer', 'CHAT');
+    const sent = await send(s.buyer, 'buyer', s.order.threadId, { mediaId: photo.id });
+    expect(sent.status).toBe(201);
+    // the seller sees the same photo at their own audience route
+    const seen = await call('GET', `/v1/seller/threads/${s.order.threadId}`, { token: s.seller });
+    expect(seen.body.messages.at(-1).media.url).toBe(`/v1/seller/threads/photos/${photo.id}`);
+
+    const own = await call('GET', `/v1/buyer/threads/photos/${photo.id}`, { token: s.buyer });
+    expect(own.status).toBe(200);
+    expect(own.headers['content-type']).toBe('image/jpeg');
+    expect(own.headers['cache-control']).toMatch(/^private/);
+    expect((await call('GET', `/v1/seller/threads/photos/${photo.id}`, { token: s.seller })).status).toBe(200);
+
+    // everyone else gets the same 404 as for a file that does not exist
+    const missing = await call('GET', '/v1/buyer/threads/photos/11111111-1111-4111-8111-111111111111', { token: s.buyer });
+    for (const r of [
+      await call('GET', `/v1/buyer/threads/photos/${photo.id}`, { token: s.stranger }),
+      await call('GET', `/v1/seller/threads/photos/${photo.id}`, { token: s.otherSeller }),
+    ]) {
+      expect(r.status).toBe(404);
+      expect(r.body).toEqual(missing.body);
+    }
+    expect((await call('GET', `/v1/buyer/threads/photos/${photo.id}`, {})).status).toBe(401); // no token
+    expect((await call('GET', `/v1/buyer/threads/photos/${photo.id}`, { token: s.seller })).status).toBe(403); // wrong app
+    // the public route no longer serves it, and a chat photo that was never sent is private too
+    expect((await call('GET', `/v1/media/${photo.id}`, {})).status).toBe(404);
+    const unsent = await upload(call, s.buyer, 'buyer', 'CHAT');
+    expect(unsent.url).toBeNull();
+    expect((await call('GET', `/v1/buyer/threads/photos/${unsent.id}`, { token: s.buyer })).status).toBe(404);
+    // review photos stay public
+    const review = await upload(call, s.buyer, 'buyer', 'REVIEW');
+    expect((await call('GET', `/v1/media/${review.id}`, {})).status).toBe(200);
+  });
+
   it('a photo must be the sender’s own finished chat image', async () => {
     const s = await setup();
     const id = s.order.threadId;
@@ -147,7 +183,7 @@ describe('chat: sending', () => {
     const ok = await send(s.buyer, 'buyer', id, { mediaId: photo.id, text: 'See this' });
     expect(ok.status).toBe(201);
     expect(ok.body.messages.at(-1)).toMatchObject({ type: 'MEDIA', text: 'See this' });
-    expect(ok.body.messages.at(-1).media.url).toBe(`/v1/media/${photo.id}`);
+    expect(ok.body.messages.at(-1).media.url).toBe(`/v1/buyer/threads/photos/${photo.id}`);
     const review = await upload(call, s.buyer, 'buyer', 'REVIEW');
     expect((await send(s.buyer, 'buyer', id, { mediaId: review.id })).body.fields?.media).toBeTruthy(); // wrong purpose
     const theirs = await upload(call, s.stranger, 'buyer', 'CHAT');

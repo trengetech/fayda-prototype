@@ -1,13 +1,10 @@
-import { Body, Controller, Delete, Get, Headers, HttpCode, Inject, Param, ParseUUIDPipe, Post, Put, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Inject, Param, ParseUUIDPipe, Post, Put, Req, Res, UseGuards } from '@nestjs/common';
 import {
-  BuyerFeedSchema,
   BuyerListingSchema,
   ListingInputSchema,
   ListingStatusChangeSchema,
   SellerListingListSchema,
   SellerListingSchema,
-  z,
-  type BuyerFeed,
   type BuyerListing,
   type ListingInput,
   type SellerListing,
@@ -19,7 +16,7 @@ import type { AccessClaims } from '../auth/token.service.js';
 import { CLOCK } from '../common/clock.js';
 import { IdempotencyService } from '../common/idempotency.service.js';
 import { ZodPipe } from '../common/zod-pipe.js';
-import { ListingsService, MAX_FEED_PAGE } from './listings.service.js';
+import { ListingsService } from './listings.service.js';
 
 /** The seller's listings. Every write accepts an Idempotency-Key header, so a retry after a lost reply does not repeat it. */
 @Controller('seller/listings')
@@ -90,19 +87,12 @@ export class SellerListingsController {
   }
 }
 
-const FeedQuerySchema = z.object({ cursor: z.string().max(200).optional(), limit: z.coerce.number().int().min(1).max(MAX_FEED_PAGE).optional() });
-
 /** What a buyer sees: live listings only, built from buyer schemas. */
 @Controller('buyer')
 @UseGuards(AuthGuard)
 @Audience('buyer')
 export class BuyerCatalogController {
   constructor(@Inject(ListingsService) private readonly listings: ListingsService) {}
-
-  @Get('feed')
-  async feed(@Query(new ZodPipe(FeedQuerySchema)) q: { cursor?: string; limit?: number }): Promise<BuyerFeed> {
-    return BuyerFeedSchema.parse(await this.listings.feed(q.cursor, q.limit));
-  }
 
   @Get('listings/:id')
   async get(@Param('id', new ParseUUIDPipe()) id: string): Promise<BuyerListing> {

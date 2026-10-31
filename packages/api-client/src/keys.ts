@@ -7,6 +7,9 @@ export const THREADS_KEY = 'threads';
 export const REQUESTS_KEY = 'requests';
 export const REVIEWS_KEY = 'reviews';
 export const RECORD_KEY = 'record';
+export const FEED_KEY = 'buyer-feed';
+export const SHOP_KEY = 'shop';
+export const FOLLOWS_KEY = 'follows';
 /** The buyer's own profile (addresses, contact). */
 export const PROFILE_KEY = 'buyer-profile';
 
@@ -26,6 +29,10 @@ export const queryKeys = {
   shopReviews: (baseUrl: string, sellerId: string | null) => [REVIEWS_KEY, 'shop', baseUrl, sellerId] as const,
   shopRecord: (baseUrl: string, sellerId: string | null) => [RECORD_KEY, 'shop', baseUrl, sellerId] as const,
   sellerRecord: (baseUrl: string) => [RECORD_KEY, 'seller', baseUrl] as const,
+  feed: (baseUrl: string, params: unknown) => [FEED_KEY, baseUrl, params] as const,
+  shop: (baseUrl: string, handle: string | null) => [SHOP_KEY, baseUrl, handle] as const,
+  shopListings: (baseUrl: string, handle: string | null, params: unknown) => [SHOP_KEY, baseUrl, handle, 'listings', params] as const,
+  follows: (baseUrl: string) => [FOLLOWS_KEY, baseUrl] as const,
 } as const;
 
 /**

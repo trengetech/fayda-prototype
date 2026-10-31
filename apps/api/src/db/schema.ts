@@ -1,4 +1,5 @@
 import { bigint, boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import type { DealAccess, Negotiation, Shipment } from '@fayda/domain';
 
 /**
@@ -161,6 +162,8 @@ export const listings = pgTable(
     title: text('title').notNull(),
     description: text('description').notNull().default(''),
     category: text('category').notNull(),
+    /** Search keywords, lower case (`validateTags`). Public: shown on the product page and matched by search. */
+    tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
     pricePaise: integer('price_paise').notNull(),
     bargainMode: text('bargain_mode', { enum: ['BUY_NOW', 'BOTH'] }).notNull(),
     /** How long a bargaining offer on this listing stays open: 30, 60, 180, 360 or 1440 minutes. */
@@ -177,7 +180,12 @@ export const listings = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('listings_seller_idx').on(t.sellerId, t.status), index('listings_feed_idx').on(t.status, t.publishedAt, t.id)],
+  (t) => [
+    index('listings_seller_idx').on(t.sellerId, t.status),
+    index('listings_feed_idx').on(t.status, t.publishedAt, t.id),
+    index('listings_tags_idx').using('gin', t.tags),
+    index('listings_price_idx').on(t.status, t.pricePaise, t.id),
+  ],
 );
 
 export const listingMedia = pgTable(
@@ -437,4 +445,25 @@ export const responseMedia = pgTable(
     mediaId: uuid('media_id').notNull().references(() => media.id),
   },
   (t) => [primaryKey({ columns: [t.responseId, t.position] })],
+);
+
+/**
+ * Who follows what. One row per (follower, kind, target); `target_type` says what `target_id` points at, so following
+ * other things later (a collection, a person) needs no new table. Today the only kind is SELLER, and the service checks
+ * the target exists. Deleting a follow is a plain delete. Counts come from the indexes below.
+ */
+export const follows = pgTable(
+  'follows',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    followerUserId: uuid('follower_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    targetType: text('target_type', { enum: ['SELLER'] }).notNull(),
+    targetId: uuid('target_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('follows_edge_idx').on(t.followerUserId, t.targetType, t.targetId),
+    index('follows_target_idx').on(t.targetType, t.targetId),
+    index('follows_follower_idx').on(t.followerUserId, t.targetType, t.createdAt, t.id),
+  ],
 );

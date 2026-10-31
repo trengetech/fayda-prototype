@@ -43,7 +43,7 @@ export function fakeApi(routes: Record<string, Route>, fetchFn: jest.Mock) {
 }
 
 export const sellerListing = (over: Record<string, unknown> = {}) => ({
-  id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', status: 'DRAFT', title: 'Cotton kurta', description: 'Block print', category: 'Ethnic wear', price: 150000,
+  id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', status: 'DRAFT', title: 'Cotton kurta', description: 'Block print', category: 'Ethnic wear', tags: [], price: 150000,
   media: [{ mediaId: 'm1', kind: 'image', url: '/v1/media/m1', posterMediaId: null, posterUrl: null }],
   variants: [{ id: 'v1', label: 'M', stock: 3 }], bargaining: { mode: 'BUY_NOW', expiryMinutes: 1440 },
   rules: { autoAcceptAt: null, autoDeclineBelow: null, autoCounterAt: null }, checkout: { channel: 'DIRECT', productUrl: null },

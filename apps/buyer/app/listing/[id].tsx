@@ -4,7 +4,7 @@ import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 
-import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { bargainingLabel, sizeNote } from '../../src/listing-view';
 import { openExternal } from '../../src/orders';
 import { ratingLine } from '../../src/stars';
@@ -14,11 +14,11 @@ import { OfferSheet } from '../../src/offer-sheet';
 /** The product page: media, price, sizes, seller card and the bargaining label. Buy opens checkout (direct) or the seller's website; Make offer opens the offer sheet. */
 export default function ListingScreen() {
   const { colors } = useTheme();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, offer } = useLocalSearchParams<{ id: string; offer?: string }>();
   const q = useBuyerListing(id ?? null);
   const l = q.data;
   const router = useRouter();
-  const [offering, setOffering] = useState(false);
+  const [offering, setOffering] = useState(offer === '1'); // a reel's Make offer opens the sheet straight away
   const [siteNote, setSiteNote] = useState<string | null>(null);
 
   return (
@@ -47,7 +47,9 @@ export default function ListingScreen() {
               {l.soldOut ? <Badge label="Sold out" tone="danger" /> : <Badge label={bargainingLabel(l.bargaining)} tone={l.bargaining.acceptsOffers ? 'accent' : 'info'} />}
             </View>
             <Card>
-              <AppText weight="bold">{l.seller.name}</AppText>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Open shop ${l.seller.name}`} onPress={() => router.push(`/shop/${l.seller.handle}` as never)}>
+                <AppText weight="bold">{l.seller.name} ›</AppText>
+              </Pressable>
               <AppText tone="muted" size={13}>{l.seller.area}, {l.seller.city} · {ratingLine(l.seller.rating, l.seller.reviewCount)}</AppText>
               <AppText tone="muted" size={13}>Confirms payment within {l.seller.slaConfirmHours === 1 ? '1 hour' : `${l.seller.slaConfirmHours} hours`} · ships within {l.seller.slaShipDays === 1 ? '1 day' : `${l.seller.slaShipDays} days`}</AppText>
               <AppText tone="muted" size={12}>{l.seller.record.completed} of {l.seller.record.orders} orders delivered · {l.seller.record.cancelled} cancelled · {l.seller.record.expired} not confirmed in time</AppText>
@@ -69,6 +71,7 @@ export default function ListingScreen() {
             </Card>
 
             {l.description ? <AppText>{l.description}</AppText> : null}
+            {l.tags.length ? <AppText tone="muted" size={12}>{l.tags.map((t) => `#${t.replace(/ /g, '')}`).join('  ')}</AppText> : null}
 
             <Card>
               {l.checkout.channel === 'WEBSITE' ? (
