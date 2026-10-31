@@ -94,7 +94,7 @@ describe('seller onboarding', () => {
 
   it('resumes at payment when the shop is already saved, needs the Code of Conduct, and completes the profile', async () => {
     fetchMock.mockImplementation((url: string, init: { method?: string }) => {
-      if (init.method === 'PUT' && String(url).endsWith('/v1/seller/payment')) return Promise.resolve(json({ ...shop([]), payment: { upiId: 'sana@okaxis', bankHolder: null, bankAccount: null, bankIfsc: null, bankName: null, paymentLink: null, website: null } }));
+      if (init.method === 'PUT' && String(url).endsWith('/v1/seller/payment')) return Promise.resolve(json({ ...shop([]), payment: { upiId: 'sana@okaxis', upiQrMediaId: null, bankHolder: null, bankAccount: null, bankIfsc: null, bankName: null, paymentLink: null, website: null } }));
       if (String(url).endsWith('/v1/me')) return Promise.resolve(json({ user: { id: 'u1', phone: '9876543210', name: null }, app: 'seller', profile: { complete: true, missing: [] } }));
       return Promise.resolve(json(shop()));
     });

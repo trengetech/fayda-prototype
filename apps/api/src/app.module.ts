@@ -10,6 +10,8 @@ import { BuyerController } from './profiles/buyer.controller.js';
 import { ProfileService } from './profiles/profile.service.js';
 import { SellerController } from './profiles/seller.controller.js';
 import { CLOCK } from './common/clock.js';
+import { BuyerCatalogController, SellerListingsController } from './listings/listings.controller.js';
+import { ListingsService } from './listings/listings.service.js';
 import { MediaController } from './media/media.controller.js';
 import { DiskMediaStorage, MEDIA_STORAGE } from './media/media-storage.js';
 import { MediaService } from './media/media.service.js';
@@ -25,7 +27,7 @@ export class AppModule {
     return {
       module: AppModule,
       imports: [ScheduleModule.forRoot()],
-      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController],
+      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController, SellerListingsController, BuyerCatalogController],
       providers: [
         { provide: APP_CONFIG, useValue: config },
         { provide: CLOCK, useValue: systemClock },
@@ -36,6 +38,7 @@ export class AppModule {
         ProfileService,
         { provide: MEDIA_STORAGE, useFactory: () => new DiskMediaStorage(config.uploadsDir) },
         MediaService,
+        ListingsService,
         AuthService,
         AuthGuard,
         { provide: AUTH_VERIFIER, useClass: DevOtpVerifier },
