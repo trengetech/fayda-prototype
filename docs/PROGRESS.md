@@ -72,8 +72,21 @@ Also built: `packages/ui` (tokens, fonts, components, gallery), `packages/api-cl
 - The gallery header had a doubled top inset; it now draws its own header.
 - The first Gradle build hung for 31 minutes: its automatic NDK installer never unpacked a finished download. Fixed by installing the NDK with `sdkmanager`. If a build seems stuck at "Install NDK", check CPU use and do the same.
 
+### Automated screen tests (31 Oct 2026)
+
+Jest (jest-expo) with `@testing-library/react-native`, in both apps (`pnpm test`; 5 tests each, about 1 s). They render the real status screen against a mocked `fetch`, so the typed client, contract validation and TanStack Query are all exercised:
+- loading state (the API never answers). This was the state I could not see on the emulator;
+- success: Online, database latency, environment and version, both providers marked Simulated;
+- a 503 health body shows "Database down";
+- network failure shows "Can't connect" with the Internet hint, and Retry recovers;
+- a malformed response shows the different hint.
+
+Checked by breaking the screen on purpose (loading state removed, old Wi-Fi hint restored): 2 tests failed, then passed again once restored. Whole repo: typecheck, lint and 82 tests pass.
+
+Notes: `forceExit` is set in `jest.config.mjs` because `ApiProvider` owns its `QueryClient`, whose 5-minute garbage-collection timers otherwise keep Jest alive after the run. Not covered: real device rendering, fonts, and navigation to the gallery.
+
 ### Known limits
-- **No automated tests of the app screens** (jest-expo needs `@testing-library/react-native`, which is outside the agreed stack and awaits approval). Screens were verified by hand on the emulator.
+- **Automated screen tests cover the status screen only** (see below). The gallery and the root layout (fonts, splash, banner) are still verified by hand on the emulator.
 - Release APKs are signed with the debug key: fine for your own phone, not for the Play Store.
 - `dev` builds allow plain-HTTP API addresses; `prod` builds will not.
 - Android only; iOS not attempted.

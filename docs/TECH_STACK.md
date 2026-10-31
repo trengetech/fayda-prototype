@@ -38,7 +38,8 @@ Checked against the npm registry on 31 Oct 2026. **Installed** means it is in th
 | React Native / React | 0.88.1 / 19.3.0 | `bundledNativeModules.json` of expo 58.0.21 |
 | Expo Router | 58.0.28 | same file |
 | expo-video / expo-font / expo-constants / expo-secure-store | 58.0.13 / 58.0.11 / 58.0.14 / 58.0.2 | same file |
-| jest-expo | 58.0.13 | same file |
+| jest-expo / jest | 58.0.13 / 30.5.2 | installed in both apps (3.0b) |
+| `@testing-library/react-native` / `test-renderer` | 14.1.0 / 1.3.0 | **Outside the original stack table; approved by the founder 31 Oct 2026** ("add the automated screentests"). v14 renders with `test-renderer`, not `react-test-renderer`, and `render` is async. Also installed as jest-expo peers: `@react-native/jest-preset` 0.88.1, `react-server-dom-webpack` 19.3.0 |
 | react-native-screens / safe-area-context / gesture-handler / reanimated | 4.30.0 / 5.10.1 / 3.3.0 / 4.7.1 | same file; Expo Router's peers, approved as a group in 3.0b |
 | TanStack Query / Zustand | 5.105.0 / 5.0.16 | npm latest |
 | React Hook Form / `@hookform/resolvers` | 7.91.0 / 6.0.2 | resolvers 6.0.2 accepts Zod `^3.25 \|\| ^4` and RHF `^7.55` |
