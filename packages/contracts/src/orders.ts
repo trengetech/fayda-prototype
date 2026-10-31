@@ -82,7 +82,7 @@ export const PaymentInstructionsSchema = z
   .openapi('PaymentInstructions');
 export type PaymentInstructions = z.infer<typeof PaymentInstructionsSchema>;
 
-const ReviewViewSchema = z.object({ id: z.string(), rating: z.number().int(), text: z.string(), media: z.array(z.object({ id: z.string(), kind: z.enum(['image', 'video']), url: z.string() })), createdAt: EpochMsSchema, editedAt: EpochMsSchema.nullable() });
+export const ReviewViewSchema = z.object({ id: z.string(), rating: z.number().int(), text: z.string(), media: z.array(z.object({ id: z.string(), kind: z.enum(['image', 'video']), url: z.string() })), createdAt: EpochMsSchema, editedAt: EpochMsSchema.nullable() });
 export type ReviewView = z.infer<typeof ReviewViewSchema>;
 const BuyAgainSchema = z.object({ listingId: z.string(), channel: z.enum(['DIRECT', 'WEBSITE']), variantId: z.string().nullable(), anyAvailable: z.boolean() });
 

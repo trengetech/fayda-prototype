@@ -74,4 +74,26 @@ describe('startRealtime', () => {
     expect(refreshes).toBe(1);
     expect(seen).toEqual(['bad']);
   });
+
+  it('passes order, chat and request events to onEvent, and negotiation events to both callbacks', async () => {
+    const { url } = await server(() => true);
+    const events: unknown[] = [];
+    const updates: unknown[] = [];
+    let connects = 0;
+    const rt = startRealtime({ baseUrl: url, getAccessToken: () => 't', refreshAccessToken: async () => null, onUpdate: (e) => updates.push(e), onEvent: (e) => events.push(e), onConnect: () => connects++ });
+    closers.push(rt.close);
+    await until(() => connects === 1);
+    io.emit('order.updated', { orderId: 'o1' });
+    io.emit('chat.updated', { threadId: 't1' });
+    io.emit('request.updated', { requestId: 'r1' });
+    io.emit('negotiation.updated', { negotiationId: 'n1', listingId: 'l1' });
+    await until(() => events.length === 4);
+    expect(events).toEqual([
+      { name: 'order.updated', orderId: 'o1' },
+      { name: 'chat.updated', threadId: 't1' },
+      { name: 'request.updated', requestId: 'r1' },
+      { name: 'negotiation.updated', negotiationId: 'n1', listingId: 'l1' },
+    ]);
+    expect(updates).toEqual([{ negotiationId: 'n1', listingId: 'l1' }]);
+  });
 });

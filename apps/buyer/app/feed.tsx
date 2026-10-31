@@ -68,7 +68,16 @@ export default function FeedScreen() {
       onEndReached={() => {
         if (feed.hasNextPage && !feed.isFetchingNextPage) void fetchNextPage();
       }}
-      ListHeaderComponent={<AppText weight="extrabold" size={20}>Browse</AppText>}
+      ListHeaderComponent={
+        <View style={{ gap: 12 }}>
+          <AppText weight="extrabold" size={20}>Browse</AppText>
+          <Card>
+            <AppText weight="bold">Can’t find it? Ask sellers</AppText>
+            <AppText tone="muted" size={13}>Describe what you want with a photo. Sellers who sell it can reply.</AppText>
+            <Button title="Ask sellers" variant="outline" onPress={() => router.push('/request/new' as never)} />
+          </Card>
+        </View>
+      }
       ListEmptyComponent={
         <Card>
           <AppText weight="bold">Nothing listed yet</AppText>

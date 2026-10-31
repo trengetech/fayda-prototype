@@ -43,6 +43,16 @@ function Routes() {
         <Stack.Screen name="listing/[id]" />
         <Stack.Screen name="offers" />
         <Stack.Screen name="negotiation/[id]" />
+        <Stack.Screen name="checkout" />
+        <Stack.Screen name="orders" />
+        <Stack.Screen name="order/[id]" />
+        <Stack.Screen name="messages" />
+        <Stack.Screen name="chat/[id]" />
+        <Stack.Screen name="requests" />
+        <Stack.Screen name="request/new" />
+        <Stack.Screen name="request/[id]" />
+        <Stack.Screen name="contact" />
+        <Stack.Screen name="agreement" />
         <Stack.Screen name="gallery" />
       </Stack.Protected>
     </Stack>

@@ -157,7 +157,7 @@ describe('negotiation screen', () => {
     expect(await screen.findByText('Agreed at ₹1,400')).toBeOnTheScreen();
     expect(screen.getByText(/held for you for 12 h/)).toBeOnTheScreen();
     expect(screen.getByText('Your coupon code: KURTA14')).toBeOnTheScreen();
-    expect(screen.getByText(/Placing the order is not available yet/)).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'I’ve used the code. Record my order' })).toBeOnTheScreen();
   });
 
   it('counters in paise, and shows the server’s message when the counter is refused', async () => {

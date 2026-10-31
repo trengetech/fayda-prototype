@@ -1,4 +1,4 @@
-import { NetworkError, useHealth, useMeta, useSellerNegotiations } from '@fayda/api-client';
+import { NetworkError, useHealth, useMeta, useSellerNegotiations, useSellerOrders, useSellerRequests, useThreads } from '@fayda/api-client';
 import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
 import { Link, useRouter } from 'expo-router';
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
@@ -12,6 +12,9 @@ export default function StatusScreen() {
   const health = useHealth();
   const meta = useMeta();
   const waiting = useSellerNegotiations().data?.needsReply ?? 0;
+  const needsConfirm = useSellerOrders().data?.needsConfirm ?? 0;
+  const unread = useThreads('seller').data?.unread ?? 0;
+  const newRequests = useSellerRequests().data?.newCount ?? 0;
   const refetch = () => void Promise.all([health.refetch(), meta.refetch()]);
   const error = health.error ?? meta.error;
   const loading = (health.isPending || meta.isPending) && !error;
@@ -22,10 +25,24 @@ export default function StatusScreen() {
       contentContainerStyle={{ padding: 16, gap: 12 }}
       refreshControl={<RefreshControl refreshing={health.isRefetching || meta.isRefetching} onRefresh={refetch} />}
     >
-      <AppText weight="extrabold" size={20}>Fayda {APP_LABEL}</AppText>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <AppText weight="extrabold" size={20}>Fayda {APP_LABEL}</AppText>
+        <Button title={unread ? `Messages (${unread})` : 'Messages'} size="sm" variant="outline" onPress={() => router.push('/messages' as never)} />
+      </View>
       <AppText tone="muted" size={12}>API: {API_URL}</AppText>
       <AccountCard />
-      <Button title={waiting ? `Offers (${waiting} need a reply)` : 'Offers'} size="lg" onPress={() => router.push('/offers' as never)} />
+      {needsConfirm || unread || newRequests ? (
+        <Card>
+          <AppText weight="bold">Needs you</AppText>
+          {needsConfirm ? <Button title={`${needsConfirm} ${needsConfirm === 1 ? 'order needs' : 'orders need'} confirming`} onPress={() => router.push('/orders' as never)} /> : null}
+          {unread ? <Button title={`${unread} unread ${unread === 1 ? 'message' : 'messages'}`} variant="outline" onPress={() => router.push('/messages' as never)} /> : null}
+          {newRequests ? <Button title={`${newRequests} new buyer ${newRequests === 1 ? 'request' : 'requests'}`} variant="outline" onPress={() => router.push('/requests' as never)} /> : null}
+        </Card>
+      ) : null}
+      <Button title={needsConfirm ? `Orders (${needsConfirm} to confirm)` : 'Orders'} size="lg" onPress={() => router.push('/orders' as never)} />
+      <Button title={waiting ? `Offers (${waiting} need a reply)` : 'Offers'} size="lg" variant="outline" onPress={() => router.push('/offers' as never)} />
+      <Button title={newRequests ? `Requests (${newRequests} new)` : 'Requests'} size="lg" variant="outline" onPress={() => router.push('/requests' as never)} />
+      <Button title="Shop and reviews" size="lg" variant="outline" onPress={() => router.push('/shop' as never)} />
       <Button title="My listings" size="lg" variant="outline" onPress={() => router.push('/listings' as never)} />
 
       {loading ? (

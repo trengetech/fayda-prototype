@@ -1,15 +1,20 @@
-import { useBuyerNegotiation, useBuyerRespond } from '@fayda/api-client';
+import { useBuyerNegotiation, useBuyerRespond, usePlaceOrder } from '@fayda/api-client';
 import { formatRupees, parseRupees, timeLeft } from '@fayda/domain';
 import { AppText, Badge, Button, Card, FieldError, Screen, TextField, describeError } from '@fayda/ui';
-import { useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { offerLine, statusBadge } from '../../src/offers';
+import { newKey, openExternal } from '../../src/orders';
 
 export default function NegotiationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const query = useBuyerNegotiation(id ?? null);
   const respond = useBuyerRespond();
+  const place = usePlaceOrder();
+  const router = useRouter();
+  const orderKey = useRef(newKey());
+  const [dealNote, setDealNote] = useState<string | null>(null);
   const [counter, setCounter] = useState('');
   const [error, setError] = useState<{ message: string; fields: Record<string, string> } | null>(null);
 
@@ -52,11 +57,31 @@ export default function NegotiationScreen() {
       {n.agreement ? (
         <Card>
           <AppText weight="bold">Agreed at {formatRupees(n.agreement.price)}</AppText>
-          <AppText tone="muted" size={13}>One unit is held for you for {timeLeft(n.agreement.deadline, Date.now())}.</AppText>
+          {n.status === 'AGREED' ? <AppText tone="muted" size={13}>One unit is held for you for {timeLeft(n.agreement.deadline, Date.now())}.</AppText> : null}
           {n.agreement.dealAccess ? (
             <AppText size={13}>{n.agreement.dealAccess.type === 'CODE' ? 'Your coupon code' : 'Your discount link'}: {n.agreement.dealAccess.value}</AppText>
           ) : null}
-          <AppText tone="muted" size={12}>Placing the order is not available yet. It arrives with the next update.</AppText>
+          {n.status === 'AGREED' && n.channel === 'DIRECT' ? (
+            <Button title={`Place order at ${formatRupees(n.agreement.price)}`} onPress={() => router.push(`/checkout?negotiationId=${n.id}&listingId=${n.listing.id}&variantId=${n.variantId}` as never)} />
+          ) : null}
+          {n.status === 'AGREED' && n.channel === 'WEBSITE' ? (
+            <>
+              {n.agreement.dealAccess?.type === 'LINK' ? <Button title="Open the discount link" variant="outline" onPress={() => void openExternal(n.agreement?.dealAccess?.value ?? '').then((ok) => setDealNote(ok ? null : 'The link could not be opened. Copy it from above.'))} /> : null}
+              <Button
+                title="I’ve used the code. Record my order"
+                loading={place.isPending}
+                onPress={() =>
+                  place.mutate(
+                    { input: { negotiationId: n.id }, idempotencyKey: orderKey.current },
+                    { onSuccess: (o) => { orderKey.current = newKey(); router.replace(`/order/${o.id}` as never); }, onError: (e) => setError(describeError(e)) },
+                  )
+                }
+              />
+              <AppText tone="muted" size={12}>This records your order here so the seller can confirm it. Fayda can’t see your purchase on their website.</AppText>
+              {dealNote ? <AppText tone="danger" size={12} accessibilityRole="alert">{dealNote}</AppText> : null}
+            </>
+          ) : null}
+          {n.status === 'PURCHASED' ? <Button title="View my orders" variant="outline" onPress={() => router.push('/orders' as never)} /> : null}
         </Card>
       ) : null}
 
@@ -76,6 +101,7 @@ export default function NegotiationScreen() {
         </Card>
       ) : null}
 
+      {n.status === 'PURCHASED' && !n.agreement ? <Button title="View my orders" variant="outline" onPress={() => router.push('/orders' as never)} /> : null}
       {n.canWithdraw ? <Button title="Withdraw my offer" variant="outline" loading={respond.isPending} onPress={() => run({ id: n.id, action: 'withdraw' })} /> : null}
       <FieldError>{error && !Object.keys(error.fields).length ? error.message : undefined}</FieldError>
     </Screen>

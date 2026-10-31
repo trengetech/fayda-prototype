@@ -1,5 +1,5 @@
 import { act, fireEvent, screen } from '@testing-library/react-native';
-import { View as MockView } from 'react-native';
+import { Linking, View as MockView } from 'react-native';
 import ListingScreen from '../app/listing/[id]';
 import { buyerListing, fakeApi, json, managerWith, problem, renderWith } from './utils';
 
@@ -50,7 +50,9 @@ describe('buyer product page', () => {
     await renderWith(signedIn(), <ListingScreen />);
     expect(await screen.findByText('Cotton kurta')).toBeOnTheScreen();
     expect(screen.getByText('₹1,500')).toBeOnTheScreen();
-    expect(screen.getByText('Kiran Studio · Madhapur, Hyderabad')).toBeOnTheScreen();
+    expect(screen.getByText('Kiran Studio')).toBeOnTheScreen();
+    expect(screen.getByText('Madhapur, Hyderabad · ★ 4.5 (12)')).toBeOnTheScreen();
+    expect(screen.getByText(/Confirms payment within 4 hours · ships within 2 days/)).toBeOnTheScreen();
     expect(screen.getByText('Block print, soft cotton.')).toBeOnTheScreen();
     expect(screen.getByText('Open to offers')).toBeOnTheScreen();
     expect(screen.getByLabelText('Photo 1 of 1: Cotton kurta').props.source).toEqual({ uri: 'http://api.test/v1/media/m1' });
@@ -80,15 +82,40 @@ describe('buyer product page', () => {
     expect(screen.queryByText('Open to offers')).not.toBeOnTheScreen();
   });
 
-  it('says Buying is not available yet; Buy sends nothing, and Make offer is available on a listing that takes offers', async () => {
+  it('Buy opens checkout for a direct listing, and Make offer stays available on a listing that takes offers', async () => {
     serve(buyerListing());
     await renderWith(signedIn(), <ListingScreen />);
     await screen.findByText('Cotton kurta');
-    expect(screen.getByText(/Buying is not available yet/)).toBeOnTheScreen();
-    expect(screen.getByRole('button', { name: 'Buy' })).toBeDisabled();
-    await act(async () => void fireEvent.press(screen.getByText('Buy')));
+    expect(screen.getByRole('button', { name: 'Buy' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Make offer' })).toBeEnabled();
-    expect(fetchMock).toHaveBeenCalledTimes(1); // only the page load
+    await act(async () => void fireEvent.press(screen.getByText('Buy')));
+    expect(mockRouter.push).toHaveBeenCalledWith(`/checkout?listingId=${ID}`);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // only the page load: Buy itself sends nothing
+  });
+
+  it('a website listing says Fayda does not handle that purchase and opens the seller’s site', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    serve(buyerListing({ checkout: { channel: 'WEBSITE', productUrl: 'https://kiran.example/kurta', payMethods: [] } }));
+    await renderWith(signedIn(), <ListingScreen />);
+    await screen.findByText('Cotton kurta');
+    expect(screen.queryByRole('button', { name: 'Buy' })).not.toBeOnTheScreen();
+    expect(screen.getByText(/Fayda does not handle that purchase/)).toBeOnTheScreen();
+    await act(async () => void fireEvent.press(screen.getByText('Buy on the seller’s website')));
+    expect(open).toHaveBeenCalledWith('https://kiran.example/kurta');
+    open.mockRestore();
+  });
+
+  it('cannot be bought when it is sold out', async () => {
+    serve(buyerListing({ soldOut: true, variants: [{ id: 'v1', label: 'M', available: false, low: false }] }));
+    await renderWith(signedIn(), <ListingScreen />);
+    await screen.findByText('Sizes');
+    expect(screen.getByRole('button', { name: 'Buy' })).toBeDisabled();
+  });
+
+  it('shows "No reviews yet" for a seller with no reviews', async () => {
+    serve(buyerListing({ seller: { ...buyerListing().seller, rating: null, reviewCount: 0 } }));
+    await renderWith(signedIn(), <ListingScreen />);
+    expect(await screen.findByText(/No reviews yet/)).toBeOnTheScreen();
   });
 
   it('has no Make offer on a fixed-price listing', async () => {

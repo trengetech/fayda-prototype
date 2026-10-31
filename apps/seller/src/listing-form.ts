@@ -110,7 +110,7 @@ export function fromListing(l: SellerListing): { values: EditorValues; media: Ed
 }
 
 /** Builds the API request. A fixed-price listing sends no private rules; website deal codes go only where they apply. */
-export function toInput(v: EditorValues, media: EditorMedia[], publish: boolean): ListingInput {
+export function toInput(v: EditorValues, media: EditorMedia[], publish: boolean, fromResponseId?: string | null): ListingInput {
   const priced = v.mode === 'BOTH';
   const website = v.channel === 'WEBSITE';
   const deal = (type: 'CODE' | 'LINK', value: string) => (value.trim() ? { type, value: value.trim() } : null);
@@ -126,6 +126,8 @@ export function toInput(v: EditorValues, media: EditorMedia[], publish: boolean)
     checkout: { channel: v.channel, ...(website ? { productUrl: v.productUrl.trim() } : {}) },
     dealCodes: website && priced ? { accept: deal(v.acceptType, v.acceptValue), counter: deal(v.counterType, v.counterValue) } : null,
     publish,
+    // Set when the listing is made for a buyer's request: the server then shares it in that chat after publishing.
+    ...(fromResponseId ? { fromResponseId } : {}),
   };
 }
 

@@ -57,3 +57,24 @@ export const sellerNegotiation = (over: Partial<SellerNegotiation> = {}): Seller
   agreement: null as SellerNegotiation['agreement'], needsReply: true, canCounter: true, counterBounds: { minExclusive: 100000, maxExclusive: 150000 } as SellerNegotiation['counterBounds'],
   pendingExpiresAt: Date.now() + 3_600_000, updatedAt: 1, ...over,
 });
+
+export const sellerOrder = (over: Record<string, unknown> = {}) => ({
+  id: 'o1', number: 'FD-100001', status: 'PLACED', statusLabel: 'Waiting for you to confirm',
+  listing: { id: 'l1', title: 'Cotton kurta', coverUrl: '/v1/media/m1', variantLabel: 'M', channel: 'DIRECT' },
+  price: 120000, priceSource: 'NEGOTIATED', channel: 'DIRECT', paymentMethod: 'UPI', dealAccess: null, buyerName: 'Asha Buyer',
+  address: { name: 'Asha', line1: '12 Road', line2: 'Banjara Hills', pin: '500034', city: 'Hyderabad', state: 'Telangana' },
+  createdAt: 1, confirmBy: Date.now() + 36 * 3_600_000, confirmedAt: null, shipment: null, cancelText: null,
+  buyerContact: { phone: '9000000001', whatsapp: '9000000001' }, review: null,
+  canConfirm: true, canShip: false, canDeliver: false, canCancel: true, threadId: 't1', unread: 0, ...over,
+});
+
+export const chatThread = (over: Record<string, unknown> = {}) => ({
+  id: 't1', kind: 'ORDER', title: 'FD-100001 · Cotton kurta', otherName: 'Asha Buyer', orderId: 'o1', requestId: null, unread: 0, lastMessage: null, lastAt: 1,
+  messages: [{ id: 'm1', from: 'SYSTEM', type: 'TEXT', text: 'Order FD-100001 placed.', media: null, listing: null, at: 1 }, { id: 'm2', from: 'OTHER', type: 'TEXT', text: 'Is it in cotton?', media: null, listing: null, at: 2 }],
+  ...over,
+});
+
+export const sellerRequest = (over: Record<string, unknown> = {}) => ({
+  id: 'r1', category: 'Ethnic wear', title: 'Red silk saree', description: 'For a wedding', size: 'Free', budget: 500000,
+  media: [{ id: 'rm1', kind: 'image', url: '/v1/media/rm1' }], buyerFirstName: 'Asha', status: 'OPEN', expiresAt: Date.now() + 86_400_000, createdAt: 1, response: null, ...over,
+});

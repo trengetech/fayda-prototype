@@ -44,6 +44,8 @@ export const BuyerNegotiationSchema = z
     pendingExpiresAt: EpochMsSchema.nullable(),
     agreement: z.object({ price: PaiseSchema, deadline: EpochMsSchema, dealAccess: DealAccessSchema.nullable() }).nullable(),
     channel: z.enum(['DIRECT', 'WEBSITE']),
+    /** Set once the buyer has placed the order for this agreement. */
+    orderId: z.string().nullable(),
     canRespond: z.boolean(),
     canCounter: z.boolean(),
     canWithdraw: z.boolean(),

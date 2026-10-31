@@ -98,7 +98,7 @@ describe('media and listings', () => {
     expect((await c.createMediaIntent({ kind: 'image', purpose: 'LISTING', mime: 'image/jpeg', size: 10 })).upload.url).toContain('/v1/media/upload/');
   });
   it('asks for the next feed page with the cursor, and parses the page', async () => {
-    const seller = { id: 's1', name: 'Kiran Studio', handle: 'kiranstudio', area: 'Madhapur', city: 'Hyderabad' };
+    const seller = { id: 's1', name: 'Kiran Studio', handle: 'kiranstudio', area: 'Madhapur', city: 'Hyderabad', rating: null, reviewCount: 0 };
     const item = { id: listing.id, title: 'Cotton kurta', price: 150000, category: 'Ethnic wear', soldOut: false, acceptsOffers: true, coverUrl: '/v1/media/m1', hasVideo: false, seller };
     const urls: string[] = [];
     const c = authed(async (u) => { urls.push(String(u)); return json(200, { items: [item], nextCursor: 'abc' }); });
@@ -108,8 +108,8 @@ describe('media and listings', () => {
   });
 
   it('drops a private field the buyer schema does not list', async () => {
-    const seller = { id: 's1', name: 'Kiran Studio', handle: 'kiranstudio', area: 'Madhapur', city: 'Hyderabad' };
-    const page = { id: listing.id, title: 'Cotton kurta', description: '', category: 'Ethnic wear', price: 150000, soldOut: false, media: [], variants: [{ id: 'v1', label: 'M', available: true, low: false }], bargaining: { mode: 'BOTH', acceptsOffers: true, expiryMinutes: 1440 }, checkout: { channel: 'DIRECT', productUrl: null }, seller };
+    const seller = { id: 's1', name: 'Kiran Studio', handle: 'kiranstudio', area: 'Madhapur', city: 'Hyderabad', rating: null, reviewCount: 0, slaConfirmHours: 24, slaShipDays: 3, categories: ['Ethnic wear'], record: { orders: 0, completed: 0, confirmed: 0, cancelled: 0, expired: 0, medianConfirmMs: null, rating: null, reviewCount: 0 } };
+    const page = { id: listing.id, title: 'Cotton kurta', description: '', category: 'Ethnic wear', price: 150000, soldOut: false, media: [], variants: [{ id: 'v1', label: 'M', available: true, low: false }], bargaining: { mode: 'BOTH', acceptsOffers: true, expiryMinutes: 1440 }, checkout: { channel: 'DIRECT', productUrl: null, payMethods: ['UPI'] }, seller };
     const got = await authed(async () => json(200, { ...page, rules: { autoAcceptAt: 120000 } })).getBuyerListing(listing.id);
     expect(got).not.toHaveProperty('rules'); // the buyer schema drops anything it does not list
   });

@@ -16,6 +16,8 @@ export const ERROR_CODES = [
   'CANT_WITHDRAW', 'INVALID_ACTION', 'DEAL_ACCESS_REQUIRED', 'NEGOTIATION_CLOSED',
   // orders
   'NOT_AGREED', 'USE_WEBSITE', 'NO_METHOD',
+  // chat, reviews, requests
+  'INVALID_LISTING', 'EMPTY', 'TOO_LONG', 'NOT_CONFIRMED', 'CLOSED', 'OWN_REQUEST', 'NOT_IN_CATEGORY', 'ALREADY_RESPONDED',
 ] as const;
 export type ApiErrorCode = (typeof ERROR_CODES)[number];
 

@@ -25,7 +25,7 @@ import { ZodPipe } from '../common/zod-pipe.js';
 import { NegotiationsService } from './negotiations.service.js';
 
 /** Every write takes an Idempotency-Key, so a retry after a lost reply does not make a second offer or counter. */
-abstract class IdempotentController {
+export abstract class IdempotentController {
   protected constructor(
     protected readonly idempotency: IdempotencyService,
     protected readonly clock: Clock,

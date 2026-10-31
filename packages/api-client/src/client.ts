@@ -17,6 +17,37 @@ import {
   SellerListingListSchema,
   SellerListingSchema,
   SellerProfileSchema,
+  BuyerOrderListSchema,
+  BuyerOrderSchema,
+  SellerOrderListSchema,
+  SellerOrderSchema,
+  SellerRecordSchema,
+  ChatThreadListSchema,
+  ChatThreadSchema,
+  BuyerRequestListSchema,
+  BuyerRequestSchema,
+  SellerRequestListSchema,
+  SellerRequestSchema,
+  ShopReviewListSchema,
+  type BuyerOrder,
+  type BuyerOrderList,
+  type SellerOrder,
+  type SellerOrderList,
+  type SellerRecord,
+  type PlaceOrder,
+  type ShipmentBody,
+  type CancelOrder,
+  type ChatThread,
+  type ChatThreadList,
+  type SendMessage,
+  type PutReview,
+  type BuyerRequest,
+  type BuyerRequestList,
+  type SellerRequest,
+  type SellerRequestList,
+  type CreateRequest,
+  type Respond,
+  type ShopReviewList,
   type AppAudience,
   type AuthResult,
   type BuyerProfile,
@@ -91,8 +122,9 @@ export interface ApiClient {
   saveSellerPayment(input: PaymentInput): Promise<SellerProfile>;
   /** Turns an address from the API (`/v1/media/…` or a full URL) into one a player or uploader can use. */
   resolveUrl(path: string): string;
-  createMediaIntent(input: MediaIntentInput): Promise<MediaIntent>;
-  completeMedia(mediaId: string): Promise<Media>;
+  /** `app` picks the upload route: the seller app uses `seller` (default), the buyer app `buyer` (reviews, requests, chat photos). */
+  createMediaIntent(input: MediaIntentInput, app?: AppAudience): Promise<MediaIntent>;
+  completeMedia(mediaId: string, app?: AppAudience): Promise<Media>;
   listSellerListings(): Promise<SellerListing[]>;
   getSellerListing(id: string): Promise<SellerListing>;
   /** `idempotencyKey` makes a retry after a lost reply safe: reuse the same key for the same save. */
@@ -117,7 +149,55 @@ export interface ApiClient {
   sellerAccept(id: string, dealAccess?: DealAccessInput | null, idempotencyKey?: string): Promise<SellerNegotiation>;
   sellerCounter(id: string, amount: number, dealAccess?: DealAccessInput | null, idempotencyKey?: string): Promise<SellerNegotiation>;
   sellerDecline(id: string, idempotencyKey?: string): Promise<SellerNegotiation>;
+
+  // ---------- orders (buyer) ----------
+  /** Places an order. Prices come from the server; reuse `idempotencyKey` when retrying the same order. */
+  placeOrder(input: PlaceOrder, idempotencyKey?: string): Promise<BuyerOrder>;
+  listBuyerOrders(): Promise<BuyerOrderList>;
+  getBuyerOrder(id: string): Promise<BuyerOrder>;
+  putReview(orderId: string, input: PutReview, idempotencyKey?: string): Promise<BuyerOrder>;
+  /** The seller's UPI QR for a PLACED order. It needs the bearer token, so this returns what an `<Image source>` takes. */
+  getPaymentQrSource(orderId: string): { uri: string; headers: Record<string, string> };
+
+  // ---------- orders (seller) ----------
+  listSellerOrders(): Promise<SellerOrderList>;
+  getSellerOrder(id: string): Promise<SellerOrder>;
+  confirmOrder(id: string, shipment?: ShipmentBody | null, idempotencyKey?: string): Promise<SellerOrder>;
+  shipOrder(id: string, shipment: ShipmentBody, idempotencyKey?: string): Promise<SellerOrder>;
+  deliverOrder(id: string, idempotencyKey?: string): Promise<SellerOrder>;
+  cancelOrder(id: string, input: CancelOrder, idempotencyKey?: string): Promise<SellerOrder>;
+  getSellerRecord(): Promise<SellerRecord>;
+
+  // ---------- chat ----------
+  listBuyerThreads(): Promise<ChatThreadList>;
+  getBuyerThread(id: string): Promise<ChatThread>;
+  /** `clientKey` (8 to 64 characters) is sent in the body so a retried message is not posted twice. */
+  sendBuyerMessage(threadId: string, input: SendMessage): Promise<ChatThread>;
+  markBuyerThreadRead(threadId: string): Promise<ChatThread>;
+  listSellerThreads(): Promise<ChatThreadList>;
+  getSellerThread(id: string): Promise<ChatThread>;
+  sendSellerMessage(threadId: string, input: SendMessage): Promise<ChatThread>;
+  markSellerThreadRead(threadId: string): Promise<ChatThread>;
+
+  // ---------- requests ----------
+  createRequest(input: CreateRequest, idempotencyKey?: string): Promise<BuyerRequest>;
+  listBuyerRequests(): Promise<BuyerRequestList>;
+  getBuyerRequest(id: string): Promise<BuyerRequest>;
+  closeRequest(id: string, idempotencyKey?: string): Promise<BuyerRequest>;
+  wantResponse(responseId: string, idempotencyKey?: string): Promise<BuyerRequest>;
+  declineResponse(responseId: string, idempotencyKey?: string): Promise<BuyerRequest>;
+  /** How many sellers a request in this category would reach ("Send to N sellers"). */
+  getRequestReach(category: string): Promise<{ count: number }>;
+  listSellerRequests(): Promise<SellerRequestList>;
+  respondToRequest(requestId: string, input: Respond, idempotencyKey?: string): Promise<SellerRequest>;
+
+  // ---------- reviews and the public record ----------
+  listSellerReviews(): Promise<ShopReviewList>;
+  getShopReviews(sellerId: string): Promise<ShopReviewList>;
+  getShopRecord(sellerId: string): Promise<SellerRecord>;
 }
+
+const ReachSchema = { parse: (x: unknown) => x, safeParse: (x: unknown) => (typeof x === 'object' && x && typeof (x as { count?: unknown }).count === 'number' ? { success: true as const, data: x as { count: number } } : { success: false as const }) } as unknown as z.ZodType<{ count: number }>;
 
 export interface DealAccessInput {
   type: 'CODE' | 'LINK';
@@ -197,8 +277,8 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     saveSellerShop: (input) => call('/v1/seller/profile', SellerProfileSchema, { method: 'PUT', body: input, auth: true }),
     saveSellerPayment: (input) => call('/v1/seller/payment', SellerProfileSchema, { method: 'PUT', body: input, auth: true }),
     resolveUrl: (path) => (path.startsWith('/') ? baseUrl + path : path),
-    createMediaIntent: (input) => call('/v1/seller/media/intents', MediaIntentSchema, { method: 'POST', body: input, auth: true }),
-    completeMedia: (mediaId) => call(`/v1/seller/media/${mediaId}/complete`, MediaSchema, { method: 'POST', auth: true }),
+    createMediaIntent: (input, app = 'seller') => call(`/v1/${app}/media/intents`, MediaIntentSchema, { method: 'POST', body: input, auth: true }),
+    completeMedia: (mediaId, app = 'seller') => call(`/v1/${app}/media/${mediaId}/complete`, MediaSchema, { method: 'POST', auth: true }),
     listSellerListings: async () => (await call('/v1/seller/listings', SellerListingListSchema, { auth: true })).items,
     getSellerListing: (id) => call(`/v1/seller/listings/${id}`, SellerListingSchema, { auth: true }),
     createListing: (input, key) => call('/v1/seller/listings', SellerListingSchema, { method: 'POST', body: input, auth: true, ...idem(key) }),
@@ -225,5 +305,46 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     sellerAccept: (id, dealAccess, key) => call(`/v1/seller/negotiations/${id}/accept`, SellerNegotiationSchema, { method: 'POST', body: { dealAccess: dealAccess ?? null }, auth: true, ...idem(key) }),
     sellerCounter: (id, amount, dealAccess, key) => call(`/v1/seller/negotiations/${id}/counter`, SellerNegotiationSchema, { method: 'POST', body: { amount, dealAccess: dealAccess ?? null }, auth: true, ...idem(key) }),
     sellerDecline: (id, key) => call(`/v1/seller/negotiations/${id}/decline`, SellerNegotiationSchema, { method: 'POST', auth: true, ...idem(key) }),
+
+    placeOrder: (input, key) => call('/v1/buyer/orders', BuyerOrderSchema, { method: 'POST', body: input, auth: true, ...idem(key) }),
+    listBuyerOrders: () => call('/v1/buyer/orders', BuyerOrderListSchema, { auth: true }),
+    getBuyerOrder: (id) => call(`/v1/buyer/orders/${id}`, BuyerOrderSchema, { auth: true }),
+    putReview: (orderId, input, key) => call(`/v1/buyer/orders/${orderId}/review`, BuyerOrderSchema, { method: 'PUT', body: input, auth: true, ...idem(key) }),
+    getPaymentQrSource: (orderId) => {
+      const t = opts.getAccessToken?.() ?? null;
+      const headers: Record<string, string> = t ? { authorization: `Bearer ${t}` } : {};
+      return { uri: `${baseUrl}/v1/buyer/orders/${orderId}/payment-qr`, headers };
+    },
+
+    listSellerOrders: () => call('/v1/seller/orders', SellerOrderListSchema, { auth: true }),
+    getSellerOrder: (id) => call(`/v1/seller/orders/${id}`, SellerOrderSchema, { auth: true }),
+    confirmOrder: (id, shipment, key) => call(`/v1/seller/orders/${id}/confirm`, SellerOrderSchema, { method: 'POST', body: { shipment: shipment ?? null }, auth: true, ...idem(key) }),
+    shipOrder: (id, shipment, key) => call(`/v1/seller/orders/${id}/ship`, SellerOrderSchema, { method: 'POST', body: shipment, auth: true, ...idem(key) }),
+    deliverOrder: (id, key) => call(`/v1/seller/orders/${id}/deliver`, SellerOrderSchema, { method: 'POST', auth: true, ...idem(key) }),
+    cancelOrder: (id, input, key) => call(`/v1/seller/orders/${id}/cancel`, SellerOrderSchema, { method: 'POST', body: input, auth: true, ...idem(key) }),
+    getSellerRecord: () => call('/v1/seller/record', SellerRecordSchema, { auth: true }),
+
+    listBuyerThreads: () => call('/v1/buyer/threads', ChatThreadListSchema, { auth: true }),
+    getBuyerThread: (id) => call(`/v1/buyer/threads/${id}`, ChatThreadSchema, { auth: true }),
+    sendBuyerMessage: (id, input) => call(`/v1/buyer/threads/${id}/messages`, ChatThreadSchema, { method: 'POST', body: input, auth: true }),
+    markBuyerThreadRead: (id) => call(`/v1/buyer/threads/${id}/read`, ChatThreadSchema, { method: 'POST', auth: true }),
+    listSellerThreads: () => call('/v1/seller/threads', ChatThreadListSchema, { auth: true }),
+    getSellerThread: (id) => call(`/v1/seller/threads/${id}`, ChatThreadSchema, { auth: true }),
+    sendSellerMessage: (id, input) => call(`/v1/seller/threads/${id}/messages`, ChatThreadSchema, { method: 'POST', body: input, auth: true }),
+    markSellerThreadRead: (id) => call(`/v1/seller/threads/${id}/read`, ChatThreadSchema, { method: 'POST', auth: true }),
+
+    createRequest: (input, key) => call('/v1/buyer/requests', BuyerRequestSchema, { method: 'POST', body: input, auth: true, ...idem(key) }),
+    listBuyerRequests: () => call('/v1/buyer/requests', BuyerRequestListSchema, { auth: true }),
+    getBuyerRequest: (id) => call(`/v1/buyer/requests/${id}`, BuyerRequestSchema, { auth: true }),
+    closeRequest: (id, key) => call(`/v1/buyer/requests/${id}/close`, BuyerRequestSchema, { method: 'POST', auth: true, ...idem(key) }),
+    wantResponse: (id, key) => call(`/v1/buyer/responses/${id}/want`, BuyerRequestSchema, { method: 'POST', auth: true, ...idem(key) }),
+    declineResponse: (id, key) => call(`/v1/buyer/responses/${id}/decline`, BuyerRequestSchema, { method: 'POST', auth: true, ...idem(key) }),
+    getRequestReach: (category) => call(`/v1/buyer/requests/reach?category=${encodeURIComponent(category)}`, ReachSchema, { auth: true }),
+    listSellerRequests: () => call('/v1/seller/requests', SellerRequestListSchema, { auth: true }),
+    respondToRequest: (id, input, key) => call(`/v1/seller/requests/${id}/responses`, SellerRequestSchema, { method: 'POST', body: input, auth: true, ...idem(key) }),
+
+    listSellerReviews: () => call('/v1/seller/reviews', ShopReviewListSchema, { auth: true }),
+    getShopReviews: (sellerId) => call(`/v1/shops/${sellerId}/reviews`, ShopReviewListSchema),
+    getShopRecord: (sellerId) => call(`/v1/shops/${sellerId}/record`, SellerRecordSchema),
   };
 }
