@@ -1,7 +1,7 @@
 import { useApiClient, useRespondToRequest, useSellerRequests } from '@fayda/api-client';
 import type { SellerRequest } from '@fayda/contracts/schemas';
 import { RULES, formatRupees } from '@fayda/domain';
-import { AppText, Badge, Button, Card, ChipGroup, FieldError, TextField, describeError, useTheme } from '@fayda/ui';
+import { AppText, Badge, Button, Card, ChipGroup, FieldError, TextField, Thumb, describeError, useTheme } from '@fayda/ui';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -85,14 +85,20 @@ function RespondForm({ request, onDone }: { request: SellerRequest; onDone: () =
 
 function RequestCard({ r }: { r: SellerRequest }) {
   const router = useRouter();
+  const client = useApiClient();
   const [open, setOpen] = useState(false);
   const res = r.response;
   return (
     <Card>
-      <Photos media={r.media} />
-      <AppText weight="bold">{r.title}</AppText>
-      {r.description ? <AppText tone="muted" size={13}>{r.description}</AppText> : null}
-      <AppText tone="muted" size={12}>{[r.category, r.size ? `Size ${r.size}` : null, r.budget != null ? `Budget ${formatRupees(r.budget)}` : null, r.buyerFirstName].filter(Boolean).join(' · ')}</AppText>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Thumb size={72} source={r.media[0] ? { uri: client.resolveUrl(r.media[0].url) } : null} label={`Photo of ${r.title}`} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <AppText weight="extrabold">{r.title}</AppText>
+          <AppText tone="muted" size={12}>{[r.category, r.size ? `Size ${r.size}` : null, r.budget != null ? `Budget ${formatRupees(r.budget)}` : null, r.buyerFirstName].filter(Boolean).join(' · ')}</AppText>
+        </View>
+      </View>
+      {r.description ? <AppText size={13}>{r.description}</AppText> : null}
+      {r.media.length > 1 ? <Photos media={r.media} /> : null}
       {res ? (
         <View style={{ gap: 6 }}>
           <Badge label={RESPONSE_LABEL[res.status]} tone={res.status === 'WANTED' ? 'success' : res.status === 'DECLINED' ? 'danger' : 'info'} />

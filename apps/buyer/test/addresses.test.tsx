@@ -12,7 +12,7 @@ let fetchMock: jest.Mock;
 const signedIn = () => managerWith('buyer', fetchMock, { missing: [] });
 const press = (label: string) => act(async () => void fireEvent.press(screen.getByText(label)));
 const pressLabel = (label: string) => act(async () => void fireEvent.press(screen.getByLabelText(label)));
-const pressAt = (label: string, i: number) => act(async () => void fireEvent.press(screen.getAllByText(label)[i] as never));
+const pressLabelAt = (re: RegExp, i: number) => act(async () => void fireEvent.press(screen.getAllByLabelText(re)[i] as never));
 const type = (label: string, text: string) => act(async () => void fireEvent.changeText(screen.getAllByLabelText(label).at(-1) as never, text));
 
 const a1 = { id: 'a1', name: 'Asha', line1: '12 Road', line2: 'Madhapur', pin: '500081', city: 'Hyderabad', state: 'Telangana' };
@@ -39,7 +39,7 @@ describe('delivery addresses screen', () => {
     await renderWith(signedIn(), <AddressesScreen />);
     expect(await screen.findByText('12 Road, Madhapur')).toBeOnTheScreen();
     expect(screen.getByText('Default')).toBeOnTheScreen();
-    expect(screen.queryByText('Delete')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText(/^Delete address/)).not.toBeOnTheScreen();
     expect(screen.queryByText('Make default')).not.toBeOnTheScreen();
   });
 
@@ -58,7 +58,7 @@ describe('delivery addresses screen', () => {
     fakeApi({ 'GET /v1/buyer/profile': () => json(profile()), 'POST /v1/buyer/addresses': () => (post(), json(profile([a1, a2]), 201)) }, fetchMock);
     await renderWith(signedIn(), <AddressesScreen />);
     await screen.findByText('12 Road, Madhapur');
-    await press('Add an address');
+    await press('+ Add another address');
     await type('PIN code', '12');
     await type('Name on the delivery', 'A');
     await press('Save address');
@@ -79,7 +79,7 @@ describe('delivery addresses screen', () => {
     );
     await renderWith(signedIn(), <AddressesScreen />);
     await screen.findByText('12 Road, Madhapur');
-    await press('Add an address');
+    await press('+ Add another address');
     await fillNew();
     await press('Save address');
     expect(await screen.findByText('4 Tower, Hitech City')).toBeOnTheScreen();
@@ -92,7 +92,7 @@ describe('delivery addresses screen', () => {
     fakeApi({ 'GET /v1/buyer/profile': () => json(current), 'PUT /v1/buyer/addresses/a1': ({ body: b }) => ((body = b), (current = profile([{ ...a1, line1: '99 New Road' }])), json(current)) }, fetchMock);
     await renderWith(signedIn(), <AddressesScreen />);
     await screen.findByText('12 Road, Madhapur');
-    await press('Edit');
+    await pressLabelAt(/^Edit address/, 0);
     await type('Flat, house or building', '99 New Road');
     await press('Save changes');
     expect(await screen.findByText('99 New Road, Madhapur')).toBeOnTheScreen();
@@ -100,18 +100,18 @@ describe('delivery addresses screen', () => {
     expect(body).not.toHaveProperty('id');
   });
 
-  it('asks before deleting, and Keep it deletes nothing', async () => {
+  it('asks before deleting, and Cancel deletes nothing', async () => {
     const del = jest.fn();
     let current = profile([a1, a2]);
     fakeApi({ 'GET /v1/buyer/profile': () => json(current), 'DELETE /v1/buyer/addresses/a2': () => (del(), (current = profile([a1])), json(current)) }, fetchMock);
     await renderWith(signedIn(), <AddressesScreen />);
     await screen.findByText('4 Tower, Hitech City');
-    await pressAt('Delete', 1);
+    await pressLabelAt(/^Delete address/, 1);
     expect(screen.getByText('Delete this address?')).toBeOnTheScreen();
-    await press('Keep it');
+    await press('Cancel');
     expect(del).not.toHaveBeenCalled();
-    await pressAt('Delete', 1);
-    await press('Yes, delete it');
+    await pressLabelAt(/^Delete address/, 1);
+    await press('Delete');
     await waitFor(() => expect(screen.queryByText('4 Tower, Hitech City')).not.toBeOnTheScreen());
     expect(del).toHaveBeenCalledTimes(1);
   });
@@ -131,7 +131,7 @@ describe('delivery addresses screen', () => {
     fakeApi({ 'GET /v1/buyer/profile': () => json(profile()), 'POST /v1/buyer/addresses': () => problem(400, 'VALIDATION', undefined, 'You can save up to 10 addresses. Delete one first.') }, fetchMock);
     await renderWith(signedIn(), <AddressesScreen />);
     await screen.findByText('12 Road, Madhapur');
-    await press('Add an address');
+    await press('+ Add another address');
     await fillNew();
     await press('Save address');
     expect(await screen.findByText('You can save up to 10 addresses. Delete one first.')).toBeOnTheScreen();

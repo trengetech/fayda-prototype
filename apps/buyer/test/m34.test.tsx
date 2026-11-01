@@ -484,13 +484,13 @@ describe('asking sellers', () => {
       'POST /v1/buyer/responses/resp1/want': ({ headers }) => (want.push(headers['idempotency-key'] as string), (state = buyerRequest({ responses: [{ ...buyerRequest().responses[0], status: 'WANTED', threadId: 't9' }] })), json(state)),
     }, fetchMock);
     await renderWith(signedIn(), <RequestScreen />);
-    expect(await screen.findByText(/★ 4.5 \(12\)/)).toBeOnTheScreen();
+    expect(await screen.findByLabelText('Rated 4.5 from 12 reviews')).toBeOnTheScreen();
     expect(screen.getByText('₹4,500')).toBeOnTheScreen();
     expect(screen.getByText('I have this')).toBeOnTheScreen();
     await press('I want this');
     await waitFor(() => expect(want).toHaveLength(1));
     expect(mockRouter.push).toHaveBeenCalledWith('/chat/t9');
-    expect(await screen.findByText('Open chat')).toBeOnTheScreen();
+    expect(await screen.findByText(/Open chat/)).toBeOnTheScreen();
   });
 
   it('says no to a reply, and closes the request', async () => {

@@ -1,6 +1,6 @@
 import { useAddressAction } from '@fayda/api-client';
 import type { AddressInput } from '@fayda/contracts/schemas';
-import { AppText, Badge, Button, Card, Screen, describeError } from '@fayda/ui';
+import { AppText, Badge, Button, Card, Confirm, IconButton, Screen, describeError, useTheme } from '@fayda/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -14,6 +14,7 @@ type Mode = { kind: 'list' } | { kind: 'new' } | { kind: 'edit'; id: string };
  * new address is saved as the default and the screen goes straight back to checkout, which then selects it.
  */
 export default function AddressesScreen() {
+  const { colors } = useTheme();
   const params = useLocalSearchParams<{ pick?: string; add?: string }>();
   const router = useRouter();
   const profile = useBuyerProfile();
@@ -80,34 +81,35 @@ export default function AddressesScreen() {
     );
   }
 
+  const doomed = addresses.find((x) => x.id === confirming);
   return (
     <Screen>
       <AppText tone="muted" size={13}>Orders keep the address you chose when you placed them, so changing or deleting one here never changes an order.</AppText>
       {addresses.map((a) => (
         <Card key={a.id}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-            <AppText weight="bold" style={{ flex: 1 }}>{a.name}</AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <AppText weight="extrabold" style={{ flex: 1 }}>{a.name}</AppText>
             {a.id === defaultAddressId ? <Badge label="Default" tone="accent" /> : null}
+            <IconButton plain icon="edit" label={`Edit address ${a.name}`} size={18} onPress={() => setMode({ kind: 'edit', id: a.id })} />
+            {addresses.length > 1 ? <IconButton plain icon="trash" label={`Delete address ${a.name}`} size={18} color={colors.danger} onPress={() => setConfirming(a.id)} /> : null}
           </View>
           <AppText tone="muted" size={13}>{a.line1}, {a.line2}</AppText>
           <AppText tone="muted" size={13}>{a.city}, {a.state} {a.pin}</AppText>
-          {confirming === a.id ? (
-            <View style={{ gap: 8 }}>
-              <AppText weight="bold" size={14}>Delete this address?</AppText>
-              <Button title="Yes, delete it" variant="danger" size="sm" loading={change.isPending} onPress={() => run({ action: 'delete', id: a.id }, () => setConfirming(null))} />
-              <Button title="Keep it" variant="ghost" size="sm" onPress={() => setConfirming(null)} />
-            </View>
-          ) : (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              <Button title="Edit" size="sm" variant="outline" onPress={() => setMode({ kind: 'edit', id: a.id })} />
-              {a.id !== defaultAddressId ? <Button title="Make default" size="sm" variant="outline" onPress={() => run({ action: 'default', id: a.id }, () => undefined)} /> : null}
-              {addresses.length > 1 ? <Button title="Delete" size="sm" variant="ghost" onPress={() => setConfirming(a.id)} /> : null}
-            </View>
-          )}
+          {a.id !== defaultAddressId ? <Button title="Make default" size="sm" variant="outline" block={false} onPress={() => run({ action: 'default', id: a.id }, () => undefined)} /> : null}
         </Card>
       ))}
       {error ? <AppText tone="danger" size={13} accessibilityRole="alert">{error.message}</AppText> : null}
-      <Button title="Add an address" onPress={() => { setError(null); setMode({ kind: 'new' }); }} />
+      <Button title="+ Add another address" variant="ghost" block={false} onPress={() => { setError(null); setMode({ kind: 'new' }); }} />
+      <Confirm
+        visible={!!doomed}
+        title="Delete this address?"
+        {...(doomed ? { body: `${doomed.name}, ${doomed.line1}. Orders you already placed keep their address.` } : {})}
+        confirmLabel="Delete"
+        danger
+        busy={change.isPending}
+        onCancel={() => setConfirming(null)}
+        onConfirm={() => doomed && run({ action: 'delete', id: doomed.id }, () => setConfirming(null))}
+      />
     </Screen>
   );
 }

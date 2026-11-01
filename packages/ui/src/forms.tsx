@@ -114,10 +114,14 @@ export function Screen({ children }: { children: ReactNode }) {
 }
 
 export function StepHeader({ step, total, title }: { step: number; total: number; title: string }) {
+  const { colors } = useTheme();
   return (
-    <View style={{ gap: 4 }}>
-      <AppText tone="accent" weight="bold" size={12}>Step {step} of {total}</AppText>
-      <AppText weight="extrabold" size={22}>{title}</AppText>
+    <View style={{ gap: 6 }}>
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        {Array.from({ length: total }, (_, i) => <View key={i} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i < step ? colors.accent : colors.divider }} />)}
+      </View>
+      <AppText tone="muted" weight="extrabold" size={12}>Step {step} of {total}</AppText>
+      <AppText weight="extrabold" size={24} style={{ letterSpacing: -0.4 }}>{title}</AppText>
     </View>
   );
 }

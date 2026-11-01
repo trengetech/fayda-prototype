@@ -1,13 +1,15 @@
 import { useCreateRequest, useRequestReach } from '@fayda/api-client';
 import { CATEGORIES, formatRupees, parseRupees, validateRequest } from '@fayda/domain';
-import { AppText, Button, ChipGroup, Screen, TextField, describeError } from '@fayda/ui';
+import { ActionBar, AppText, Button, ChipGroup, Screen, TextField, describeError, useTheme } from '@fayda/ui';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
+import { View } from 'react-native';
 import { AttachmentPicker, type Attached } from '../../src/attachments';
 import { newKey } from '../../src/orders';
 
 /** "Can't find it? Ask sellers": describe what you want, add photos, and it goes to sellers who sell that category. */
 export default function NewRequestScreen() {
+  const { colors } = useTheme();
   const router = useRouter();
   const create = useCreateRequest();
   const [category, setCategory] = useState<string | null>(null);
@@ -51,6 +53,7 @@ export default function NewRequestScreen() {
   };
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.surface }}>
     <Screen>
       <AppText tone="muted" size={13}>Describe what you’re looking for. Sellers who sell this category can reply with a photo, a price and a message. You choose who to talk to.</AppText>
       <ChipGroup label="Category" options={CATEGORIES} value={category ? [category] : []} onChange={(v) => changed(setCategory)(v[0] ?? null)} error={errors.category} />
@@ -59,11 +62,14 @@ export default function NewRequestScreen() {
       <TextField label="Size" optional value={size} onChangeText={changed(setSize)} maxLength={20} />
       <TextField label="Budget" optional prefix="₹" keyboardType="number-pad" value={budgetText} onChangeText={changed(setBudgetText)} error={errors.budget} hint="Whole rupees." />
       <AttachmentPicker label="Photos of what you want (1 to 4)" purpose="REQUEST" max={4} video={false} value={media} onChange={changed(setMedia)} error={errors.media} />
-      <Button title={count != null ? `Send to ${count} ${count === 1 ? 'seller' : 'sellers'}` : 'Send to sellers'} loading={create.isPending} onPress={submit} />
+      <AppText tone="muted" size={12}>Requests close after 7 days. Fayda may ban accounts that post false or abusive requests.</AppText>
+    </Screen>
+    <ActionBar>
+      <Button size="lg" title={count != null ? `Send to ${count} ${count === 1 ? 'seller' : 'sellers'}` : 'Send to sellers'} loading={create.isPending} onPress={submit} />
       {category && count === 0 ? <AppText tone="muted" size={12}>No seller sells this category yet. Your request will wait for 7 days in case one joins.</AppText> : null}
       {budget != null && budget > 0 ? <AppText tone="muted" size={12}>Budget: {formatRupees(budget)}</AppText> : null}
       {formError && !Object.keys(errors).length ? <AppText tone="danger" size={12} accessibilityRole="alert">{formError}</AppText> : null}
-      <AppText tone="muted" size={12}>Requests close after 7 days. Fayda may ban accounts that post false or abusive requests.</AppText>
-    </Screen>
+    </ActionBar>
+    </View>
   );
 }
