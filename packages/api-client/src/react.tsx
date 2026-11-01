@@ -1,4 +1,4 @@
-import type { BlockInput, PushTokenInput, ReportInput, AddressInput, CancelOrder, CreateRequest, ListingInput, NewAddress, PlaceOrder, PostComment, PutReview, Respond, SendMessage, ShipmentBody } from '@fayda/contracts/schemas';
+import type { BlockInput, NotificationCategory, PushTokenInput, ReportInput, AddressInput, CancelOrder, CreateRequest, ListingInput, NewAddress, PlaceOrder, PostComment, PutReview, Respond, SendMessage, ShipmentBody } from '@fayda/contracts/schemas';
 import { QueryClient, QueryClientProvider, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { useStore } from 'zustand';
@@ -573,6 +573,39 @@ export function useMarkAllNotificationsRead(side: 'buyer' | 'seller') {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => client.markAllNotificationsRead(side),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [NOTIFICATIONS_KEY] }),
+  });
+}
+
+export function useDeleteNotification(side: 'buyer' | 'seller') {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => client.deleteNotification(side, id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [NOTIFICATIONS_KEY] }),
+  });
+}
+
+export function useClearNotifications(side: 'buyer' | 'seller') {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => client.clearNotifications(side),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [NOTIFICATIONS_KEY] }),
+  });
+}
+
+/** Which kinds of notification this person wants (push and centre), one row per kind. */
+export function useNotificationSettings(side: 'buyer' | 'seller') {
+  const client = useApiClient();
+  return useQuery({ queryKey: [...queryKeys.notifications(side, client.baseUrl), 'settings'], queryFn: () => client.getNotificationSettings(side) });
+}
+
+export function useSetNotificationSetting(side: 'buyer' | 'seller') {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { category: NotificationCategory; push: boolean; inApp: boolean }) => client.setNotificationSetting(side, v.category, { push: v.push, inApp: v.inApp }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [NOTIFICATIONS_KEY] }),
   });
 }

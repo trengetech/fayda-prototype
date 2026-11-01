@@ -1,8 +1,9 @@
 import { useSellerDashboard } from '@fayda/api-client';
-import type { DashboardWindow } from '@fayda/contracts/schemas';
+import type { DashboardWindow, ListingDashboardRow } from '@fayda/contracts/schemas';
 import { AppText, Button, Card, useTheme } from '@fayda/ui';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { formatDuration } from '../src/format';
 
 function Stat({ label, value }: { label: string; value: number | string }) {
@@ -29,6 +30,42 @@ function WindowCard({ w }: { w: DashboardWindow }) {
         <Stat label="Saves" value={w.saves} />
         <Stat label="Comments" value={w.comments} />
       </View>
+    </Card>
+  );
+}
+
+function ListingRow({ l, days }: { l: ListingDashboardRow; days: 7 | 30 }) {
+  const n = days === 7 ? l.last7 : l.last30;
+  return (
+    <View style={{ gap: 2, paddingVertical: 8 }} accessibilityLabel={`${l.title}, last ${days} days: ${n.views} views, ${n.likes} likes, ${n.saves} saves, ${n.comments} comments, ${n.offers} offers, ${n.orders} orders`}>
+      <AppText weight="bold">{l.title}{l.status === 'PAUSED' ? ' (paused)' : ''}</AppText>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        <Stat label="Views" value={n.views} />
+        <Stat label="Likes" value={n.likes} />
+        <Stat label="Saves" value={n.saves} />
+        <Stat label="Comments" value={n.comments} />
+        <Stat label="Offers" value={n.offers} />
+        <Stat label="Orders" value={n.orders} />
+      </View>
+      <AppText tone="muted" size={12}>{n.conversionPct == null ? 'Conversion: no views yet' : `Conversion: ${n.conversionPct}% (orders per 100 views)`}</AppText>
+    </View>
+  );
+}
+
+/** Each listing's own numbers for the last 7 or 30 days, busiest first. */
+function ListingsCard({ rows }: { rows: ListingDashboardRow[] }) {
+  const [days, setDays] = useState<7 | 30>(30);
+  return (
+    <Card>
+      <AppText weight="bold">Your listings</AppText>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {([7, 30] as const).map((d) => (
+          <Pressable key={d} accessibilityRole="button" accessibilityState={{ selected: days === d }} accessibilityLabel={`Show the last ${d} days`} onPress={() => setDays(d)}>
+            <AppText weight={days === d ? 'bold' : 'regular'} tone={days === d ? 'accent' : 'muted'}>{`${d} days`}</AppText>
+          </Pressable>
+        ))}
+      </View>
+      {rows.length ? rows.map((l) => <ListingRow key={l.id} l={l} days={days} />) : <AppText tone="muted">No live listings yet.</AppText>}
     </Card>
   );
 }
@@ -62,6 +99,7 @@ export default function DashboardScreen() {
             <Button title={d.needsReply ? `${d.needsReply} ${d.needsReply === 1 ? 'offer needs' : 'offers need'} a reply` : 'No offers waiting'} variant={d.needsReply ? 'primary' : 'outline'} onPress={() => router.push('/offers' as never)} />
           </Card>
           {d.windows.map((w) => <WindowCard key={w.days} w={w} />)}
+          <ListingsCard rows={d.listings} />
           <Card>
             <AppText weight="bold">Your public record (all time)</AppText>
             <AppText tone="muted" size={12}>This is what buyers see on your shop.</AppText>

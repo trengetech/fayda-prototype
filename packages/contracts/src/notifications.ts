@@ -40,3 +40,28 @@ export type PushTokenInput = z.infer<typeof PushTokenInputSchema>;
 /** Real-time: a notification was written for this person in this app. Ids only; the app refetches. */
 export const NotificationEventSchema = z.object({ notificationId: z.string() });
 export type NotificationEventPayload = z.infer<typeof NotificationEventSchema>;
+
+// ---------- settings: which kinds of notification a person wants ----------
+/** Orders cannot be switched off: they are about money and delivery. */
+export const NotificationCategorySchema = z.enum(['ORDERS', 'OFFERS', 'CHAT', 'REQUESTS', 'COMMENTS', 'REVIEWS']).openapi('NotificationCategory');
+export type NotificationCategory = z.infer<typeof NotificationCategorySchema>;
+export const ALWAYS_ON_CATEGORIES: readonly NotificationCategory[] = ['ORDERS'];
+
+export const NotificationSettingSchema = z
+  .object({
+    category: NotificationCategorySchema,
+    label: z.string(),
+    /** Send a push to the phone. */
+    push: z.boolean(),
+    /** Show in the notification centre (and its unread count). Off hides them; nothing is deleted, so turning it on brings them back. */
+    inApp: z.boolean(),
+    alwaysOn: z.boolean(),
+  })
+  .openapi('NotificationSetting');
+export type NotificationSetting = z.infer<typeof NotificationSettingSchema>;
+
+export const NotificationSettingsSchema = z.object({ items: z.array(NotificationSettingSchema) }).openapi('NotificationSettings');
+export type NotificationSettings = z.infer<typeof NotificationSettingsSchema>;
+
+export const NotificationSettingInputSchema = z.object({ push: z.boolean(), inApp: z.boolean() }).openapi('NotificationSettingInput');
+export type NotificationSettingInput = z.infer<typeof NotificationSettingInputSchema>;

@@ -74,6 +74,7 @@ function Routes() {
         <Stack.Screen name="contact" />
         <Stack.Screen name="agreement" />
         <Stack.Screen name="notifications" />
+        <Stack.Screen name="notification-settings" />
         <Stack.Screen name="blocked" />
         <Stack.Screen name="gallery" />
       </Stack.Protected>

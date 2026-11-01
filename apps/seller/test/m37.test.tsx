@@ -149,7 +149,7 @@ describe('blocked people', () => {
 describe('dashboard', () => {
   const win = (days: number, n: number) => ({ days, views: n * 10, offersReceived: n, offersAgreed: n - 1, ordersPlaced: 2, ordersConfirmed: 1, ordersDelivered: 0, likes: 12, saves: 3, comments: 4 });
   it('shows what needs me, both windows and the public record', async () => {
-    fakeApi({ 'GET /v1/seller/dashboard': () => json({ windows: [win(7, 5), win(30, 20)], record: { orders: 9, completed: 6, confirmed: 8, cancelled: 1, expired: 0, medianConfirmMs: 7_800_000, rating: 4.5, reviewCount: 3 }, needsReply: 2, needsConfirm: 1 }) }, fetchMock);
+    fakeApi({ 'GET /v1/seller/dashboard': () => json({ windows: [win(7, 5), win(30, 20)], record: { orders: 9, completed: 6, confirmed: 8, cancelled: 1, expired: 0, medianConfirmMs: 7_800_000, rating: 4.5, reviewCount: 3 }, needsReply: 2, needsConfirm: 1, listings: [] }) }, fetchMock);
     await renderWith(signedIn(), <DashboardScreen />);
     expect(await screen.findByText('Last 7 days')).toBeOnTheScreen();
     expect(screen.getByText('Last 30 days')).toBeOnTheScreen();
@@ -163,7 +163,7 @@ describe('dashboard', () => {
   });
   it('shows a dash for a median that does not exist yet, and an error with retry', async () => {
     let fail = true;
-    fakeApi({ 'GET /v1/seller/dashboard': () => (fail ? json({ title: 'x', status: 500, code: 'INTERNAL', detail: 'down' }, 500) : json({ windows: [win(7, 1), win(30, 1)], record: { orders: 0, completed: 0, confirmed: 0, cancelled: 0, expired: 0, medianConfirmMs: null, rating: null, reviewCount: 0 }, needsReply: 0, needsConfirm: 0 })) }, fetchMock);
+    fakeApi({ 'GET /v1/seller/dashboard': () => (fail ? json({ title: 'x', status: 500, code: 'INTERNAL', detail: 'down' }, 500) : json({ windows: [win(7, 1), win(30, 1)], record: { orders: 0, completed: 0, confirmed: 0, cancelled: 0, expired: 0, medianConfirmMs: null, rating: null, reviewCount: 0 }, needsReply: 0, needsConfirm: 0, listings: [] })) }, fetchMock);
     await renderWith(signedIn(), <DashboardScreen />);
     expect(await screen.findByText('Can’t load the dashboard')).toBeOnTheScreen();
     fail = false;

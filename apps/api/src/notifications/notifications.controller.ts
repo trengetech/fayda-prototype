@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, ParseUUIDPipe, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { NotificationListSchema, NotificationQuerySchema, PushTokenInputSchema, UnreadCountSchema, type NotificationList, type NotificationQuery, type PushTokenInput, type UnreadCount } from '@fayda/contracts';
+import { NotificationCategorySchema, NotificationListSchema, NotificationQuerySchema, NotificationSettingInputSchema, NotificationSettingsSchema, PushTokenInputSchema, UnreadCountSchema, type NotificationCategory, type NotificationList, type NotificationQuery, type NotificationSettingInput, type NotificationSettings, type PushTokenInput, type UnreadCount } from '@fayda/contracts';
 import { Audience, Auth, AuthGuard } from '../auth/auth.guard.js';
 import type { AccessClaims } from '../auth/token.service.js';
 import { ZodPipe } from '../common/zod-pipe.js';
@@ -26,6 +26,26 @@ abstract class NotificationsController {
   @HttpCode(200)
   async readAll(@Auth() who: AccessClaims): Promise<UnreadCount> {
     return UnreadCountSchema.parse(await this.svc.markAllRead(who.userId, this.app));
+  }
+
+  @Get('settings')
+  async settings(@Auth() who: AccessClaims): Promise<NotificationSettings> {
+    return NotificationSettingsSchema.parse(await this.svc.settings(who.userId, this.app));
+  }
+
+  @Put('settings/:category')
+  async setSetting(@Auth() who: AccessClaims, @Param('category', new ZodPipe(NotificationCategorySchema)) category: NotificationCategory, @Body(new ZodPipe(NotificationSettingInputSchema)) body: NotificationSettingInput): Promise<NotificationSettings> {
+    return NotificationSettingsSchema.parse(await this.svc.setSetting(who.userId, this.app, category, body));
+  }
+
+  @Delete()
+  async clear(@Auth() who: AccessClaims): Promise<UnreadCount> {
+    return UnreadCountSchema.parse(await this.svc.removeAll(who.userId, this.app));
+  }
+
+  @Delete(':id')
+  async delete(@Auth() who: AccessClaims, @Param('id', IdParam) id: string): Promise<UnreadCount> {
+    return UnreadCountSchema.parse(await this.svc.remove(who.userId, this.app, id));
   }
 
   @Post(':id/read')

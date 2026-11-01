@@ -39,6 +39,26 @@ describe('buyer product page', () => {
     expect(views[0]![1]?.method).toBe('POST');
   });
 
+  it('shows how many people looked in the last 30 days', async () => {
+    serve(buyerListing({ viewCount: 41 }));
+    await renderWith(signedIn(), <ListingScreen />);
+    expect(await screen.findByText('41 views in the last 30 days')).toBeOnTheScreen();
+  });
+
+  it('says "1 view" for one, and shows nothing when no one has looked, and never shows saves, offers or orders', async () => {
+    serve(buyerListing({ viewCount: 1 }));
+    await renderWith(signedIn(), <ListingScreen />);
+    expect(await screen.findByText('1 view in the last 30 days')).toBeOnTheScreen();
+    expect(screen.queryByText(/\bsaves\b|offers received|orders placed|conversion/i)).toBeNull();
+  });
+
+  it('shows no views line when the count is zero', async () => {
+    serve(buyerListing({ viewCount: 0 }));
+    await renderWith(signedIn(), <ListingScreen />);
+    await screen.findByText('Cotton kurta');
+    expect(screen.queryByText(/in the last 30 days/)).toBeNull();
+  });
+
   it('shows a loading state, then the error with Try again', async () => {
     fetchMock.mockImplementation(() => new Promise(() => {}));
     await renderWith(signedIn(), <ListingScreen />);

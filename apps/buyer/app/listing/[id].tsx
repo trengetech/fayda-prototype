@@ -52,6 +52,7 @@ export default function ListingScreen() {
               {l.soldOut ? <Badge label="Sold out" tone="danger" /> : <Badge label={bargainingLabel(l.bargaining)} tone={l.bargaining.acceptsOffers ? 'accent' : 'info'} />}
             </View>
             <ReactionRow item={l} />
+            {l.viewCount > 0 ? <AppText tone="faint" size={12} accessibilityLabel={`${l.viewCount} views in the last 30 days`}>{`${l.viewCount} ${l.viewCount === 1 ? 'view' : 'views'} in the last 30 days`}</AppText> : null}
             <Card>
               <Pressable accessibilityRole="button" accessibilityLabel={`Open shop ${l.seller.name}`} onPress={() => router.push(`/shop/${l.seller.handle}` as never)}>
                 <AppText weight="bold">{l.seller.name} ›</AppText>

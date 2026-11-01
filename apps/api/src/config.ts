@@ -10,6 +10,8 @@ const EnvSchema = z.object({
   /** Comma-separated browser origins allowed by CORS. Native apps do not need CORS. */
   CORS_ORIGINS: z.string().default(''),
   SWEEP_ENABLED: z.enum(['true', 'false']).default('true'),
+  /** `all`: card and product-page comment counts include everyone. `viewer`: they leave out people the viewer has blocked. */
+  COMMENT_COUNT_MODE: z.enum(['all', 'viewer']).default('all'),
   /** Signs access tokens. At least 32 characters; never commit it. */
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   /** Only `dev-otp` exists today: a fixed code, no SMS. It is reported as simulated by /v1/meta. */
@@ -40,6 +42,7 @@ export interface AppConfig {
   authRateLimitPerMin: number;
   uploadsDir: string;
   pushProvider: 'off' | 'expo';
+  commentCountMode: 'all' | 'viewer';
   expoAccessToken: string | null;
 }
 
@@ -60,6 +63,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     databaseUrl: e.DATABASE_URL,
     corsOrigins: e.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
     sweepEnabled: e.SWEEP_ENABLED === 'true',
+    commentCountMode: e.COMMENT_COUNT_MODE,
     jwtSecret: e.JWT_SECRET,
     authProvider: e.AUTH_PROVIDER,
     accessTtlSeconds: e.ACCESS_TTL_SECONDS,

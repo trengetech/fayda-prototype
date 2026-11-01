@@ -11,6 +11,7 @@ import {
   BuyerFeedSchema,
   CommentListSchema,
   NotificationListSchema,
+  NotificationSettingsSchema,
   UnreadCountSchema,
   BlockedListSchema,
   BlockedPersonSchema,
@@ -71,7 +72,10 @@ import {
   type BuyerFeed,
   type Comment,
   type CommentList,
+  type NotificationCategory,
   type NotificationList,
+  type NotificationSettingInput,
+  type NotificationSettings,
   type UnreadCount,
   type PushTokenInput,
   type BlockedList,
@@ -202,6 +206,12 @@ export interface ApiClient {
   getUnreadCount(app: 'buyer' | 'seller'): Promise<UnreadCount>;
   markNotificationRead(app: 'buyer' | 'seller', id: string): Promise<UnreadCount>;
   markAllNotificationsRead(app: 'buyer' | 'seller'): Promise<UnreadCount>;
+  /** Delete one of my notifications, or clear my centre. Returns the new unread count. */
+  deleteNotification(app: 'buyer' | 'seller', id: string): Promise<UnreadCount>;
+  clearNotifications(app: 'buyer' | 'seller'): Promise<UnreadCount>;
+  /** Which kinds of notification I want, for push and for the centre. Orders cannot be switched off. */
+  getNotificationSettings(app: 'buyer' | 'seller'): Promise<NotificationSettings>;
+  setNotificationSetting(app: 'buyer' | 'seller', category: NotificationCategory, input: NotificationSettingInput): Promise<NotificationSettings>;
   registerPushToken(app: 'buyer' | 'seller', input: PushTokenInput): Promise<void>;
   removePushToken(app: 'buyer' | 'seller', input: PushTokenInput): Promise<void>;
   /** Report and block (I-31). Apps never see user ids: a block names a comment or a chat thread. */
@@ -432,6 +442,10 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     getUnreadCount: (app) => call(`/v1/${app}/notifications/unread-count`, UnreadCountSchema, { auth: true }),
     markNotificationRead: (app, id) => call(`/v1/${app}/notifications/${id}/read`, UnreadCountSchema, { method: 'POST', auth: true }),
     markAllNotificationsRead: (app) => call(`/v1/${app}/notifications/read-all`, UnreadCountSchema, { method: 'POST', auth: true }),
+    deleteNotification: (app, id) => call(`/v1/${app}/notifications/${id}`, UnreadCountSchema, { method: 'DELETE', auth: true }),
+    clearNotifications: (app) => call(`/v1/${app}/notifications`, UnreadCountSchema, { method: 'DELETE', auth: true }),
+    getNotificationSettings: (app) => call(`/v1/${app}/notifications/settings`, NotificationSettingsSchema, { auth: true }),
+    setNotificationSetting: (app, category, input) => call(`/v1/${app}/notifications/settings/${category}`, NotificationSettingsSchema, { method: 'PUT', body: input, auth: true }),
     registerPushToken: (app, input) => call(`/v1/${app}/push-token`, NoBody, { method: 'PUT', body: input, auth: true }),
     removePushToken: (app, input) => call(`/v1/${app}/push-token`, NoBody, { method: 'DELETE', body: input, auth: true }),
     reportComment: (app, commentId, input) => call(`/v1/${app}/comments/${commentId}/report`, ReportReceiptSchema, { method: 'POST', body: input, auth: true }),
