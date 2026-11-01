@@ -35,6 +35,13 @@ import { RequestsService } from './requests/requests.service.js';
 import { IdempotencyService } from './common/idempotency.service.js';
 import { APP_CONFIG, type AppConfig } from './config.js';
 import { DbService } from './db/db.service.js';
+import { BuyerNotificationsController, BuyerPushTokenController, SellerNotificationsController, SellerPushTokenController } from './notifications/notifications.controller.js';
+import { NotificationsService } from './notifications/notifications.service.js';
+import { ExpoPushProvider, OffPushProvider, PUSH_PROVIDER } from './notifications/push-provider.js';
+import { BuyerSafetyController, SellerSafetyController } from './safety/safety.controller.js';
+import { SafetyService } from './safety/safety.service.js';
+import { SellerDashboardController } from './dashboard/dashboard.controller.js';
+import { DashboardService } from './dashboard/dashboard.service.js';
 import { SweepRunner } from './scheduler/sweep-runner.js';
 import { SystemController } from './system/system.controller.js';
 
@@ -44,7 +51,7 @@ export class AppModule {
     return {
       module: AppModule,
       imports: [ScheduleModule.forRoot()],
-      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController, BuyerMediaController, SellerListingsController, BuyerCatalogController, BuyerDiscoveryController, BuyerSocialController, SellerSocialController, BuyerNegotiationsController, SellerNegotiationsController, BuyerOrdersController, SellerOrdersController, PublicShopsController, BuyerChatController, SellerChatController, BuyerReviewsController, SellerReviewsController, ShopReviewsController, BuyerRequestsController, SellerRequestsController],
+      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController, BuyerMediaController, SellerListingsController, BuyerCatalogController, BuyerDiscoveryController, BuyerSocialController, SellerSocialController, BuyerNegotiationsController, SellerNegotiationsController, BuyerOrdersController, SellerOrdersController, PublicShopsController, BuyerChatController, SellerChatController, BuyerReviewsController, SellerReviewsController, ShopReviewsController, BuyerRequestsController, SellerRequestsController, BuyerNotificationsController, SellerNotificationsController, BuyerPushTokenController, SellerPushTokenController, BuyerSafetyController, SellerSafetyController, SellerDashboardController],
       providers: [
         { provide: APP_CONFIG, useValue: config },
         { provide: CLOCK, useValue: clock },
@@ -65,12 +72,16 @@ export class AppModule {
         ReviewsService,
         RequestsService,
         OrdersService,
+        NotificationsService,
+        SafetyService,
+        DashboardService,
+        { provide: PUSH_PROVIDER, useFactory: () => (config.pushProvider === 'expo' ? new ExpoPushProvider(config.expoAccessToken) : new OffPushProvider()) },
         NegotiationsGateway,
         AuthService,
         AuthGuard,
         { provide: AUTH_VERIFIER, useClass: DevOtpVerifier },
       ],
-      exports: [DbService, IdempotencyService, SweepRunner, CLOCK, APP_CONFIG, MediaService, NegotiationsService, NegotiationEvents, ChatService, ReviewsService, RequestsService, OrdersService],
+      exports: [DbService, IdempotencyService, SweepRunner, CLOCK, APP_CONFIG, MediaService, NegotiationsService, NegotiationEvents, ChatService, ReviewsService, RequestsService, OrdersService, NotificationsService, SafetyService, PUSH_PROVIDER],
     };
   }
 }

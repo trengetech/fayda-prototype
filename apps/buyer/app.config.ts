@@ -21,6 +21,8 @@ const config: ExpoConfig = {
   android: {
     package: `com.fayda.buyer${v.suffix}`,
     versionCode: 2,
+    // Push on Android needs the Firebase file (founder task, I-32). Without it the app builds and push is simply unavailable.
+    ...(process.env.GOOGLE_SERVICES_JSON ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON } : {}),
     adaptiveIcon: { foregroundImage: './assets/icon.png', backgroundColor: '#C2410C' },
   },
   plugins: [
@@ -28,6 +30,7 @@ const config: ExpoConfig = {
     'expo-font',
     'expo-secure-store',
     'expo-video',
+    'expo-notifications',
     // Plain-HTTP API addresses (a laptop on the local network) are allowed in dev and staging builds only.
     ['expo-build-properties', { android: { usesCleartextTraffic: variant !== 'prod' } }],
   ],

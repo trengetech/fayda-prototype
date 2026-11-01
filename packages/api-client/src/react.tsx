@@ -1,9 +1,9 @@
-import type { AddressInput, CancelOrder, CreateRequest, ListingInput, NewAddress, PlaceOrder, PostComment, PutReview, Respond, SendMessage, ShipmentBody } from '@fayda/contracts/schemas';
+import type { BlockInput, PushTokenInput, ReportInput, AddressInput, CancelOrder, CreateRequest, ListingInput, NewAddress, PlaceOrder, PostComment, PutReview, Respond, SendMessage, ShipmentBody } from '@fayda/contracts/schemas';
 import { QueryClient, QueryClientProvider, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import { createApiClient, feedQueryString, type ApiClient, type DealAccessInput, type FeedParams } from './client';
-import { ALL_LIVE_KEYS, COMMENTS_KEY, FEED_KEY, FOLLOWS_KEY, SAVED_KEY, SHOP_KEY, NEGOTIATIONS_KEY, ORDERS_KEY, PROFILE_KEY, RECORD_KEY, REQUESTS_KEY, REVIEWS_KEY, THREADS_KEY, invalidationFor, queryKeys } from './keys';
+import { ALL_LIVE_KEYS, BLOCKS_KEY, COMMENTS_KEY, NOTIFICATIONS_KEY, FEED_KEY, FOLLOWS_KEY, SAVED_KEY, SHOP_KEY, NEGOTIATIONS_KEY, ORDERS_KEY, PROFILE_KEY, RECORD_KEY, REQUESTS_KEY, REVIEWS_KEY, THREADS_KEY, invalidationFor, queryKeys } from './keys';
 import { startRealtime } from './realtime';
 import type { SessionManager, SessionState } from './session';
 
@@ -531,4 +531,87 @@ export function useRemoveComment(side: 'buyer' | 'seller') {
       void qc.invalidateQueries({ queryKey: ['seller-listings'] });
     },
   });
+}
+
+// ---------- notifications, push, report and block, dashboard (M3.7) ----------
+/** The unread number for the bell. Refreshed by the `notification.created` event and on reconnect. */
+export function useUnreadCount(side: 'buyer' | 'seller') {
+  const client = useApiClient();
+  return useQuery({ queryKey: [...queryKeys.notifications(side, client.baseUrl), 'unread'], queryFn: () => client.getUnreadCount(side) });
+}
+
+/** The notification centre, newest first, one page at a time. */
+export function useNotifications(side: 'buyer' | 'seller') {
+  const client = useApiClient();
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.notifications(side, client.baseUrl), 'list'],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => client.listNotifications(side, pageParam),
+    getNextPageParam: (last) => last.nextCursor,
+  });
+}
+
+export function useMarkNotificationRead(side: 'buyer' | 'seller') {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => client.markNotificationRead(side, id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [NOTIFICATIONS_KEY] }),
+  });
+}
+
+export function useMarkAllNotificationsRead(side: 'buyer' | 'seller') {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => client.markAllNotificationsRead(side),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [NOTIFICATIONS_KEY] }),
+  });
+}
+
+/** Tells the API this phone's push token, while signed in, and again if it changes. `getToken` returns null when push is unavailable (no permission, an emulator without Google services). */
+export function usePushRegistration(side: 'buyer' | 'seller', getToken: () => Promise<PushTokenInput | null>): void {
+  const client = useApiClient();
+  const status = useSession().status;
+  useEffect(() => {
+    if (status !== 'signedIn') return;
+    let cancelled = false;
+    void getToken()
+      .then((t) => (t && !cancelled ? client.registerPushToken(side, t) : undefined))
+      .catch(() => undefined); // push is a convenience: a failure never blocks the app
+    return () => {
+      cancelled = true;
+    };
+  }, [status, client, side, getToken]);
+}
+
+export function useReport(side: 'buyer' | 'seller') {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (a: { kind: 'COMMENT'; commentId: string; input: ReportInput } | { kind: 'MESSAGE'; threadId: string; messageId: string; input: ReportInput }) =>
+      a.kind === 'COMMENT' ? client.reportComment(side, a.commentId, a.input) : client.reportMessage(side, a.threadId, a.messageId, a.input),
+  });
+}
+
+export function useBlocks(side: 'buyer' | 'seller') {
+  const client = useApiClient();
+  return useQuery({ queryKey: queryKeys.blocks(side, client.baseUrl), queryFn: () => client.listBlocks(side) });
+}
+
+/** Blocking and unblocking change what comments and chats show, so those are refreshed too. */
+export function useBlockActions(side: 'buyer' | 'seller') {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  const done = () => {
+    for (const k of [BLOCKS_KEY, COMMENTS_KEY, THREADS_KEY]) void qc.invalidateQueries({ queryKey: [k] });
+  };
+  return {
+    block: useMutation({ mutationFn: (input: BlockInput) => client.blockPerson(side, input), onSuccess: done }),
+    unblock: useMutation({ mutationFn: (blockId: string) => client.unblockPerson(side, blockId), onSuccess: done }),
+  };
+}
+
+export function useSellerDashboard() {
+  const client = useApiClient();
+  return useQuery({ queryKey: queryKeys.dashboard(client.baseUrl), queryFn: () => client.getSellerDashboard() });
 }

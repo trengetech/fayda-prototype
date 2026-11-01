@@ -12,6 +12,9 @@ export const SHOP_KEY = 'shop';
 export const FOLLOWS_KEY = 'follows';
 export const SAVED_KEY = 'saved';
 export const COMMENTS_KEY = 'comments';
+export const NOTIFICATIONS_KEY = 'notifications';
+export const BLOCKS_KEY = 'blocks';
+export const DASHBOARD_KEY = 'dashboard';
 /** The buyer's own profile (addresses, contact). */
 export const PROFILE_KEY = 'buyer-profile';
 
@@ -36,6 +39,9 @@ export const queryKeys = {
   shopListings: (baseUrl: string, handle: string | null, params: unknown) => [SHOP_KEY, baseUrl, handle, 'listings', params] as const,
   follows: (baseUrl: string) => [FOLLOWS_KEY, baseUrl] as const,
   saved: (baseUrl: string) => [SAVED_KEY, baseUrl] as const,
+  notifications: (side: Side, baseUrl: string) => [NOTIFICATIONS_KEY, side, baseUrl] as const,
+  blocks: (side: Side, baseUrl: string) => [BLOCKS_KEY, side, baseUrl] as const,
+  dashboard: (baseUrl: string) => [DASHBOARD_KEY, baseUrl] as const,
   comments: (side: Side, baseUrl: string, listingId: string | null) => [COMMENTS_KEY, side, baseUrl, listingId] as const,
 } as const;
 
@@ -54,9 +60,30 @@ export function invalidationFor(e: RealtimeEvent): string[] {
     case 'request.updated':
       return [REQUESTS_KEY, THREADS_KEY];
     case 'comment.created':
-      return [COMMENTS_KEY, 'seller-listings', 'seller-listing'];
+      return [COMMENTS_KEY, 'seller-listings', 'seller-listing', DASHBOARD_KEY];
+    case 'notification.created':
+      return [NOTIFICATIONS_KEY];
   }
 }
 
 /** Everything a reconnect refreshes: updates may have been missed while the socket was down. */
-export const ALL_LIVE_KEYS: readonly string[] = [NEGOTIATIONS_KEY, 'buyer-listing', ORDERS_KEY, THREADS_KEY, REQUESTS_KEY, RECORD_KEY, REVIEWS_KEY, COMMENTS_KEY];
+export const ALL_LIVE_KEYS: readonly string[] = [NEGOTIATIONS_KEY, 'buyer-listing', ORDERS_KEY, THREADS_KEY, REQUESTS_KEY, RECORD_KEY, REVIEWS_KEY, COMMENTS_KEY, NOTIFICATIONS_KEY, BLOCKS_KEY, DASHBOARD_KEY];
+
+/**
+ * The screen a notification opens, per app. Orders and chats open in both apps; a negotiation is `negotiation/:id` for the
+ * buyer and `offer/:id` for the seller; a seller's listing notice (a comment) opens that listing's comments.
+ */
+export function notificationHref(side: Side, target: { kind: 'ORDER' | 'THREAD' | 'NEGOTIATION' | 'REQUEST' | 'LISTING'; id: string }): string {
+  switch (target.kind) {
+    case 'ORDER':
+      return `/order/${target.id}`;
+    case 'THREAD':
+      return `/chat/${target.id}`;
+    case 'NEGOTIATION':
+      return side === 'buyer' ? `/negotiation/${target.id}` : `/offer/${target.id}`;
+    case 'REQUEST':
+      return side === 'buyer' ? `/request/${target.id}` : '/requests';
+    case 'LISTING':
+      return side === 'buyer' ? `/listing/${target.id}` : `/comments/${target.id}`;
+  }
+}

@@ -1,5 +1,6 @@
 import { useComments, usePostComment, useRemoveComment, useSetLike, useSetSave } from '@fayda/api-client';
 import type { Comment } from '@fayda/contracts/schemas';
+import { CommentSafety } from './safety';
 import { COMMENT_MAX_CHARS, formatAgo, formatCount, formatRupees } from '@fayda/domain';
 import { AppText, Badge, Button, Card, TextField, describeError, useTheme } from '@fayda/ui';
 import * as Linking from 'expo-linking';
@@ -78,6 +79,7 @@ function CommentRow({ c, onRemove, busy }: { c: Comment; onRemove: () => void; b
           <AppText tone="danger" size={12}>Remove</AppText>
         </Pressable>
       ) : null}
+      <CommentSafety c={c} />
     </View>
   );
 }

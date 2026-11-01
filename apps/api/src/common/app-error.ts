@@ -39,6 +39,7 @@ const STATUS: Partial<Record<string, number>> = {
   IDEMPOTENCY_KEY_REUSED: 422,
   DAILY_LIMIT: 429,
   RATE_LIMITED: 429,
+  BLOCKED: 403,
   SERVICE_UNAVAILABLE: 503,
 };
 export const statusForCode = (code: string): number => STATUS[code] ?? 422;

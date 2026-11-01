@@ -20,6 +20,10 @@ const EnvSchema = z.object({
   AUTH_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).max(10000).default(20),
   /** Where the local-disk media adapter keeps uploads. Must be outside any folder a deploy replaces (I-11). */
   UPLOADS_DIR: z.string().min(1).default('./uploads'),
+  /** `off` sends nothing (reported as simulated by /v1/meta); `expo` sends through the Expo push service (Android and iOS). */
+  PUSH_PROVIDER: z.enum(['off', 'expo']).default('off'),
+  /** Optional: only if the Expo project turns on enhanced push security. Never commit it. */
+  EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
 });
 
 export interface AppConfig {
@@ -35,6 +39,8 @@ export interface AppConfig {
   refreshTtlDays: number;
   authRateLimitPerMin: number;
   uploadsDir: string;
+  pushProvider: 'off' | 'expo';
+  expoAccessToken: string | null;
 }
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -60,5 +66,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     refreshTtlDays: e.REFRESH_TTL_DAYS,
     authRateLimitPerMin: e.AUTH_RATE_LIMIT_PER_MIN,
     uploadsDir: e.UPLOADS_DIR,
+    pushProvider: e.PUSH_PROVIDER,
+    expoAccessToken: e.EXPO_ACCESS_TOKEN ?? null,
   };
 }

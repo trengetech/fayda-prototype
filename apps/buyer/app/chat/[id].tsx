@@ -7,8 +7,9 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, View } from 'react-native';
 import { AttachmentPicker, type Attached } from '../../src/attachments';
 import { newKey } from '../../src/orders';
+import { BlockedNotice, MessageSafety } from '../../src/safety';
 
-function Bubble({ m }: { m: ChatMessageView }) {
+function Bubble({ m, threadId, who }: { m: ChatMessageView; threadId: string; who: string }) {
   const { colors } = useTheme();
   const client = useApiClient();
   const router = useRouter();
@@ -27,6 +28,7 @@ function Bubble({ m }: { m: ChatMessageView }) {
           <Button title="View and buy" size="sm" onPress={() => router.push(`/listing/${m.listing?.id}` as never)} />
         </View>
       ) : null}
+      {m.from === 'OTHER' ? <MessageSafety threadId={threadId} messageId={m.id} who={who} /> : null}
     </View>
   );
 }
@@ -35,6 +37,7 @@ function Bubble({ m }: { m: ChatMessageView }) {
 export default function ChatScreen() {
   const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const q = useThread('buyer', id ?? null);
   const send = useSendMessage('buyer');
   const markRead = useMarkThreadRead('buyer');
@@ -89,13 +92,17 @@ export default function ChatScreen() {
     <ScrollView style={{ flex: 1, backgroundColor: colors.surface }} contentContainerStyle={{ padding: 16, gap: 10 }} keyboardShouldPersistTaps="handled">
       <AppText weight="extrabold" size={18}>{t.title}</AppText>
       <AppText tone="muted" size={12}>Chatting with {t.otherName}</AppText>
-      {t.messages.map((m) => <Bubble key={m.id} m={m} />)}
+      {t.messages.map((m) => <Bubble key={m.id} m={m} threadId={t.id} who={t.otherName} />)}
+      {t.messagingDisabled ? (
+        <Card><BlockedNotice youBlocked={t.youBlocked} onOpenBlocked={() => router.push('/blocked' as never)} /></Card>
+      ) : (
       <Card>
         <TextField label="Message" multiline value={text} onChangeText={edited(setText)} maxLength={1000} />
         <AttachmentPicker label="Photo" purpose="CHAT" max={1} video={false} value={photo} onChange={edited(setPhoto)} />
         <Button title="Send" disabled={!canSend} loading={send.isPending} onPress={submit} />
         {error ? <AppText tone="danger" size={12} accessibilityRole="alert">{error}</AppText> : null}
       </Card>
+      )}
     </ScrollView>
   );
 }

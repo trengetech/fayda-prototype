@@ -9,3 +9,15 @@ configure({ asyncUtilTimeout: 5_000 });
 
 // The clipboard is native; tests read what was copied from this mock (`jest.requireMock('expo-clipboard').setStringAsync`).
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true) }));
+
+// Push is native. Tests drive it through these mocks (`jest.requireMock('expo-notifications')`).
+jest.mock('expo-notifications', () => ({
+  setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn(async () => null),
+  getPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  requestPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  getExpoPushTokenAsync: jest.fn(async () => ({ data: 'ExponentPushToken[abcdefghijklmnopqrstuv]' })),
+  getLastNotificationResponseAsync: jest.fn(async () => null),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  AndroidImportance: { HIGH: 4 },
+}));

@@ -10,6 +10,12 @@ import {
   ProblemSchema,
   BuyerFeedSchema,
   CommentListSchema,
+  NotificationListSchema,
+  UnreadCountSchema,
+  BlockedListSchema,
+  BlockedPersonSchema,
+  ReportReceiptSchema,
+  SellerDashboardSchema,
   CommentSchema,
   LikeStateSchema,
   SaveStateSchema,
@@ -65,6 +71,15 @@ import {
   type BuyerFeed,
   type Comment,
   type CommentList,
+  type NotificationList,
+  type UnreadCount,
+  type PushTokenInput,
+  type BlockedList,
+  type BlockedPerson,
+  type BlockInput,
+  type ReportInput,
+  type ReportReceipt,
+  type SellerDashboard,
   type LikeState,
   type PostComment,
   type SaveState,
@@ -180,6 +195,20 @@ export interface ApiClient {
   listComments(app: 'buyer' | 'seller', listingId: string, cursor?: string | null, limit?: number): Promise<CommentList>;
   postComment(app: 'buyer' | 'seller', listingId: string, input: PostComment, idempotencyKey?: string): Promise<Comment>;
   removeComment(app: 'buyer' | 'seller', commentId: string): Promise<void>;
+  /** The notification centre of one app, newest first, and the push token of this phone (M3.7). */
+  listNotifications(app: 'buyer' | 'seller', cursor?: string | null, limit?: number): Promise<NotificationList>;
+  getUnreadCount(app: 'buyer' | 'seller'): Promise<UnreadCount>;
+  markNotificationRead(app: 'buyer' | 'seller', id: string): Promise<UnreadCount>;
+  markAllNotificationsRead(app: 'buyer' | 'seller'): Promise<UnreadCount>;
+  registerPushToken(app: 'buyer' | 'seller', input: PushTokenInput): Promise<void>;
+  removePushToken(app: 'buyer' | 'seller', input: PushTokenInput): Promise<void>;
+  /** Report and block (I-31). Apps never see user ids: a block names a comment or a chat thread. */
+  reportComment(app: 'buyer' | 'seller', commentId: string, input: ReportInput): Promise<ReportReceipt>;
+  reportMessage(app: 'buyer' | 'seller', threadId: string, messageId: string, input: ReportInput): Promise<ReportReceipt>;
+  listBlocks(app: 'buyer' | 'seller'): Promise<BlockedList>;
+  blockPerson(app: 'buyer' | 'seller', input: BlockInput): Promise<BlockedPerson>;
+  unblockPerson(app: 'buyer' | 'seller', blockId: string): Promise<void>;
+  getSellerDashboard(): Promise<SellerDashboard>;
   /** Make a first offer on a size. Amounts are paise (whole rupees). Pass `idempotencyKey` to make a retry safe. */
   startOffer(listingId: string, variantId: string, amount: number, idempotencyKey?: string): Promise<BuyerNegotiation>;
   listBuyerNegotiations(): Promise<BuyerNegotiationList>;
@@ -391,6 +420,23 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     },
     postComment: (app, listingId, input, key) => call(`/v1/${app}/listings/${listingId}/comments`, CommentSchema, { method: 'POST', body: input, auth: true, ...idem(key) }),
     removeComment: (app, commentId) => call(`/v1/${app}/comments/${commentId}`, NoBody, { method: 'DELETE', auth: true }),
+    listNotifications: (app, cursor, limit) => {
+      const q = new URLSearchParams();
+      if (limit) q.set('limit', String(limit));
+      if (cursor) q.set('cursor', cursor);
+      return call(`/v1/${app}/notifications${q.size ? `?${q}` : ''}`, NotificationListSchema, { auth: true });
+    },
+    getUnreadCount: (app) => call(`/v1/${app}/notifications/unread-count`, UnreadCountSchema, { auth: true }),
+    markNotificationRead: (app, id) => call(`/v1/${app}/notifications/${id}/read`, UnreadCountSchema, { method: 'POST', auth: true }),
+    markAllNotificationsRead: (app) => call(`/v1/${app}/notifications/read-all`, UnreadCountSchema, { method: 'POST', auth: true }),
+    registerPushToken: (app, input) => call(`/v1/${app}/push-token`, NoBody, { method: 'PUT', body: input, auth: true }),
+    removePushToken: (app, input) => call(`/v1/${app}/push-token`, NoBody, { method: 'DELETE', body: input, auth: true }),
+    reportComment: (app, commentId, input) => call(`/v1/${app}/comments/${commentId}/report`, ReportReceiptSchema, { method: 'POST', body: input, auth: true }),
+    reportMessage: (app, threadId, messageId, input) => call(`/v1/${app}/threads/${threadId}/messages/${messageId}/report`, ReportReceiptSchema, { method: 'POST', body: input, auth: true }),
+    listBlocks: (app) => call(`/v1/${app}/blocks`, BlockedListSchema, { auth: true }),
+    blockPerson: (app, input) => call(`/v1/${app}/blocks`, BlockedPersonSchema, { method: 'PUT', body: input, auth: true }),
+    unblockPerson: (app, blockId) => call(`/v1/${app}/blocks/${blockId}`, NoBody, { method: 'DELETE', auth: true }),
+    getSellerDashboard: () => call('/v1/seller/dashboard', SellerDashboardSchema, { auth: true }),
     startOffer: (listingId, variantId, amount, key) => call(`/v1/buyer/listings/${listingId}/offers`, BuyerNegotiationSchema, { method: 'POST', body: { variantId, amount }, auth: true, ...idem(key) }),
     listBuyerNegotiations: () => call('/v1/buyer/negotiations', BuyerNegotiationListSchema, { auth: true }),
     getBuyerNegotiation: (id) => call(`/v1/buyer/negotiations/${id}`, BuyerNegotiationSchema, { auth: true }),

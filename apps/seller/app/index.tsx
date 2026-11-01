@@ -1,4 +1,4 @@
-import { NetworkError, useHealth, useMeta, useSellerNegotiations, useSellerOrders, useSellerRequests, useThreads } from '@fayda/api-client';
+import { NetworkError, useHealth, useMeta, useSellerNegotiations, useSellerOrders, useSellerRequests, useThreads, useUnreadCount } from '@fayda/api-client';
 import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
 import { Link, useRouter } from 'expo-router';
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
@@ -15,6 +15,7 @@ export default function StatusScreen() {
   const needsConfirm = useSellerOrders().data?.needsConfirm ?? 0;
   const unread = useThreads('seller').data?.unread ?? 0;
   const newRequests = useSellerRequests().data?.newCount ?? 0;
+  const notifUnread = useUnreadCount('seller').data?.unread ?? 0;
   const refetch = () => void Promise.all([health.refetch(), meta.refetch()]);
   const error = health.error ?? meta.error;
   const loading = (health.isPending || meta.isPending) && !error;
@@ -39,11 +40,14 @@ export default function StatusScreen() {
           {newRequests ? <Button title={`${newRequests} new buyer ${newRequests === 1 ? 'request' : 'requests'}`} variant="outline" onPress={() => router.push('/requests' as never)} /> : null}
         </Card>
       ) : null}
+      <Button title={notifUnread ? `Notifications (${notifUnread} new)` : 'Notifications'} variant={notifUnread ? 'primary' : 'outline'} onPress={() => router.push('/notifications' as never)} />
+      <Button title="Dashboard" variant="outline" onPress={() => router.push('/dashboard' as never)} />
       <Button title={needsConfirm ? `Orders (${needsConfirm} to confirm)` : 'Orders'} size="lg" onPress={() => router.push('/orders' as never)} />
       <Button title={waiting ? `Offers (${waiting} need a reply)` : 'Offers'} size="lg" variant="outline" onPress={() => router.push('/offers' as never)} />
       <Button title={newRequests ? `Requests (${newRequests} new)` : 'Requests'} size="lg" variant="outline" onPress={() => router.push('/requests' as never)} />
       <Button title="Shop and reviews" size="lg" variant="outline" onPress={() => router.push('/shop' as never)} />
       <Button title="My listings" size="lg" variant="outline" onPress={() => router.push('/listings' as never)} />
+      <Button title="Blocked people" variant="ghost" onPress={() => router.push('/blocked' as never)} />
 
       {loading ? (
         <Card>

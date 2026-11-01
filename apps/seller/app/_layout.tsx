@@ -1,13 +1,15 @@
-import { ApiProvider, SessionProvider, useRealtime, useSession } from '@fayda/api-client';
+import { ApiProvider, SessionProvider, notificationHref, usePushRegistration, useRealtime, useSession } from '@fayda/api-client';
 import { AppText, Button, PrototypeBanner, ThemeProvider, fontAssets, useTheme } from '@fayda/ui';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { APP_LABEL, VARIANT } from '../src/config';
+import { getPushToken, targetFromPush } from '../src/push';
 import { sessionManager } from '../src/session';
 
 void SplashScreen.preventAutoHideAsync();
@@ -17,6 +19,19 @@ function Routes() {
   const { colors } = useTheme();
   const { status, profile } = useSession();
   useRealtime();
+  usePushRegistration('seller', getPushToken);
+  const router = useRouter();
+  // Tapping a push opens what it is about (also when the tap is what started the app).
+  useEffect(() => {
+    if (status !== 'signedIn') return;
+    const go = (r: Notifications.NotificationResponse | null) => {
+      const t = targetFromPush(r?.notification.request.content.data);
+      if (t) router.push(notificationHref('seller', t) as never);
+    };
+    void Notifications.getLastNotificationResponseAsync().then(go).catch(() => undefined);
+    const sub = Notifications.addNotificationResponseReceivedListener(go);
+    return () => sub.remove();
+  }, [status, router]);
   useEffect(() => {
     void sessionManager.restore();
   }, []);
@@ -50,6 +65,9 @@ function Routes() {
         <Stack.Screen name="chat/[id]" />
         <Stack.Screen name="requests" />
         <Stack.Screen name="shop" />
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="blocked" />
+        <Stack.Screen name="dashboard" />
         <Stack.Screen name="gallery" />
       </Stack.Protected>
     </Stack>

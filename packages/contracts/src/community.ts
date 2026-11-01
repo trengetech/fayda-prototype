@@ -43,6 +43,10 @@ export const ChatThreadSchema = z
     unread: z.number().int(),
     lastMessage: z.string().nullable(),
     lastAt: EpochMsSchema,
+    /** New messages are off because one of the two blocked the other. */
+    messagingDisabled: z.boolean(),
+    /** I am the one who blocked (so I can unblock from here). */
+    youBlocked: z.boolean(),
     messages: z.array(ChatMessageSchema),
   })
   .openapi('ChatThread');

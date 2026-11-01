@@ -6,6 +6,7 @@ import { CLOCK } from '../common/clock.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { AUTH_VERIFIER, type AuthVerifier } from '../auth/auth-verifier.js';
 import { DbService } from '../db/db.service.js';
+import { PUSH_PROVIDER, type PushProvider } from '../notifications/push-provider.js';
 import { APP_VERSION } from '../version.js';
 
 @Controller()
@@ -15,6 +16,7 @@ export class SystemController {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(AUTH_VERIFIER) private readonly verifier: AuthVerifier,
+    @Inject(PUSH_PROVIDER) private readonly push: PushProvider,
   ) {}
 
   /** 200 when the database answers, 503 when it does not. Never includes error details. */
@@ -43,6 +45,7 @@ export class SystemController {
       providers: [
         { key: 'auth', name: this.verifier.name, simulated: this.verifier.simulated },
         { key: 'media', name: 'local-disk', simulated: true },
+        { key: 'push', name: this.push.name, simulated: this.push.simulated },
       ],
     });
   }

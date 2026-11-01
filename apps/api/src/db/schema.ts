@@ -275,8 +275,13 @@ export const notifications = pgTable(
     listingId: uuid('listing_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     readAt: timestamp('read_at', { withTimezone: true }),
+    /** Set when the notification has been told to the person's open apps (real-time) and sent as a push. Null = not yet. */
+    pushedAt: timestamp('pushed_at', { withTimezone: true }),
   },
-  (t) => [index('notifications_user_idx').on(t.userId, t.app, t.createdAt)],
+  (t) => [
+    index('notifications_user_idx').on(t.userId, t.app, t.createdAt),
+    index('notifications_unpushed_idx').on(t.createdAt).where(sql`${t.pushedAt} is null`),
+  ],
 );
 
 // ---------- orders (M3.4) ----------
@@ -525,4 +530,55 @@ export const comments = pgTable(
     index('comments_author_idx').on(t.authorUserId, t.createdAt),
     uniqueIndex('comments_client_key_idx').on(t.authorUserId, t.clientKey),
   ],
+);
+
+// ---------- notifications, push, safety (M3.7) ----------
+/** One phone's push address for one app. A token belongs to one person at a time: signing in as someone else on the phone rebinds it. */
+export const pushTokens = pgTable(
+  'push_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    app: text('app', { enum: ['buyer', 'seller'] }).notNull(),
+    token: text('token').notNull(),
+    platform: text('platform', { enum: ['android', 'ios'] }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex('push_tokens_token_app_idx').on(t.token, t.app), index('push_tokens_user_idx').on(t.userId, t.app)],
+);
+
+/** One person blocking another. By person, across both apps (one identity). */
+export const userBlocks = pgTable(
+  'user_blocks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    blockerUserId: uuid('blocker_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    blockedUserId: uuid('blocked_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex('user_blocks_edge_idx').on(t.blockerUserId, t.blockedUserId), index('user_blocks_blocked_idx').on(t.blockedUserId)],
+);
+
+/**
+ * A report of a comment or a chat message (a message with a photo keeps its photo). `snapshot` keeps the words as reported,
+ * so removing the comment afterwards does not erase the evidence. `status` is for a moderation list; the review screen comes later.
+ */
+export const reports = pgTable(
+  'reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    reporterUserId: uuid('reporter_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    targetType: text('target_type', { enum: ['COMMENT', 'CHAT_MESSAGE'] }).notNull(),
+    targetId: uuid('target_id').notNull(),
+    /** The person who wrote it. */
+    targetUserId: uuid('target_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    reason: text('reason', { enum: ['SPAM', 'ABUSE', 'SCAM', 'OTHER'] }).notNull(),
+    note: text('note'),
+    snapshot: text('snapshot'),
+    mediaId: uuid('media_id'),
+    status: text('status', { enum: ['OPEN', 'REVIEWED', 'ACTIONED'] }).notNull().default('OPEN'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex('reports_once_idx').on(t.reporterUserId, t.targetType, t.targetId), index('reports_status_idx').on(t.status, t.createdAt), index('reports_reporter_idx').on(t.reporterUserId, t.createdAt)],
 );
