@@ -34,7 +34,7 @@ For anyone demoing or testing the internal APKs. Written 1 Nov 2026 from `docs/P
 - Review, request and chat photos stream through the API (access-checked for chat, I-19).
 
 ## Behaviour to know about
-- **Version check (I-40):** apps and server must be deployed together, or the new app shows a note ("newer than the server") and some screens fail. Raise `CONTRACT_LEVEL` in `packages/contracts/src/system.ts` whenever a contract changes in a way an older app cannot handle; nothing enforces that, a person must remember. There is no store link on the "please update" screen yet (no store listing exists).
+- **Version check (I-40):** apps and server must be deployed together, or the new app shows a note ("newer than the server") and some screens fail. A test (`packages/contracts/test/contract-guard.test.ts`, run by `pnpm test` and CI) fails when a contract change would break an older app and `CONTRACT_LEVEL` was not raised; it compares the contracts and the routes in the OpenAPI document, not the server code, so a breaking change in a route that has no contract is not seen. There is no store link on the "please update" screen yet (to do during production setup, L3).
 - Offer countdowns are computed when a screen draws, not ticking.
 - Changing a listing's rules does not change timers on offers already pending.
 - Accepting at the exact moment a seller pauses a listing can leave an agreement on a paused listing; ordering then refuses it.
