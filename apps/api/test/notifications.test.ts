@@ -4,12 +4,12 @@ import { join } from 'node:path';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { notifications, pushTokens } from '../src/db/schema.js';
+import { notifications, pushTickets, pushTokens } from '../src/db/schema.js';
 import { NegotiationEvents, type RealtimeEvent } from '../src/negotiations/negotiation-events.js';
-import { NotificationsService } from '../src/notifications/notifications.service.js';
-import { ExpoPushProvider, type PushMessage, type PushProvider, type PushResult } from '../src/notifications/push-provider.js';
+import { NotificationsService, RECEIPT_DELAY_MS, RECEIPT_MAX_AGE_MS } from '../src/notifications/notifications.service.js';
+import { ExpoPushProvider, type PushMessage, type PushProvider, type PushResult, type ReceiptResult } from '../src/notifications/push-provider.js';
 import { renderNotification } from '../src/notifications/render.js';
-import { makeCaller, type Caller } from './api.js';
+import { makeCaller, signIn, type Caller } from './api.js';
 import { makeBuyer, makeListing, makeShop, userId } from './community-helpers.js';
 import { ManualClock, dbOf, startApp } from './helpers.js';
 
@@ -23,12 +23,20 @@ let kiran: string; // buyer
 let listing: { id: string; variantId: string };
 const sent: PushMessage[][] = [];
 let nextResult: PushResult = 'ok';
+let ticketSeq = 0;
+/** What the fake push service says about each ticket's receipt. Tickets not listed here are "not made yet". */
+const receiptAnswers = new Map<string, ReceiptResult>();
+const receiptAsks: string[][] = [];
 const fake: PushProvider = {
   name: 'fake',
   simulated: false,
   async send(messages) {
     sent.push(messages);
-    return messages.map(() => nextResult);
+    return messages.map(() => (nextResult === 'ok' ? { result: nextResult, ticketId: `ticket-${++ticketSeq}` } : { result: nextResult }));
+  },
+  async receipts(ids) {
+    receiptAsks.push(ids);
+    return new Map(ids.map((id) => [id, receiptAnswers.get(id) ?? ('pending' as const)]));
   },
 };
 const events: RealtimeEvent[] = [];
@@ -43,6 +51,7 @@ beforeAll(async () => {
   clock = new ManualClock();
   app = await startApp({ AUTH_RATE_LIMIT_PER_MIN: '10000', UPLOADS_DIR: dir }, clock);
   call = makeCaller(app);
+  await dbOf(app).db.execute(sql`truncate table push_tickets`); // tickets are not tied to users, so leftovers from an earlier run would clash with the fake's ticket numbers
   (svc() as unknown as { push: PushProvider }).push = fake;
   app.get(NegotiationEvents).subscribeEvents((e) => events.push(...e));
   anita = await makeShop(call, '9876504001', 'anitanotif', ['Ethnic wear']);
@@ -51,7 +60,7 @@ beforeAll(async () => {
   listing = await makeListing(call, anita, { title: 'Notif kurta' });
 });
 afterAll(async () => {
-  await dbOf(app).db.execute(sql`truncate table users cascade`);
+  await dbOf(app).db.execute(sql`truncate table users, push_tickets cascade`);
   await app.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -185,6 +194,90 @@ describe('the sweep: real-time event and push', () => {
   });
 });
 
+describe('receipts: phones that are gone', () => {
+  const RT = 'ExponentPushToken[cccccccccccccccccccccc]';
+  /** The fake clock has moved on, so the 15-minute sign-in tokens ran out: sign in again. */
+  const freshTokens = async () => {
+    [anita, kiran, asha] = await Promise.all([signIn(call, '9876504001', 'seller'), signIn(call, '9765404002', 'buyer'), signIn(call, '9765404001', 'buyer')]);
+  };
+  const ticketsFor = async (token: string) => (await dbOf(app).db.select().from(pushTickets).where(eq(pushTickets.token, token))).map((t) => t.ticketId);
+
+  it('a push to a phone that has since been uninstalled loses its token once the receipt says so, and not before', async () => {
+    await freshTokens();
+    await sweep();
+    await call('PUT', '/v1/seller/push-token', { token: anita, body: { token: RT, platform: 'android' } });
+    nextResult = 'ok';
+    await call('POST', `/v1/buyer/listings/${listing.id}/comments`, { token: kiran, body: { text: 'receipt test one' } });
+    await sweep();
+    const mine = await ticketsFor(RT);
+    expect(mine).toHaveLength(1); // accepted: its ticket is remembered
+    expect(await dbOf(app).db.select().from(pushTokens).where(eq(pushTokens.token, RT))).toHaveLength(1);
+    // too early: nobody asks
+    receiptAsks.length = 0;
+    clock.advance(RECEIPT_DELAY_MS - 60_000);
+    await sweep();
+    expect(receiptAsks.flat()).not.toContain(mine[0]);
+    // after the delay, but the receipt is not made yet: asked, ticket and token stay
+    clock.advance(2 * 60_000);
+    await sweep();
+    expect(receiptAsks.flat()).toContain(mine[0]);
+    expect(await ticketsFor(RT)).toHaveLength(1);
+    expect(await dbOf(app).db.select().from(pushTokens).where(eq(pushTokens.token, RT))).toHaveLength(1);
+    // the receipt says the phone is gone: token and ticket deleted
+    receiptAnswers.set(mine[0]!, 'gone');
+    clock.advance(31_000); // the check runs at most every 30 seconds
+    await sweep();
+    expect(await dbOf(app).db.select().from(pushTokens).where(eq(pushTokens.token, RT))).toHaveLength(0);
+    expect(await ticketsFor(RT)).toHaveLength(0);
+    // the other phone of the same person is untouched
+    expect((await dbOf(app).db.select().from(pushTokens).where(eq(pushTokens.token, T2))).length).toBeGreaterThanOrEqual(0);
+  });
+
+  it('an "ok" receipt only clears the ticket; a delivery error keeps the token; the check is throttled to once in 30 seconds', async () => {
+    const OK = 'ExponentPushToken[dddddddddddddddddddddd]';
+    await freshTokens();
+    await call('PUT', '/v1/seller/push-token', { token: anita, body: { token: OK, platform: 'android' } });
+    await call('POST', `/v1/buyer/listings/${listing.id}/comments`, { token: kiran, body: { text: 'receipt test two' } });
+    await sweep();
+    const mine = await ticketsFor(OK);
+    expect(mine.length).toBeGreaterThan(0);
+    clock.advance(RECEIPT_DELAY_MS + 60_000);
+    await freshTokens();
+    receiptAsks.length = 0;
+    await sweep();
+    await sweep();
+    await sweep(); // three ticks in the same second while the receipt is still not made: asked once, not three times
+    expect(receiptAsks).toHaveLength(1);
+    expect((await ticketsFor(OK)).length).toBe(mine.length); // not answered yet, so still remembered
+    for (const id of mine) receiptAnswers.set(id, 'failed');
+    clock.advance(31_000);
+    await sweep();
+    expect(await ticketsFor(OK)).toHaveLength(0); // answered, so cleared
+    expect(await dbOf(app).db.select().from(pushTokens).where(eq(pushTokens.token, OK))).toHaveLength(1); // a delivery error is not "phone gone"
+    await call('POST', `/v1/buyer/listings/${listing.id}/comments`, { token: kiran, body: { text: 'receipt test three' } });
+    await sweep();
+    const [t2] = await ticketsFor(OK);
+    receiptAnswers.set(t2!, 'ok');
+    clock.advance(RECEIPT_DELAY_MS + 60_000);
+    await sweep();
+    expect(await ticketsFor(OK)).toHaveLength(0);
+    expect(await dbOf(app).db.select().from(pushTokens).where(eq(pushTokens.token, OK))).toHaveLength(1);
+  });
+
+  it('a receipt that never arrives is dropped after a day, and the token stays', async () => {
+    const LATE = 'ExponentPushToken[eeeeeeeeeeeeeeeeeeeeee]';
+    await freshTokens();
+    await call('PUT', '/v1/seller/push-token', { token: anita, body: { token: LATE, platform: 'android' } });
+    await call('POST', `/v1/buyer/listings/${listing.id}/comments`, { token: kiran, body: { text: 'receipt test four' } });
+    await sweep();
+    expect(await ticketsFor(LATE)).toHaveLength(1);
+    clock.advance(RECEIPT_MAX_AGE_MS + 120_000);
+    await sweep();
+    expect(await ticketsFor(LATE)).toHaveLength(0);
+    expect(await dbOf(app).db.select().from(pushTokens).where(eq(pushTokens.token, LATE))).toHaveLength(1);
+  });
+});
+
 describe('Expo push provider', () => {
   const msg = (i: number): PushMessage => ({ to: `ExponentPushToken[${i}]`, title: 't', body: 'b', data: { a: '1' } });
   it('sends the Expo request shape in chunks of 100 and maps tickets', async () => {
@@ -194,18 +287,40 @@ describe('Expo push provider', () => {
       expect(url).toBe('https://exp.host/--/api/v2/push/send');
       expect(init.headers.authorization).toBe('Bearer secret');
       const n = (JSON.parse(init.body) as unknown[]).length;
-      return { ok: true, status: 200, json: async () => ({ data: Array.from({ length: n }, (_, i) => (i === 0 ? { status: 'error', details: { error: 'DeviceNotRegistered' } } : { status: 'ok' })) }) };
+      return { ok: true, status: 200, json: async () => ({ data: Array.from({ length: n }, (_, i) => (i === 0 ? { status: 'error', details: { error: 'DeviceNotRegistered' } } : { status: 'ok', id: `tk-${i}` })) }) };
     });
     const res = await p.send(Array.from({ length: 150 }, (_, i) => msg(i)));
     expect(bodies.map((b) => b.length)).toEqual([100, 50]);
     expect(bodies[0]![0]).toMatchObject({ to: 'ExponentPushToken[0]', title: 't', body: 'b', sound: 'default', channelId: 'default' });
-    expect(res[0]).toBe('gone');
-    expect(res[1]).toBe('ok');
+    expect(res[0]).toEqual({ result: 'gone' });
+    expect(res[1]).toEqual({ result: 'ok', ticketId: 'tk-1' });
     expect(res).toHaveLength(150);
   });
   it('never throws: a network error or a 5xx is "retry", a 4xx is "failed"', async () => {
-    expect(await new ExpoPushProvider(null, async () => { throw new Error('offline'); }).send([msg(1)])).toEqual(['retry']);
-    expect(await new ExpoPushProvider(null, async () => ({ ok: false, status: 503, json: async () => ({}) })).send([msg(1)])).toEqual(['retry']);
-    expect(await new ExpoPushProvider(null, async () => ({ ok: false, status: 400, json: async () => ({}) })).send([msg(1)])).toEqual(['failed']);
+    expect(await new ExpoPushProvider(null, async () => { throw new Error('offline'); }).send([msg(1)])).toEqual([{ result: 'retry' }]);
+    expect(await new ExpoPushProvider(null, async () => ({ ok: false, status: 503, json: async () => ({}) })).send([msg(1)])).toEqual([{ result: 'retry' }]);
+    expect(await new ExpoPushProvider(null, async () => ({ ok: false, status: 400, json: async () => ({}) })).send([msg(1)])).toEqual([{ result: 'failed' }]);
+  });
+  it('reads receipts in chunks of 1000 and maps them; ids Expo does not know yet stay pending; a network error leaves everything pending', async () => {
+    const asks: { url: string; ids: string[] }[] = [];
+    const p = new ExpoPushProvider('secret', async (url, init) => {
+      const ids = (JSON.parse(init.body) as { ids: string[] }).ids;
+      asks.push({ url, ids });
+      expect(init.headers.authorization).toBe('Bearer secret');
+      return { ok: true, status: 200, json: async () => ({ data: { [ids[0]!]: { status: 'error', details: { error: 'DeviceNotRegistered' } }, [ids[1]!]: { status: 'ok' }, [ids[2]!]: { status: 'error', details: { error: 'MessageRateExceeded' } } } }) };
+    });
+    const ids = Array.from({ length: 1200 }, (_, i) => `t${i}`);
+    const r = await p.receipts(ids);
+    expect(asks.map((a) => a.ids.length)).toEqual([1000, 200]);
+    expect(asks[0]!.url).toBe('https://exp.host/--/api/v2/push/getReceipts');
+    expect(r.get('t0')).toBe('gone');
+    expect(r.get('t1')).toBe('ok');
+    expect(r.get('t2')).toBe('failed');
+    expect(r.get('t3')).toBe('pending');
+    expect(r.size).toBe(1200);
+    const down = await new ExpoPushProvider(null, async () => { throw new Error('offline'); }).receipts(['a', 'b']);
+    expect([...down.values()]).toEqual(['pending', 'pending']);
+    const bad = await new ExpoPushProvider(null, async () => ({ ok: false, status: 503, json: async () => ({}) })).receipts(['a']);
+    expect(bad.get('a')).toBe('pending');
   });
 });
