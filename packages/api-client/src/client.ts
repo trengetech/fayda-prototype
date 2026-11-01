@@ -1,4 +1,5 @@
 import {
+  CONTRACT_LEVEL,
   AuthResultSchema,
   BuyerProfileSchema,
   HealthSchema,
@@ -106,6 +107,7 @@ import {
   type Meta,
   type OtpRequested,
   type PaymentInput,
+  type ClientApp,
   type Problem,
   type SellerListing,
   type SellerProfile,
@@ -122,6 +124,11 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+
+  /** The server says this version of the app is too old (426 CLIENT_TOO_OLD). */
+  get updateRequired(): boolean {
+    return this.status === 426 || this.problem?.code === 'CLIENT_TOO_OLD';
   }
 }
 
@@ -142,6 +149,8 @@ export interface ApiClientOptions {
   getAccessToken?: () => string | null;
   /** Called once when a signed-in call is refused (token expired). Return a fresh access token to retry, or null to give up. */
   onUnauthorized?: () => Promise<string | null>;
+  /** Which app this is. When set, every request says so and says the contract level the app was built with, so the server can refuse an app that is too old. */
+  clientApp?: ClientApp;
 }
 
 export interface ApiClient {
@@ -337,6 +346,10 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     const headers: Record<string, string> = { accept: 'application/json' };
     if (o.body !== undefined) headers['content-type'] = 'application/json';
     if (token) headers.authorization = `Bearer ${token}`;
+    if (opts.clientApp) {
+      headers['x-client-app'] = opts.clientApp;
+      headers['x-client-level'] = String(CONTRACT_LEVEL);
+    }
     Object.assign(headers, o.headers);
     try {
       return await doFetch(baseUrl + path, { method: o.method ?? 'GET', headers, signal: ctrl.signal, ...(o.body !== undefined ? { body: JSON.stringify(o.body) } : {}) });
@@ -363,7 +376,7 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     }
     if (res.ok || (o.acceptStatuses ?? []).includes(res.status)) {
       const parsed = schema.safeParse(body);
-      if (!parsed.success) throw new ApiError(res.status, 'The server sent data in an unexpected shape');
+      if (!parsed.success) throw new ApiError(res.status, 'The server sent data in an unexpected shape. This app may be out of date, so please update it.');
       return parsed.data;
     }
     const problem = ProblemSchema.safeParse(body);

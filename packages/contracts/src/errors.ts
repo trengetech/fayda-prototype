@@ -23,6 +23,8 @@ export const ERROR_CODES = [
   // safety
   'BLOCKED',
   'ALWAYS_ON',
+  // versions
+  'CLIENT_TOO_OLD',
 ] as const;
 export type ApiErrorCode = (typeof ERROR_CODES)[number];
 

@@ -1,3 +1,4 @@
+import { CONTRACT_LEVEL } from '@fayda/contracts/schemas';
 import { describe, expect, it } from 'vitest';
 import { ApiError, NetworkError, createApiClient } from '../src/client';
 
@@ -140,5 +141,43 @@ describe('media and listings', () => {
     const page = { id: listing.id, title: 'Cotton kurta', description: '', category: 'Ethnic wear', tags: [], price: 150000, soldOut: false, likeCount: 0, commentCount: 0, viewCount: 0, liked: false, saved: false, ownListing: false, media: [], variants: [{ id: 'v1', label: 'M', available: true, low: false }], bargaining: { mode: 'BOTH', acceptsOffers: true, expiryMinutes: 1440 }, checkout: { channel: 'DIRECT', productUrl: null, payMethods: ['UPI'] }, seller };
     const got = await authed(async () => json(200, { ...page, rules: { autoAcceptAt: 120000 } })).getBuyerListing(listing.id);
     expect(got).not.toHaveProperty('rules'); // the buyer schema drops anything it does not list
+  });
+});
+
+describe('version check', () => {
+  const seen = () => {
+    const headers: Record<string, string>[] = [];
+    const f: typeof fetch = async (_u, init) => {
+      headers.push((init?.headers ?? {}) as Record<string, string>);
+      return json(200, meta);
+    };
+    return { headers, f };
+  };
+
+  it('says which app it is and the contract level it was built with, only when it knows its app', async () => {
+    const a = seen();
+    await createApiClient({ baseUrl: 'http://api.test', fetch: a.f, clientApp: 'seller' }).getMeta();
+    expect(a.headers[0]).toMatchObject({ 'x-client-app': 'seller', 'x-client-level': String(CONTRACT_LEVEL) });
+    const b = seen();
+    await createApiClient({ baseUrl: 'http://api.test', fetch: b.f }).getMeta();
+    expect(b.headers[0]).not.toHaveProperty('x-client-app');
+    expect(b.headers[0]).not.toHaveProperty('x-client-level');
+  });
+
+  it('recognises “this app is too old” from the 426 answer', async () => {
+    const p = { title: 'Upgrade required', status: 426, code: 'CLIENT_TOO_OLD', detail: 'This version of the app is too old to work with the server. Please update the app.' };
+    const err = (await client(async () => json(426, p, 'application/problem+json')).getBuyerFeed().catch((e: unknown) => e)) as ApiError;
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.updateRequired).toBe(true);
+    expect(err.message).toMatch(/update the app/i);
+    const other = (await client(async () => json(404, { title: 'Not found', status: 404, code: 'NOT_FOUND' }, 'application/problem+json')).getBuyerFeed().catch((e: unknown) => e)) as ApiError;
+    expect(other.updateRequired).toBe(false);
+  });
+
+  it('a response in the wrong shape tells the person the app may be out of date', async () => {
+    const err = (await client(async () => json(200, { status: 'fine' })).getHealth().catch((e: unknown) => e)) as ApiError;
+    expect(err.message).toMatch(/unexpected shape/);
+    expect(err.message).toMatch(/out of date/i);
+    expect(err.updateRequired).toBe(false);
   });
 });

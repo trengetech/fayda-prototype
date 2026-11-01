@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BuyerFeedSchema, CommentQuerySchema, PostCommentSchema, BuyerNegotiationSchema, CounterSchema, ERROR_CODES, FeedQuerySchema, ShopViewSchema, HealthSchema, ListingInputSchema, MediaIntentSchema, MetaSchema, PaiseSchema, ProblemSchema, StartOfferSchema, buildOpenApiDocument } from '../src/index.js';
+import { CONTRACT_LEVEL, versionStatus, BuyerFeedSchema, CommentQuerySchema, PostCommentSchema, BuyerNegotiationSchema, CounterSchema, ERROR_CODES, FeedQuerySchema, ShopViewSchema, HealthSchema, ListingInputSchema, MediaIntentSchema, MetaSchema, PaiseSchema, ProblemSchema, StartOfferSchema, buildOpenApiDocument } from '../src/index.js';
 
 describe('system contracts', () => {
   it('accepts a healthy response and a database-down response', () => {
@@ -141,5 +141,37 @@ describe('negotiation contracts', () => {
     const offer = BuyerNegotiationSchema.shape.offers.element.shape.side;
     expect(offer.safeParse('SYSTEM').success).toBe(false);
     expect(offer.safeParse('SELLER').success).toBe(true);
+  });
+});
+
+describe('version check', () => {
+  const meta = (apiLevel?: number, min?: { buyer: number; seller: number }) => ({ ...(apiLevel === undefined ? {} : { apiLevel }), ...(min ? { minClientLevel: min } : {}) });
+  it('an app at the server’s level is fine', () => {
+    expect(versionStatus('buyer', 2, meta(2, { buyer: 1, seller: 1 }))).toBe('ok');
+    expect(versionStatus('seller', 2, meta(3, { buyer: 1, seller: 2 }))).toBe('ok'); // older server contract line is fine while the minimum allows it
+  });
+  it('an app below the minimum for its own app must update, whatever the other app’s minimum is', () => {
+    expect(versionStatus('buyer', 2, meta(4, { buyer: 3, seller: 1 }))).toBe('update-required');
+    expect(versionStatus('seller', 2, meta(4, { buyer: 3, seller: 1 }))).toBe('ok');
+    expect(versionStatus('buyer', 1, meta(2, { buyer: 2, seller: 2 }))).toBe('update-required');
+  });
+  it('an app newer than the server is told the server is older', () => {
+    expect(versionStatus('buyer', 3, meta(2, { buyer: 1, seller: 1 }))).toBe('server-older');
+  });
+  it('a server that says nothing is treated as level 1, so a level 2 app sees "server older" rather than "ok"', () => {
+    expect(versionStatus('buyer', CONTRACT_LEVEL, meta())).toBe(CONTRACT_LEVEL > 1 ? 'server-older' : 'ok');
+    expect(versionStatus('buyer', 1, meta())).toBe('ok');
+  });
+  it('update-required wins over server-older', () => {
+    expect(versionStatus('buyer', 1, meta(0, { buyer: 2, seller: 1 }))).toBe('update-required');
+  });
+  it('the meta schema accepts an old server’s answer (no levels) and a new one', () => {
+    const base = { environment: 'development', version: '0.0.0', providers: [] };
+    expect(MetaSchema.safeParse(base).success).toBe(true);
+    expect(MetaSchema.safeParse({ ...base, apiLevel: 2, minClientLevel: { buyer: 1, seller: 1 } }).success).toBe(true);
+    expect(MetaSchema.safeParse({ ...base, apiLevel: 'two' }).success).toBe(false);
+  });
+  it('CLIENT_TOO_OLD is a known error code', () => {
+    expect(ERROR_CODES).toContain('CLIENT_TOO_OLD');
   });
 });

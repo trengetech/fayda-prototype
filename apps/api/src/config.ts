@@ -12,6 +12,9 @@ const EnvSchema = z.object({
   SWEEP_ENABLED: z.enum(['true', 'false']).default('true'),
   /** `all`: card and product-page comment counts include everyone. `viewer`: they leave out people the viewer has blocked. */
   COMMENT_COUNT_MODE: z.enum(['all', 'viewer']).default('all'),
+  /** The oldest app contract level each app may use; older apps get 426 CLIENT_TOO_OLD. Raise it to force an update. */
+  MIN_CLIENT_LEVEL_BUYER: z.coerce.number().int().min(1).max(1000).default(1),
+  MIN_CLIENT_LEVEL_SELLER: z.coerce.number().int().min(1).max(1000).default(1),
   /** Signs access tokens. At least 32 characters; never commit it. */
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   /** Only `dev-otp` exists today: a fixed code, no SMS. It is reported as simulated by /v1/meta. */
@@ -43,6 +46,7 @@ export interface AppConfig {
   uploadsDir: string;
   pushProvider: 'off' | 'expo';
   commentCountMode: 'all' | 'viewer';
+  minClientLevel: { buyer: number; seller: number };
   expoAccessToken: string | null;
 }
 
@@ -64,6 +68,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     corsOrigins: e.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
     sweepEnabled: e.SWEEP_ENABLED === 'true',
     commentCountMode: e.COMMENT_COUNT_MODE,
+    minClientLevel: { buyer: e.MIN_CLIENT_LEVEL_BUYER, seller: e.MIN_CLIENT_LEVEL_SELLER },
     jwtSecret: e.JWT_SECRET,
     authProvider: e.AUTH_PROVIDER,
     accessTtlSeconds: e.ACCESS_TTL_SECONDS,

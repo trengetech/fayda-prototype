@@ -76,9 +76,10 @@ export function createSessionManager(opts: SessionOptions): SessionManager {
     return refreshing;
   };
 
-  const bare = createApiClient({ baseUrl: opts.baseUrl, ...(opts.fetch ? { fetch: opts.fetch } : {}), ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}) });
+  const bare = createApiClient({ baseUrl: opts.baseUrl, clientApp: opts.app, ...(opts.fetch ? { fetch: opts.fetch } : {}), ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}) });
   const client = createApiClient({
     baseUrl: opts.baseUrl,
+    clientApp: opts.app,
     ...(opts.fetch ? { fetch: opts.fetch } : {}),
     ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}),
     getAccessToken: () => accessToken,

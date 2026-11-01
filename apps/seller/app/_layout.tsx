@@ -11,6 +11,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { APP_LABEL, VARIANT } from '../src/config';
 import { getPushToken, targetFromPush } from '../src/push';
 import { sessionManager } from '../src/session';
+import { VersionGate } from '../src/version-gate';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -83,7 +84,9 @@ function Shell() {
       <PrototypeBanner>
         <Text style={{ color: colors.accentStrong, fontSize: 11, fontWeight: '700' }}>{APP_LABEL} · {VARIANT}</Text>
       </PrototypeBanner>
-      <Routes />
+      <VersionGate>
+        <Routes />
+      </VersionGate>
     </SafeAreaView>
   );
 }
