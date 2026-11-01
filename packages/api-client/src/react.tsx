@@ -1,4 +1,5 @@
-import type { BlockInput, NotificationCategory, PushTokenInput, ReportInput, AddressInput, CancelOrder, CreateRequest, ListingInput, NewAddress, PlaceOrder, PostComment, PutReview, Respond, SendMessage, ShipmentBody } from '@fayda/contracts/schemas';
+import { CONTRACT_LEVEL, versionStatus } from '@fayda/contracts/schemas';
+import type { ClientApp, VersionStatus, BlockInput, NotificationCategory, PushTokenInput, ReportInput, AddressInput, CancelOrder, CreateRequest, ListingInput, NewAddress, PlaceOrder, PostComment, PutReview, Respond, SendMessage, ShipmentBody } from '@fayda/contracts/schemas';
 import { QueryClient, QueryClientProvider, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { useStore } from 'zustand';
@@ -34,6 +35,18 @@ export function useHealth() {
 export function useMeta() {
   const client = useApiClient();
   return useQuery({ queryKey: ['meta', client.baseUrl], queryFn: () => client.getMeta() });
+}
+
+/**
+ * Whether this app can work with the server it talks to, from `/v1/meta`: `ok`, `update-required` (the app is older than the server
+ * accepts) or `server-older` (the app is newer than the server). `ok` while the answer is not in or cannot be fetched: a network
+ * problem is not a version problem. Checked on start and again every few minutes.
+ */
+export function useVersionStatus(app: ClientApp): { status: VersionStatus; apiLevel: number | null } {
+  const client = useApiClient();
+  const q = useQuery({ queryKey: ['meta', client.baseUrl], queryFn: () => client.getMeta(), staleTime: 5 * 60_000 });
+  if (!q.data) return { status: 'ok', apiLevel: null };
+  return { status: versionStatus(app, CONTRACT_LEVEL, q.data), apiLevel: q.data.apiLevel ?? 1 };
 }
 
 export const sellerListingsKey = (baseUrl: string) => ['seller-listings', baseUrl] as const;

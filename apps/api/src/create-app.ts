@@ -7,6 +7,7 @@ import { NestFactory } from '@nestjs/core';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module.js';
+import { clientTooOld } from './common/client-version.js';
 import { ProblemFilter } from './common/problem.filter.js';
 import { registerMediaRoutes } from './media/media-routes.js';
 import type { AppConfig } from './config.js';
@@ -25,6 +26,11 @@ export async function createApp(config: AppConfig, clock?: Clock): Promise<NestF
     timeWindow: '1 minute',
     max: (req) => (req.url.startsWith('/v1/auth/') ? config.authRateLimitPerMin : config.authRateLimitPerMin * 20),
     errorResponseBuilder: (_req, ctx) => new HttpException(`Too many requests. Try again in ${Math.ceil(ctx.ttl / 1000)} seconds.`, 429),
+  });
+  // An app older than the server accepts gets a clear 426 before anything else runs.
+  app.getHttpAdapter().getInstance().addHook('onRequest', async (req, reply) => {
+    const problem = clientTooOld(req.url, req.headers, config.minClientLevel);
+    if (problem) await reply.code(426).header('content-type', 'application/problem+json').send(problem);
   });
   await app.register(cors, { origin: config.corsOrigins.length ? config.corsOrigins : false });
   await registerMediaRoutes(app);

@@ -1,5 +1,5 @@
 import { Controller, Get, Inject, Res } from '@nestjs/common';
-import { HealthSchema, MetaSchema, buildOpenApiDocument, type Health, type Meta } from '@fayda/contracts';
+import { CONTRACT_LEVEL, HealthSchema, MetaSchema, buildOpenApiDocument, type Health, type Meta } from '@fayda/contracts';
 import type { Clock } from '@fayda/domain';
 import type { FastifyReply } from 'fastify';
 import { CLOCK } from '../common/clock.js';
@@ -42,6 +42,8 @@ export class SystemController {
     return MetaSchema.parse({
       environment: this.config.environment,
       version: APP_VERSION,
+      apiLevel: CONTRACT_LEVEL,
+      minClientLevel: this.config.minClientLevel,
       providers: [
         { key: 'auth', name: this.verifier.name, simulated: this.verifier.simulated },
         { key: 'media', name: 'local-disk', simulated: true },
