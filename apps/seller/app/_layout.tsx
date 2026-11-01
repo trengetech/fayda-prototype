@@ -66,6 +66,7 @@ function Routes() {
         <Stack.Screen name="requests" />
         <Stack.Screen name="shop" />
         <Stack.Screen name="notifications" />
+        <Stack.Screen name="notification-settings" />
         <Stack.Screen name="blocked" />
         <Stack.Screen name="dashboard" />
         <Stack.Screen name="gallery" />

@@ -1,9 +1,9 @@
-import { notificationHref, useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications } from '@fayda/api-client';
+import { notificationHref, useClearNotifications, useDeleteNotification, useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications } from '@fayda/api-client';
 import type { Notification } from '@fayda/contracts/schemas';
 import { formatAgo } from '@fayda/domain';
 import { AppText, Button, Card, useTheme } from '@fayda/ui';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, View } from 'react-native';
 
 /** The notification centre: newest first, unread marked, tapping one opens what it is about and marks it read. */
 export default function NotificationsScreen() {
@@ -12,6 +12,8 @@ export default function NotificationsScreen() {
   const q = useNotifications('buyer');
   const read = useMarkNotificationRead('buyer');
   const readAll = useMarkAllNotificationsRead('buyer');
+  const del = useDeleteNotification('buyer');
+  const clear = useClearNotifications('buyer');
   const items = q.data?.pages.flatMap((p) => p.items) ?? [];
   const unread = q.data?.pages[0]?.unread ?? 0;
 
@@ -19,6 +21,11 @@ export default function NotificationsScreen() {
     if (!n.read) read.mutate(n.id);
     if (n.target) router.push(notificationHref('buyer', n.target) as never);
   };
+
+  const confirmClear = () => Alert.alert('Clear all notifications?', 'This removes every notification you can see here. It can’t be undone.', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Clear all', style: 'destructive', onPress: () => clear.mutate() },
+  ]);
 
   return (
     <FlatList
@@ -38,6 +45,8 @@ export default function NotificationsScreen() {
           <AppText weight="extrabold" size={20}>Notifications</AppText>
           <AppText tone="muted" size={13}>{unread ? `${unread} unread` : 'You’re all caught up.'}</AppText>
           {unread ? <Button title="Mark all as read" variant="outline" size="sm" loading={readAll.isPending} onPress={() => readAll.mutate()} /> : null}
+          {items.length ? <Button title="Clear all" variant="outline" size="sm" loading={clear.isPending} onPress={confirmClear} /> : null}
+          <Button title="Notification settings" variant="outline" size="sm" onPress={() => router.push('/notification-settings' as never)} />
         </View>
       }
       ListEmptyComponent={
@@ -57,6 +66,9 @@ export default function NotificationsScreen() {
                 <AppText weight={n.read ? 'regular' : 'bold'}>{n.title}</AppText>
                 <AppText tone="muted" size={13}>{n.body}</AppText>
                 <AppText tone="faint" size={12}>{formatAgo(n.at, Date.now())}</AppText>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Delete notification: ${n.title}`} hitSlop={8} disabled={del.isPending} onPress={() => del.mutate(n.id)}>
+                  <AppText tone="muted" size={12} weight="bold">Delete</AppText>
+                </Pressable>
               </View>
             </View>
           </Card>

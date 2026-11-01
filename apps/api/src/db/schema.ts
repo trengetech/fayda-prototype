@@ -284,6 +284,20 @@ export const notifications = pgTable(
   ],
 );
 
+/** A person's choices per kind of notification, per app. No row means the default: on. Orders are always on (checked in the API). */
+export const notificationSettings = pgTable(
+  'notification_settings',
+  {
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    app: text('app', { enum: ['buyer', 'seller'] }).notNull(),
+    category: text('category').notNull(),
+    push: boolean('push').notNull().default(true),
+    inApp: boolean('in_app').notNull().default(true),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.app, t.category] })],
+);
+
 // ---------- orders (M3.4) ----------
 /**
  * One order. `seq` is a database identity (bigint), so the readable number `FD-100001` never runs out and never repeats;

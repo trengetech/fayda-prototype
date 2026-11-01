@@ -60,6 +60,9 @@ const SELLER: Record<string, (p: Params) => RenderedText> = {
   NEW_COMMENT: (p) => ({ title: 'New comment', body: `${typeof p?.title === 'string' ? `On ${p.title}: ` : ''}${typeof p?.snippet === 'string' ? p.snippet : 'Open it to read.'}` }),
 };
 
+/** Every code either app can render. Used to check that each one belongs to a settings category. */
+export const allCodes = (): string[] => [...new Set([...Object.keys(BUYER), ...Object.keys(SELLER)])];
+
 export function renderNotification(app: App, code: string, params: Params): RenderedText {
   const fn = (app === 'buyer' ? BUYER : SELLER)[code];
   return fn ? fn(params) : { title: 'Fayda', body: 'You have an update.' };

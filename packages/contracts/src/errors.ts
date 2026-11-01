@@ -22,6 +22,7 @@ export const ERROR_CODES = [
   'OWN_SHOP', 'FOLLOW_LIMIT', 'SAVE_LIMIT',
   // safety
   'BLOCKED',
+  'ALWAYS_ON',
 ] as const;
 export type ApiErrorCode = (typeof ERROR_CODES)[number];
 
