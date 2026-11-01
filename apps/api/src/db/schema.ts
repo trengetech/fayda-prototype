@@ -599,3 +599,18 @@ export const listingViews = pgTable(
   },
   (t) => [uniqueIndex('listing_views_once_idx').on(t.listingId, t.viewerUserId, t.hourBucket), index('listing_views_listing_idx').on(t.listingId, t.createdAt)],
 );
+
+/**
+ * A push the push service accepted, kept until its receipt is read (a few minutes later). The receipt is where Expo says a phone
+ * no longer exists, so that its token can be deleted. Rows are removed once answered, or after a day (Expo forgets receipts then).
+ */
+export const pushTickets = pgTable(
+  'push_tickets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ticketId: text('ticket_id').notNull(),
+    token: text('token').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex('push_tickets_ticket_idx').on(t.ticketId), index('push_tickets_created_idx').on(t.createdAt)],
+);

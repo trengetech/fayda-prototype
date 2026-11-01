@@ -5,7 +5,7 @@ import { and, count, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 import { AppError } from '../common/app-error.js';
 import { CLOCK } from '../common/clock.js';
 import { DbService } from '../db/db.service.js';
-import { notifications, pushTokens } from '../db/schema.js';
+import { notifications, pushTickets, pushTokens } from '../db/schema.js';
 import { NegotiationEvents } from '../negotiations/negotiation-events.js';
 import { SweepRunner, type SweepTask } from '../scheduler/sweep-runner.js';
 import { PUSH_PROVIDER, type PushMessage, type PushProvider } from './push-provider.js';
@@ -18,6 +18,12 @@ const BATCH = 200;
 /** A push that could not be handed over (a temporary failure) is tried again for this long, then dropped. */
 const RETRY_WINDOW_MS = 120_000;
 const MAX_TOKENS_PER_APP = 5;
+/** Expo makes receipts a few minutes after accepting a push and keeps them a day. Ask after the delay, give up after the day. */
+export const RECEIPT_DELAY_MS = 10 * 60_000;
+export const RECEIPT_MAX_AGE_MS = 24 * 3_600_000;
+/** How often the sweep looks for receipts to read (it ticks every second; this is far cheaper). */
+const RECEIPT_CHECK_EVERY_MS = 30_000;
+const RECEIPT_BATCH = 1000;
 
 const encode = (at: Date, id: string): string => Buffer.from(`${at.getTime()}:${id}`).toString('base64url');
 function decode(cursor: string): { at: Date; id: string } {
@@ -36,6 +42,7 @@ function decode(cursor: string): { at: Date; id: string } {
 export class NotificationsService implements SweepTask {
   readonly name = 'notifications';
   private readonly log = new Logger('Notifications');
+  private lastReceiptCheck = 0;
 
   constructor(
     @Inject(DbService) private readonly database: DbService,
@@ -108,9 +115,40 @@ export class NotificationsService implements SweepTask {
     await this.db.delete(pushTokens).where(and(eq(pushTokens.userId, userId), eq(pushTokens.app, app), eq(pushTokens.token, token)));
   }
 
+  // ---------- receipts: find phones that are gone ----------
+  /**
+   * Reads the receipts of pushes accepted RECEIPT_DELAY ago or more. An answered ticket is deleted; if its receipt says the phone is
+   * not registered, that token is deleted too (for whoever holds it: the phone is gone). A receipt not made yet is asked again
+   * later; one still missing after a day is dropped. Runs at most every 30 seconds, and is safe on two servers at once.
+   */
+  async readReceipts(now: number): Promise<number> {
+    if (this.push.simulated || now - this.lastReceiptCheck < RECEIPT_CHECK_EVERY_MS) return 0;
+    this.lastReceiptCheck = now;
+    return this.db.transaction(async (tx) => {
+      const due = await tx
+        .select()
+        .from(pushTickets)
+        .where(lt(pushTickets.createdAt, new Date(now - RECEIPT_DELAY_MS)))
+        .orderBy(pushTickets.createdAt)
+        .limit(RECEIPT_BATCH)
+        .for('update', { skipLocked: true });
+      if (!due.length) return 0;
+      const answers = await this.push.receipts(due.map((t) => t.ticketId));
+      const expired = (t: (typeof due)[number]) => now - t.createdAt.getTime() > RECEIPT_MAX_AGE_MS;
+      const answered = due.filter((t) => (answers.get(t.ticketId) ?? 'pending') !== 'pending' || expired(t));
+      const deadTokens = [...new Set(due.filter((t) => answers.get(t.ticketId) === 'gone').map((t) => t.token))];
+      if (deadTokens.length) await tx.delete(pushTokens).where(inArray(pushTokens.token, deadTokens));
+      if (answered.length) await tx.delete(pushTickets).where(inArray(pushTickets.id, answered.map((t) => t.id)));
+      const failed = due.filter((t) => answers.get(t.ticketId) === 'failed').length;
+      if (failed) this.log.warn(`${failed} push receipt(s) reported a delivery error`);
+      return deadTokens.length;
+    });
+  }
+
   // ---------- the sweep: tell the open apps, then push ----------
   async run(now: number): Promise<number> {
     const at = new Date(now);
+    await this.readReceipts(now);
     const claimed = await this.db.transaction(async (tx) => {
       const rows = await tx
         .select()
@@ -152,9 +190,13 @@ export class NotificationsService implements SweepTask {
       }
     }
     if (!msgs.length) return claimed.length;
-    const results = await this.push.send(msgs.map((m) => m.msg));
+    const outcomes = await this.push.send(msgs.map((m) => m.msg));
+    const results = outcomes.map((o) => o.result);
     const gone = msgs.filter((_, i) => results[i] === 'gone').map((m) => m.tokenId);
     if (gone.length) await this.db.delete(pushTokens).where(inArray(pushTokens.id, gone));
+    // Remember the accepted pushes: their receipts, a few minutes from now, tell us about phones that are gone.
+    const tickets = msgs.flatMap((m, i) => (outcomes[i]?.ticketId ? [{ ticketId: outcomes[i]!.ticketId!, token: m.msg.to, createdAt: at }] : []));
+    if (tickets.length) await this.db.insert(pushTickets).values(tickets).onConflictDoNothing();
     // A temporary failure is tried again for a short while.
     const retry = [...new Set(msgs.filter((m, i) => results[i] === 'retry' && now - m.createdAt.getTime() < RETRY_WINDOW_MS).map((m) => m.notificationId))];
     if (retry.length) await this.db.update(notifications).set({ pushedAt: null }).where(inArray(notifications.id, retry));
