@@ -2,6 +2,8 @@
 
 **Where we are (1 Nov 2026): M3.0 to M3.8 are merged (PRs #20 and #21) and the live server is deployed. M3.8 is complete except the founder's two-physical-phone run of `docs/DEMO_SCRIPT.md`. The two-physical-phone test is deferred by the founder. M3.9 search and ranking (I-39, I-41, proposed) is 
 
+**Developer tooling (1 Nov 2026): graphify, a local code graph (I-42, proposed).** `pnpm graph` builds it (about 10 s), `pnpm graph:update` refreshes it (about 7 s), both with `GRAPHIFY_BACKEND=none --code-only`, so nothing leaves the machine. Needs `pipx install "graphifyy==0.9.92"` once per developer. Checked on this repo: 375 code files, about 4,100 nodes and 12,800 edges; `graphify affected "rankScore"` found exactly the service, controller, module and two tests that use it. Weak spots: free-text `graphify query` matches keywords only (it answered a ranking question with unrelated nodes), SQL files are not indexed (needs the `sql` extra), 28 files with no symbols are skipped. The graph is git-ignored and the shared hook is not committed (see I-42). Not used by CI.
+
 ## M3.9: search and ranking (1 Nov 2026): built, tested; emulator and phones not checked
 
 Branch `m3.9-search-ranking`. Decisions I-39 (detail rewritten) and I-41 (admin-managed categories, later) in `docs/DECISIONS.md`, both **proposed**. Founder approved the plan on 1 Nov 2026, including `pg_trgm`, and asked that weights be tuned on test data.
