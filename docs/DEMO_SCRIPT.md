@@ -18,8 +18,8 @@ Time: about 15 minutes. Phone A runs the **Fayda Seller** app, phone B the **Fay
 
 ## Before you start
 
-- Install both internal APKs (see `infra/README.md`; built against `https://fayda.140-245-219-163.sslip.io`). Allow notifications on both.
-- Seed the demo data (once): `node infra/seed/seed-demo.mjs https://fayda.140-245-219-163.sslip.io --yes`. Undo: `cd apps/api && node --env-file=.env ../../infra/seed/unseed-demo.mjs --delete`.
+- Install both internal APKs (build and host them as in `infra/README.md`, release runbook; built against `https://fayda.140-245-219-163.sslip.io`). Allow notifications on both.
+- Seed the demo data: **already done on the dev server (3 shops, 9 listings, 2 buyers, 4 orders), nothing to run** unless you are resetting it. To seed: `node infra/seed/seed-demo.mjs https://fayda.140-245-219-163.sslip.io --yes`. Undo: `cd apps/api && node --env-file=.env ../../infra/seed/unseed-demo.mjs --delete`.
 - Sign-in code for every number is **123456** (simulated OTP; both apps show a "Prototype" banner).
 
 | Who | Phone number | App | Shop / name |
