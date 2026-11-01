@@ -22,7 +22,7 @@ export const FeedQuerySchema = z
     maxPrice: z.coerce.number().int().min(0).optional(),
     size: z.string().max(20).optional(),
     acceptsOffers: boolParam.optional(),
-    sort: z.enum(['NEWEST', 'PRICE_LOW', 'PRICE_HIGH']).optional(),
+    sort: z.enum(['BEST', 'NEWEST', 'PRICE_LOW', 'PRICE_HIGH']).optional(),
   })
   .openapi('FeedQuery');
 export type FeedQuery = z.infer<typeof FeedQuerySchema>;
@@ -65,3 +65,13 @@ export type FollowedShopList = z.infer<typeof FollowedShopListSchema>;
 /** The filter choices the app shows: categories, sorts and the size labels in use on live listings. */
 export const FeedFacetsSchema = z.object({ categories: z.array(z.string()), sizes: z.array(z.string()), minPrice: PaiseSchema.nullable(), maxPrice: PaiseSchema.nullable() }).openapi('FeedFacets');
 export type FeedFacets = z.infer<typeof FeedFacetsSchema>;
+
+/** What the feed showed (I-39): the listings on screen with their place in the page, and which order the page came in. */
+export const ImpressionsBodySchema = z
+  .object({
+    scope: z.enum(['FOR_YOU', 'FOLLOWING', 'SEARCH', 'SHOP']),
+    ranker: z.enum(['NEWEST', 'SCORED', 'RELEVANCE', 'PRICE']),
+    items: z.array(z.object({ listingId: z.string().uuid(), position: z.number().int().min(0).max(10_000) })).min(1).max(50),
+  })
+  .openapi('FeedImpressions');
+export type ImpressionsBody = z.infer<typeof ImpressionsBodySchema>;

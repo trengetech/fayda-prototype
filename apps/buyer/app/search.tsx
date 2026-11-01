@@ -53,7 +53,7 @@ export default function SearchScreen() {
           </View>
           {showFilters ? (
             <Card>
-              <ChipGroup label="Sort by" options={FEED_SORTS} value={[filters.sort]} onChange={(v) => set('sort', (v[0] ?? 'NEWEST') as FeedSort)} format={(s) => SORT_LABELS[s]} />
+              <ChipGroup label="Sort by" options={FEED_SORTS} value={[filters.sort]} onChange={(v) => set('sort', (v[0] ?? 'BEST') as FeedSort)} format={(s) => SORT_LABELS[s]} />
               {facets.data ? <ChipGroup label="Category" options={facets.data.categories} value={filters.category ? [filters.category] : []} onChange={(v) => set('category', v[0] === filters.category ? null : (v[0] ?? null))} /> : null}
               {facets.data?.sizes.length ? <ChipGroup label="Size in stock" options={facets.data.sizes} value={filters.size ? [filters.size] : []} onChange={(v) => set('size', v[0] === filters.size ? null : (v[0] ?? null))} format={(s) => s.toUpperCase()} /> : null}
               <ChipGroup label="Bargaining" options={['Open to offers']} value={filters.acceptsOffers ? ['Open to offers'] : []} onChange={(v) => set('acceptsOffers', v.length > 0 && !filters.acceptsOffers)} />

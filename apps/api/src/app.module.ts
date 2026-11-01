@@ -14,6 +14,7 @@ import { BuyerCatalogController, SellerListingsController } from './listings/lis
 import { ListingsService } from './listings/listings.service.js';
 import { BuyerDiscoveryController } from './discovery/discovery.controller.js';
 import { DiscoveryService } from './discovery/discovery.service.js';
+import { RankingService } from './discovery/ranking.service.js';
 import { FollowsService } from './discovery/follows.service.js';
 import { BuyerSocialController, SellerSocialController } from './social/social.controller.js';
 import { SocialService } from './social/social.service.js';
@@ -64,6 +65,7 @@ export class AppModule {
         MediaService,
         ListingsService,
         DiscoveryService,
+        RankingService,
         FollowsService,
         SocialService,
         NegotiationEvents,

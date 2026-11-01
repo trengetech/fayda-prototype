@@ -97,6 +97,7 @@ function ReelCard({ item, height, active, near, playing, muted, onTogglePlay, on
 interface Viewable {
   item: unknown;
   isViewable: boolean;
+  index?: number | null;
 }
 
 export interface ReelsPagerProps {
@@ -109,6 +110,8 @@ export interface ReelsPagerProps {
   onRefresh: () => void;
   footer?: React.ReactElement | null;
   empty?: React.ReactElement | null;
+  /** A reel became the one on screen (for impressions). Called with its place in the list. */
+  onShown?: (item: FeedItem, position: number) => void;
 }
 
 /**
@@ -116,17 +119,20 @@ export interface ReelsPagerProps {
  * plays, and only while this screen is in front and the app is in the foreground. A tap on the picture pauses or
  * resumes it. Photo-only listings are shown as a full-screen photo.
  */
-export function ReelsPager({ items, muted, onOpen, onOpenShop, onEndReached, refreshing, onRefresh, footer, empty }: ReelsPagerProps) {
+export function ReelsPager({ items, muted, onOpen, onOpenShop, onEndReached, refreshing, onRefresh, footer, empty, onShown }: ReelsPagerProps) {
   const [height, setHeight] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [pausedId, setPausedId] = useState<string | null>(null);
   const focused = useScreenFocused();
   const appActive = useAppActive();
   const activeIndex = Math.max(0, items.findIndex((i) => i.id === (activeId ?? items[0]?.id)));
+  const onShownRef = useRef(onShown);
+  onShownRef.current = onShown;
   const onViewable = useRef(({ viewableItems }: { viewableItems: Viewable[] }) => {
     const first = viewableItems.find((v) => v.isViewable);
     if (first?.item) {
       setActiveId((first.item as FeedItem).id);
+      onShownRef.current?.(first.item as FeedItem, first.index ?? 0);
       setPausedId(null); // a new reel always starts playing
     }
   });

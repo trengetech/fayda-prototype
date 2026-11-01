@@ -67,6 +67,7 @@
   "POST /v1/buyer/addresses",
   "POST /v1/buyer/addresses/{id}/default",
   "POST /v1/buyer/comments/{id}/report",
+  "POST /v1/buyer/feed/impressions",
   "POST /v1/buyer/listings/{id}/comments",
   "POST /v1/buyer/listings/{id}/offers",
   "POST /v1/buyer/listings/{id}/view",
@@ -760,6 +761,15 @@
       "type": [
        "string",
        "null"
+      ]
+     },
+     "ranker": {
+      "type": "string",
+      "enum": [
+       "NEWEST",
+       "SCORED",
+       "RELEVANCE",
+       "PRICE"
       ]
      }
     },
@@ -4787,6 +4797,7 @@
      "sort": {
       "type": "string",
       "enum": [
+       "BEST",
        "NEWEST",
        "PRICE_LOW",
        "PRICE_HIGH"
@@ -4963,6 +4974,64 @@
      "status",
      "database",
      "time"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "ImpressionsBody": {
+   "request": false,
+   "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+     "scope": {
+      "type": "string",
+      "enum": [
+       "FOR_YOU",
+       "FOLLOWING",
+       "SEARCH",
+       "SHOP"
+      ]
+     },
+     "ranker": {
+      "type": "string",
+      "enum": [
+       "NEWEST",
+       "SCORED",
+       "RELEVANCE",
+       "PRICE"
+      ]
+     },
+     "items": {
+      "minItems": 1,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "listingId": {
+         "type": "string",
+         "format": "uuid",
+         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "position": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 10000
+        }
+       },
+       "required": [
+        "listingId",
+        "position"
+       ],
+       "additionalProperties": false
+      }
+     }
+    },
+    "required": [
+     "scope",
+     "ranker",
+     "items"
     ],
     "additionalProperties": false
    }

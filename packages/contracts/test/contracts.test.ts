@@ -38,7 +38,7 @@ describe('OpenAPI', () => {
     expect(doc.openapi).toBe('3.1.0');
     expect(Object.keys(doc.paths ?? {}).sort()).toEqual(
       [
-        '/v1/auth/logout', '/v1/auth/otp/request', '/v1/auth/otp/verify', '/v1/auth/refresh', '/v1/buyer/addresses', '/v1/buyer/addresses/{id}', '/v1/buyer/addresses/{id}/default', '/v1/buyer/feed', '/v1/buyer/feed/facets', '/v1/buyer/follows', '/v1/buyer/follows/sellers/{sellerId}', '/v1/buyer/listings/{id}',
+        '/v1/auth/logout', '/v1/auth/otp/request', '/v1/auth/otp/verify', '/v1/auth/refresh', '/v1/buyer/addresses', '/v1/buyer/addresses/{id}', '/v1/buyer/addresses/{id}/default', '/v1/buyer/feed', '/v1/buyer/feed/facets', '/v1/buyer/feed/impressions', '/v1/buyer/follows', '/v1/buyer/follows/sellers/{sellerId}', '/v1/buyer/listings/{id}',
         '/v1/buyer/comments/{id}', '/v1/buyer/listings/{id}/comments', '/v1/buyer/listings/{id}/like', '/v1/buyer/listings/{id}/save', '/v1/buyer/listings/{id}/view', '/v1/buyer/saved',
         '/v1/buyer/listings/{id}/offers', '/v1/buyer/negotiations', '/v1/buyer/negotiations/{id}', '/v1/buyer/negotiations/{id}/accept',
         '/v1/buyer/negotiations/{id}/counter', '/v1/buyer/negotiations/{id}/decline', '/v1/buyer/negotiations/{id}/withdraw',

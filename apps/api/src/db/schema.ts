@@ -177,11 +177,17 @@ export const listings = pgTable(
     dealAccept: jsonb('deal_accept').$type<DealAccess | null>(),
     dealCounter: jsonb('deal_counter').$type<DealAccess | null>(),
     publishedAt: timestamp('published_at', { withTimezone: true }),
+    /**
+     * Everything search looks at, lower case, in one string: title, tags, category, description, shop name and handle.
+     * Kept up to date by database triggers (migration 0014), never written by the app. One trigram index covers it.
+     */
+    searchText: text('search_text').notNull().default(''),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('listings_seller_idx').on(t.sellerId, t.status),
+    index('listings_search_trgm_idx').using('gin', t.searchText.op('gin_trgm_ops')),
     index('listings_feed_idx').on(t.status, t.publishedAt, t.id),
     index('listings_tags_idx').using('gin', t.tags),
     index('listings_price_idx').on(t.status, t.pricePaise, t.id),
@@ -627,4 +633,38 @@ export const pushTickets = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   (t) => [uniqueIndex('push_tickets_ticket_idx').on(t.ticketId), index('push_tickets_created_idx').on(t.createdAt)],
+);
+
+/**
+ * What the feed showed a buyer (I-39 groundwork for later ranking from data). One row per listing shown, with its position and
+ * which ranker ordered the page. Buyer id and listing id only: nothing about the seller's private rules. Pruned after 90 days.
+ */
+export const feedImpressions = pgTable(
+  'feed_impressions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    listingId: uuid('listing_id').notNull().references(() => listings.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    scope: text('scope', { enum: ['FOR_YOU', 'FOLLOWING', 'SEARCH', 'SHOP'] }).notNull(),
+    ranker: text('ranker', { enum: ['NEWEST', 'SCORED', 'RELEVANCE', 'PRICE'] }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [index('feed_impressions_created_idx').on(t.createdAt), index('feed_impressions_listing_idx').on(t.listingId, t.createdAt)],
+);
+
+/**
+ * The For You score of each listing, one set of rows per refresh ("generation", the refresh time in whole seconds). A feed page
+ * marker names the generation it started in, so the next page is cut from the same scores and no listing is repeated or
+ * skipped when a refresh happens between two pages. Generations older than 30 minutes are deleted. A listing with no row
+ * in a generation (published after it) counts as `NEW_LISTING_START_SCORE`.
+ */
+export const listingRankScores = pgTable(
+  'listing_rank_scores',
+  {
+    generation: bigint('generation', { mode: 'number' }).notNull(),
+    listingId: uuid('listing_id').notNull().references(() => listings.id, { onDelete: 'cascade' }),
+    score: integer('score').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.generation, t.listingId] }), index('listing_rank_scores_listing_idx').on(t.listingId)],
 );

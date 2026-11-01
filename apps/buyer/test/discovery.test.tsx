@@ -27,7 +27,7 @@ describe('filters', () => {
       params: { scope: 'FOR_YOU', sort: 'PRICE_LOW', q: 'red  kurta', category: 'Ethnic wear', size: 'm', acceptsOffers: true, minPrice: 50000, maxPrice: 150000 },
       errors: {},
     });
-    expect(filtersToParams('', NO_FILTERS).params).toEqual({ scope: 'FOR_YOU', sort: 'NEWEST' });
+    expect(filtersToParams('', NO_FILTERS).params).toEqual({ scope: 'FOR_YOU', sort: 'BEST' });
     expect(activeFilterCount(NO_FILTERS)).toBe(0);
     expect(activeFilterCount({ ...NO_FILTERS, category: 'Menswear', sort: 'PRICE_HIGH', minRupees: '10' })).toBe(3);
   });
@@ -59,7 +59,7 @@ describe('buyer search', () => {
     await act(async () => void fireEvent.changeText(screen.getByLabelText('What are you looking for?'), 'Silk  saree'));
     expect(await screen.findByText('Silk saree')).toBeOnTheScreen();
     await waitFor(() => expect(screen.queryByText('Cotton kurta')).not.toBeOnTheScreen()); // the search has replaced the list
-    expect(urls).toEqual(['/v1/buyer/feed?scope=FOR_YOU&sort=NEWEST', '/v1/buyer/feed?scope=FOR_YOU&q=Silk+saree&sort=NEWEST']); // one request, not one per key
+    expect(urls).toEqual(['/v1/buyer/feed?scope=FOR_YOU&sort=BEST', '/v1/buyer/feed?scope=FOR_YOU&q=Silk+saree&sort=BEST']); // one request, not one per key
   });
 
   it('applies category, size, offers, price and sort, and Clear filters undoes them', async () => {
@@ -115,7 +115,7 @@ describe('buyer search', () => {
     expect(mockRouter.push).toHaveBeenCalledWith(`/listing/${kurta.id}`);
     await act(async () => void fireEvent(screen.getByTestId('search-list'), 'endReached'));
     expect(await screen.findByText('Silk saree')).toBeOnTheScreen();
-    expect(urls.at(-1)).toBe('/v1/buyer/feed?scope=FOR_YOU&sort=NEWEST&cursor=c1');
+    expect(urls.at(-1)).toBe('/v1/buyer/feed?scope=FOR_YOU&sort=BEST&cursor=c1');
   });
 });
 

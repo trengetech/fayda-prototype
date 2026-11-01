@@ -63,6 +63,14 @@ describe('listing views', () => {
   });
 });
 
+describe('feed impressions', () => {
+  it('posts what was shown, with the order it came in, and asks for nothing back', async () => {
+    const { c, calls } = spy(null, 204);
+    await c.reportImpressions({ scope: 'FOR_YOU', ranker: 'SCORED', items: [{ listingId: id, position: 3 }] });
+    expect(calls).toEqual([{ url: 'http://api.test/v1/buyer/feed/impressions', method: 'POST', body: { scope: 'FOR_YOU', ranker: 'SCORED', items: [{ listingId: id, position: 3 }] } }]);
+  });
+});
+
 describe('report, block and dashboard', () => {
   it('reports a comment and a message on the audience route', async () => {
     const { c, calls } = spy({ received: true }, 201);

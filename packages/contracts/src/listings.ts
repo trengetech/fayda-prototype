@@ -107,7 +107,9 @@ export const BuyerFeedItemSchema = z
   })
   .openapi('BuyerFeedItem');
 
-export const BuyerFeedSchema = z.object({ items: z.array(BuyerFeedItemSchema), nextCursor: z.string().nullable() }).openapi('BuyerFeed');
+/** Which order a feed page came in (I-39). The app sends it back with the impressions it reports; it says nothing about private rules. */
+export const FEED_RANKERS = ['NEWEST', 'SCORED', 'RELEVANCE', 'PRICE'] as const;
+export const BuyerFeedSchema = z.object({ items: z.array(BuyerFeedItemSchema), nextCursor: z.string().nullable(), ranker: z.enum(FEED_RANKERS).optional() }).openapi('BuyerFeed');
 export type BuyerFeed = z.infer<typeof BuyerFeedSchema>;
 
 export const BuyerListingSchema = z
