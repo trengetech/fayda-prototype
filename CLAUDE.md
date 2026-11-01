@@ -139,6 +139,15 @@ docs/            DECISIONS, TECH_STACK, ARCHITECTURE, PROGRESS
   - Prefer additive changes (a new optional response field, a new route). Never edit the snapshot by hand to make the test pass.
   - After raising the level, set `MIN_CLIENT_LEVEL_BUYER` and `MIN_CLIENT_LEVEL_SELLER` on the server only when an old app truly cannot work any more; deploy the server before installing new APKs.
 
+## Code graph (graphify, optional; DECISIONS I-42)
+
+If `graphify-out/graph.json` exists (build it with `pnpm graph`; needs `pipx install "graphifyy==0.9.92"`), these answer structure questions faster and more exactly than grep:
+- `graphify affected "<symbol>"`: what calls, imports or extends it (use before changing a shared function, type or contract).
+- `graphify explain "<symbol>"` and `graphify path "<A>" "<B>"`: one symbol's neighbours, or how two connect.
+- `graphify god-nodes`: the most connected symbols.
+
+`graphify query "<words>"` matches keywords only; seed it with `--seed <symbol>` or use grep when it returns unrelated nodes. Run `pnpm graph:update` after changing code (about 7 s) and treat the graph as a pointer, never as proof: open the file before you rely on it. Always run graphify with `GRAPHIFY_BACKEND=none` (the pnpm scripts do), so no code leaves the machine. `graphify-out/` is not committed.
+
 ## Milestones (Android)
 
 | # | Milestone | Done when |
