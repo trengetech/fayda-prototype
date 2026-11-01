@@ -29,6 +29,7 @@ export default function StatusScreen() {
       <AccountCard />
       <Button title="Browse reels" onPress={() => router.push('/feed')} />
       <Button title="Search" variant="outline" onPress={() => router.push('/search' as never)} />
+      <Button title="Saved" variant="outline" onPress={() => router.push('/saved' as never)} />
       <Button title="Shops you follow" variant="outline" onPress={() => router.push('/follows' as never)} />
       <Button title={replies ? `My offers (${replies} to answer)` : 'My offers'} variant="outline" onPress={() => router.push('/offers' as never)} />
       <Button title={orderUnread ? `My orders (${orderUnread} new ${orderUnread === 1 ? 'message' : 'messages'})` : 'My orders'} variant="outline" onPress={() => router.push('/orders' as never)} />

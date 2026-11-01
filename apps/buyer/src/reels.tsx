@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, FlatList, Image, Pressable, StyleSheet, View } from 'react-native';
 import type { FeedItem } from './feed-card';
 import { FollowButton } from './follow-button';
+import { ReactionRow } from './social';
 
 /** True while this screen is the one in front (not covered by another screen). */
 export function useScreenFocused(): boolean {
@@ -81,6 +82,7 @@ function ReelCard({ item, height, active, near, playing, muted, onTogglePlay, on
               {item.soldOut ? <Badge label="Sold out" tone="danger" /> : item.acceptsOffers ? <Badge label="Open to offers" tone="accent" /> : <Badge label="Fixed price" tone="info" />}
             </View>
           </Pressable>
+          <ReactionRow item={item} onComments={() => onOpen(false)} />
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={{ flex: 1 }}><Button title="Buy" disabled={item.soldOut || item.ownShop} accessibilityLabel={`Buy ${item.title}`} onPress={() => onOpen(false)} /></View>
             {item.acceptsOffers ? <View style={{ flex: 1 }}><Button title="Make offer" variant="outline" disabled={item.soldOut || item.ownShop} accessibilityLabel={`Make an offer on ${item.title}`} onPress={() => onOpen(true)} /></View> : null}

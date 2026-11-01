@@ -22,6 +22,7 @@ import { follows, listingMedia, listingVariants, listings, media, sellerPaymentP
 import { publicMediaUrl } from '../media/media.service.js';
 import type { NegotiationTouch } from '../negotiations/negotiation-events.js';
 import { NegotiationsService } from '../negotiations/negotiations.service.js';
+import { socialCounts } from '../social/social-counts.js';
 import { andAll, encodeFeedCursor, feedAfter, feedConditions, feedOrder, type FeedRequest } from './feed-query.js';
 import { ChatService } from '../chat/chat.service.js';
 import { loadSellerStats, sellerRatings } from '../community/shared.js';
@@ -32,6 +33,36 @@ type MediaItem = { mediaId: string; kind: 'image' | 'video'; url: string; poster
 const invalid = (fields: Record<string, string>): AppError => new AppError(400, 'VALIDATION', 'Check the highlighted fields.', fields);
 const FEED_PAGE = 20;
 export const MAX_FEED_PAGE = 50;
+
+/** What a feed card needs from the database. Public columns only. */
+const CARD_COLUMNS = {
+  id: listings.id,
+  title: listings.title,
+  category: listings.category,
+  pricePaise: listings.pricePaise,
+  bargainMode: listings.bargainMode,
+  publishedAt: listings.publishedAt,
+  sellerId: sellers.id,
+  sellerUserId: sellers.userId,
+  sellerName: sellers.name,
+  sellerHandle: sellers.handle,
+  sellerArea: sellers.area,
+  sellerCity: sellers.city,
+};
+interface CardRow {
+  id: string;
+  title: string;
+  category: string;
+  pricePaise: number;
+  bargainMode: 'BUY_NOW' | 'BOTH';
+  publishedAt: Date | null;
+  sellerId: string;
+  sellerUserId: string;
+  sellerName: string;
+  sellerHandle: string;
+  sellerArea: string;
+  sellerCity: string;
+}
 
 @Injectable()
 export class ListingsService {
@@ -272,7 +303,7 @@ export class ListingsService {
 
   private async sellerViews(rows: ListingRow[]): Promise<SellerListing[]> {
     const ids = rows.map((r) => r.id);
-    const [mediaBy, variantsBy] = await Promise.all([this.mediaOf(ids), this.variantsOf(ids)]);
+    const [mediaBy, variantsBy, social] = await Promise.all([this.mediaOf(ids), this.variantsOf(ids), socialCounts(this.db, null, ids)]);
     return rows.map((l) => ({
       id: l.id,
       status: l.status,
@@ -289,6 +320,7 @@ export class ListingsService {
       dealCodes: { accept: l.dealAccept ?? null, counter: l.dealCounter ?? null },
       publishedAt: l.publishedAt ? l.publishedAt.getTime() : null,
       updatedAt: l.updatedAt.getTime(),
+      stats: { likes: social.get(l.id)!.likeCount, saves: social.get(l.id)!.saveCount, comments: social.get(l.id)!.commentCount },
     }));
   }
 
@@ -301,43 +333,39 @@ export class ListingsService {
     const take = Math.min(Math.max(limit, 1), MAX_FEED_PAGE);
     const conditions = feedConditions(req);
     if (req.cursor) conditions.push(feedAfter(req.sort, req.cursor));
-    const rows = await this.db
-      .select({
-        id: listings.id,
-        title: listings.title,
-        category: listings.category,
-        pricePaise: listings.pricePaise,
-        bargainMode: listings.bargainMode,
-        publishedAt: listings.publishedAt,
-        sellerId: sellers.id,
-        sellerUserId: sellers.userId,
-        sellerName: sellers.name,
-        sellerHandle: sellers.handle,
-        sellerArea: sellers.area,
-        sellerCity: sellers.city,
-      })
-      .from(listings)
-      .innerJoin(sellers, eq(sellers.id, listings.sellerId))
-      .where(andAll(conditions))
-      .orderBy(...feedOrder(req.sort))
-      .limit(take + 1);
+    const rows = await this.db.select(CARD_COLUMNS).from(listings).innerJoin(sellers, eq(sellers.id, listings.sellerId)).where(andAll(conditions)).orderBy(...feedOrder(req.sort)).limit(take + 1);
     const page = rows.slice(0, take);
+    const last = page[page.length - 1];
+    return { items: await this.buildCards(page, req.userId), nextCursor: rows.length > take && last ? encodeFeedCursor(req.sort, last) : null };
+  }
+
+  /** The cards for these listings, in the order given. A listing that is not live is left out. Used by lists that order by something other than the feed's sorts (Saved). */
+  async cardsFor(userId: string, ids: string[]): Promise<BuyerFeed['items']> {
+    if (!ids.length) return [];
+    const rows = await this.db.select(CARD_COLUMNS).from(listings).innerJoin(sellers, eq(sellers.id, listings.sellerId)).where(and(eq(listings.status, 'ACTIVE'), inArray(listings.id, ids)));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return this.buildCards(ids.map((id) => byId.get(id)).filter((r): r is CardRow => !!r), userId);
+  }
+
+  private async buildCards(page: CardRow[], userId: string): Promise<BuyerFeed['items']> {
     const ids = page.map((r) => r.id);
     const sellerIds = [...new Set(page.map((r) => r.sellerId))];
-    const [mediaBy, variantsBy, ratings, followed] = await Promise.all([
+    const [mediaBy, variantsBy, ratings, followed, social] = await Promise.all([
       this.mediaOf(ids),
       this.variantsOf(ids),
       sellerRatings(this.db, sellerIds),
       sellerIds.length
-        ? this.db.select({ id: follows.targetId }).from(follows).where(and(eq(follows.followerUserId, req.userId), eq(follows.targetType, 'SELLER'), inArray(follows.targetId, sellerIds)))
+        ? this.db.select({ id: follows.targetId }).from(follows).where(and(eq(follows.followerUserId, userId), eq(follows.targetType, 'SELLER'), inArray(follows.targetId, sellerIds)))
         : Promise.resolve([] as { id: string }[]),
+      socialCounts(this.db, userId, ids),
     ]);
     const following = new Set(followed.map((f) => f.id));
-    const items = page.map((r) => {
+    return page.map((r) => {
       const m = mediaBy.get(r.id) ?? [];
       const first = m[0];
       const video = m.find((x) => x.kind === 'video');
       const stock = (variantsBy.get(r.id) ?? []).reduce((t, v) => t + v.stock, 0);
+      const sc = social.get(r.id)!;
       return {
         id: r.id,
         title: r.title,
@@ -349,18 +377,21 @@ export class ListingsService {
         hasVideo: !!video,
         video: video ? { url: video.url, posterUrl: video.posterUrl } : null,
         following: following.has(r.sellerId),
-        ownShop: r.sellerUserId === req.userId,
+        ownShop: r.sellerUserId === userId,
+        likeCount: sc.likeCount,
+        commentCount: sc.commentCount,
+        liked: sc.liked,
+        saved: sc.saved,
         seller: { id: r.sellerId, name: r.sellerName, handle: r.sellerHandle, area: r.sellerArea, city: r.sellerCity, rating: ratings.get(r.sellerId)?.rating ?? null, reviewCount: ratings.get(r.sellerId)?.reviewCount ?? 0 },
       };
     });
-    const last = page[page.length - 1];
-    return { items, nextCursor: rows.length > take && last ? encodeFeedCursor(req.sort, last) : null };
   }
 
-  async getForBuyer(listingId: string): Promise<BuyerListing> {
+  async getForBuyer(viewerUserId: string, listingId: string): Promise<BuyerListing> {
     const [row] = await this.db
       .select({
         l: listings,
+        sellerUserId: sellers.userId,
         sellerName: sellers.name,
         sellerHandle: sellers.handle,
         sellerArea: sellers.area,
@@ -374,7 +405,8 @@ export class ListingsService {
       .where(and(eq(listings.id, listingId), eq(listings.status, 'ACTIVE')))
       .limit(1);
     if (!row) throw new AppError(404, 'NOT_FOUND', 'This listing is not available.');
-    const [mediaBy, variantsBy, stats] = await Promise.all([this.mediaOf([listingId]), this.variantsOf([listingId]), loadSellerStats(this.db, [row.l.sellerId])]);
+    const [mediaBy, variantsBy, stats, social] = await Promise.all([this.mediaOf([listingId]), this.variantsOf([listingId]), loadSellerStats(this.db, [row.l.sellerId]), socialCounts(this.db, viewerUserId, [listingId])]);
+    const sc = social.get(listingId)!;
     const record = stats.get(row.l.sellerId)!;
     const variants = variantsBy.get(listingId) ?? [];
     const l = row.l;
@@ -397,6 +429,11 @@ export class ListingsService {
     return {
       ...view,
       tags: l.tags,
+      likeCount: sc.likeCount,
+      commentCount: sc.commentCount,
+      liked: sc.liked,
+      saved: sc.saved,
+      ownListing: row.sellerUserId === viewerUserId,
       checkout: { ...view.checkout, payMethods: pay ? directMethods(cleanPayment(pay)) : [] },
       media: (mediaBy.get(listingId) ?? []).map((m) => ({ kind: m.kind, url: m.url, posterUrl: m.posterUrl })),
       seller: {

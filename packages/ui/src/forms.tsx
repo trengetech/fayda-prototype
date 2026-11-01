@@ -34,9 +34,11 @@ export interface TextFieldProps {
   /** Shown before the text, e.g. +91 */
   prefix?: string;
   optional?: boolean;
+  /** Lets a scrolling screen bring the field into view above the keyboard. */
+  onFocus?: () => void;
 }
 
-export function TextField({ label, value, onChangeText, error, hint, placeholder, keyboardType, maxLength, multiline, autoCapitalize, prefix, optional }: TextFieldProps) {
+export function TextField({ label, value, onChangeText, error, hint, placeholder, keyboardType, maxLength, multiline, autoCapitalize, prefix, optional, onFocus }: TextFieldProps) {
   const { colors } = useTheme();
   return (
     <View style={{ gap: 6 }}>
@@ -50,6 +52,7 @@ export function TextField({ label, value, onChangeText, error, hint, placeholder
           accessibilityLabel={label}
           value={value}
           onChangeText={onChangeText}
+          onFocus={onFocus}
           placeholder={placeholder}
           placeholderTextColor={colors.faint}
           keyboardType={keyboardType}

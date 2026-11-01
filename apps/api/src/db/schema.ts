@@ -272,6 +272,7 @@ export const notifications = pgTable(
     orderId: uuid('order_id'),
     threadId: uuid('thread_id'),
     requestId: uuid('request_id'),
+    listingId: uuid('listing_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     readAt: timestamp('read_at', { withTimezone: true }),
   },
@@ -465,5 +466,63 @@ export const follows = pgTable(
     uniqueIndex('follows_edge_idx').on(t.followerUserId, t.targetType, t.targetId),
     index('follows_target_idx').on(t.targetType, t.targetId),
     index('follows_follower_idx').on(t.followerUserId, t.targetType, t.createdAt, t.id),
+  ],
+);
+
+/**
+ * Likes and saves (M3.6). Same shape as `follows`: one row per (person, kind of thing, thing), `target_type` says what
+ * `target_id` points at, so liking a comment or saving a shop later needs a new type, not a new table. Only listings today.
+ * Counts come from the target index; a like is public as a number only (the seller never sees who).
+ */
+export const likes = pgTable(
+  'likes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    targetType: text('target_type', { enum: ['LISTING'] }).notNull(),
+    targetId: uuid('target_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex('likes_edge_idx').on(t.userId, t.targetType, t.targetId), index('likes_target_idx').on(t.targetType, t.targetId)],
+);
+
+/** Private bookmarks. Nobody but the person sees them; the seller sees only a count. */
+export const saves = pgTable(
+  'saves',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    targetType: text('target_type', { enum: ['LISTING'] }).notNull(),
+    targetId: uuid('target_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('saves_edge_idx').on(t.userId, t.targetType, t.targetId),
+    index('saves_target_idx').on(t.targetType, t.targetId),
+    index('saves_person_idx').on(t.userId, t.targetType, t.createdAt, t.id),
+  ],
+);
+
+/**
+ * Public comments on a listing, flat (the foundation's P0: a Q&A, no threads). A comment is never really deleted: the
+ * author or the listing's owner sets `removed_at` and `removed_by`, and readers stop seeing it. `client_key` makes a
+ * retried post return the first answer.
+ */
+export const comments = pgTable(
+  'comments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    listingId: uuid('listing_id').notNull().references(() => listings.id, { onDelete: 'cascade' }),
+    authorUserId: uuid('author_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    clientKey: text('client_key'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    removedAt: timestamp('removed_at', { withTimezone: true }),
+    removedBy: text('removed_by', { enum: ['AUTHOR', 'SELLER'] }),
+  },
+  (t) => [
+    index('comments_listing_idx').on(t.listingId, t.createdAt, t.id),
+    index('comments_author_idx').on(t.authorUserId, t.createdAt),
+    uniqueIndex('comments_client_key_idx').on(t.authorUserId, t.clientKey),
   ],
 );

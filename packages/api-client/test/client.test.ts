@@ -53,7 +53,7 @@ describe('media and listings', () => {
     id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', status: 'DRAFT', title: 'Kurta', description: '', category: 'Ethnic wear', tags: [], price: 150000, media: [],
     variants: [{ id: 'v1', label: 'M', stock: 2 }], bargaining: { mode: 'BUY_NOW', expiryMinutes: 1440 },
     rules: { autoAcceptAt: null, autoDeclineBelow: null, autoCounterAt: null }, checkout: { channel: 'DIRECT', productUrl: null },
-    dealCodes: { accept: null, counter: null }, publishedAt: null, updatedAt: 1,
+    dealCodes: { accept: null, counter: null }, publishedAt: null, updatedAt: 1, stats: { likes: 0, saves: 0, comments: 0 },
   };
   const input = { title: 'Kurta', category: 'Ethnic wear', tags: [], price: 150000, media: [], variants: [{ label: 'M', stock: 2 }], bargaining: { mode: 'BUY_NOW', expiryMinutes: 1440 }, checkout: { channel: 'DIRECT' }, publish: false };
   const authed = (f: typeof fetch) => createApiClient({ baseUrl: 'http://api.test', fetch: f, getAccessToken: () => 'tok' });
@@ -99,7 +99,7 @@ describe('media and listings', () => {
   });
   it('asks for the next feed page with the cursor, and parses the page', async () => {
     const seller = { id: 's1', name: 'Kiran Studio', handle: 'kiranstudio', area: 'Madhapur', city: 'Hyderabad', rating: null, reviewCount: 0 };
-    const item = { id: listing.id, title: 'Cotton kurta', price: 150000, category: 'Ethnic wear', soldOut: false, acceptsOffers: true, coverUrl: '/v1/media/m1', hasVideo: false, video: null, following: false, ownShop: false, seller };
+    const item = { id: listing.id, title: 'Cotton kurta', price: 150000, category: 'Ethnic wear', soldOut: false, acceptsOffers: true, coverUrl: '/v1/media/m1', hasVideo: false, video: null, following: false, ownShop: false, likeCount: 0, commentCount: 0, liked: false, saved: false, seller };
     const urls: string[] = [];
     const c = authed(async (u) => { urls.push(String(u)); return json(200, { items: [item], nextCursor: 'abc' }); });
     expect((await c.getBuyerFeed()).nextCursor).toBe('abc');
@@ -137,7 +137,7 @@ describe('media and listings', () => {
 
   it('drops a private field the buyer schema does not list', async () => {
     const seller = { id: 's1', name: 'Kiran Studio', handle: 'kiranstudio', area: 'Madhapur', city: 'Hyderabad', rating: null, reviewCount: 0, slaConfirmHours: 24, slaShipDays: 3, categories: ['Ethnic wear'], record: { orders: 0, completed: 0, confirmed: 0, cancelled: 0, expired: 0, medianConfirmMs: null, rating: null, reviewCount: 0 } };
-    const page = { id: listing.id, title: 'Cotton kurta', description: '', category: 'Ethnic wear', tags: [], price: 150000, soldOut: false, media: [], variants: [{ id: 'v1', label: 'M', available: true, low: false }], bargaining: { mode: 'BOTH', acceptsOffers: true, expiryMinutes: 1440 }, checkout: { channel: 'DIRECT', productUrl: null, payMethods: ['UPI'] }, seller };
+    const page = { id: listing.id, title: 'Cotton kurta', description: '', category: 'Ethnic wear', tags: [], price: 150000, soldOut: false, likeCount: 0, commentCount: 0, liked: false, saved: false, ownListing: false, media: [], variants: [{ id: 'v1', label: 'M', available: true, low: false }], bargaining: { mode: 'BOTH', acceptsOffers: true, expiryMinutes: 1440 }, checkout: { channel: 'DIRECT', productUrl: null, payMethods: ['UPI'] }, seller };
     const got = await authed(async () => json(200, { ...page, rules: { autoAcceptAt: 120000 } })).getBuyerListing(listing.id);
     expect(got).not.toHaveProperty('rules'); // the buyer schema drops anything it does not list
   });

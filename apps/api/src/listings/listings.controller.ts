@@ -95,7 +95,7 @@ export class BuyerCatalogController {
   constructor(@Inject(ListingsService) private readonly listings: ListingsService) {}
 
   @Get('listings/:id')
-  async get(@Param('id', new ParseUUIDPipe()) id: string): Promise<BuyerListing> {
-    return BuyerListingSchema.parse(await this.listings.getForBuyer(id));
+  async get(@Auth() who: AccessClaims, @Param('id', new ParseUUIDPipe()) id: string): Promise<BuyerListing> {
+    return BuyerListingSchema.parse(await this.listings.getForBuyer(who.userId, id));
   }
 }

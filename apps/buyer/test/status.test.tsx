@@ -38,7 +38,7 @@ describe('status screen', () => {
   it('opens the reels, search and the shops you follow from the home buttons', async () => {
     fetchMock.mockImplementation(() => new Promise(() => {}));
     await renderScreen();
-    for (const [label, path] of [['Browse reels', '/feed'], ['Search', '/search'], ['Shops you follow', '/follows']] as const) {
+    for (const [label, path] of [['Browse reels', '/feed'], ['Search', '/search'], ['Saved', '/saved'], ['Shops you follow', '/follows']] as const) {
       await act(async () => void fireEvent.press(screen.getByText(label)));
       expect(mockRouter.push).toHaveBeenLastCalledWith(path);
     }

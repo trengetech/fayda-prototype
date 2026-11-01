@@ -1,9 +1,9 @@
-import type { AddressInput, CancelOrder, CreateRequest, ListingInput, NewAddress, PlaceOrder, PutReview, Respond, SendMessage, ShipmentBody } from '@fayda/contracts/schemas';
+import type { AddressInput, CancelOrder, CreateRequest, ListingInput, NewAddress, PlaceOrder, PostComment, PutReview, Respond, SendMessage, ShipmentBody } from '@fayda/contracts/schemas';
 import { QueryClient, QueryClientProvider, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import { createApiClient, feedQueryString, type ApiClient, type DealAccessInput, type FeedParams } from './client';
-import { ALL_LIVE_KEYS, FEED_KEY, FOLLOWS_KEY, SHOP_KEY, NEGOTIATIONS_KEY, ORDERS_KEY, PROFILE_KEY, RECORD_KEY, REQUESTS_KEY, REVIEWS_KEY, THREADS_KEY, invalidationFor, queryKeys } from './keys';
+import { ALL_LIVE_KEYS, COMMENTS_KEY, FEED_KEY, FOLLOWS_KEY, SAVED_KEY, SHOP_KEY, NEGOTIATIONS_KEY, ORDERS_KEY, PROFILE_KEY, RECORD_KEY, REQUESTS_KEY, REVIEWS_KEY, THREADS_KEY, invalidationFor, queryKeys } from './keys';
 import { startRealtime } from './realtime';
 import type { SessionManager, SessionState } from './session';
 
@@ -86,6 +86,31 @@ export function useFollowedShops() {
     queryFn: ({ pageParam }) => client.listFollows(pageParam),
     getNextPageParam: (last) => last.nextCursor,
   });
+}
+
+type CardPatch = { liked?: boolean; saved?: boolean; likeCount?: number };
+type CardLike = { id: string; liked: boolean; saved: boolean; likeCount: number };
+
+/**
+ * Changes one listing's like or save everywhere it is cached (every feed page, the Saved list, the product page), so the
+ * heart flips at once. Returns the previous values for a rollback.
+ */
+function patchListing(qc: ReturnType<typeof useQueryClient>, baseUrl: string, listingId: string, patch: (c: CardLike) => CardPatch) {
+  const apply = (c: CardLike): CardLike => ({ ...c, ...patch(c) });
+  const pages = (old: { pages: { items: CardLike[] }[]; pageParams: unknown[] } | undefined) =>
+    old && 'pages' in old ? { ...old, pages: old.pages.map((p) => ({ ...p, items: p.items.map((i) => (i.id === listingId ? apply(i) : i)) })) } : old;
+  for (const key of [FEED_KEY, SHOP_KEY, SAVED_KEY]) qc.setQueriesData({ queryKey: [key, baseUrl] }, pages as never);
+  qc.setQueriesData<CardLike>({ queryKey: ['buyer-listing', baseUrl, listingId] }, (old) => (old && 'liked' in old ? apply(old) : old));
+}
+
+/** After a failed like or save, every place a card was patched is read again from the server. */
+function reloadCards(qc: ReturnType<typeof useQueryClient>, baseUrl: string) {
+  for (const key of [FEED_KEY, SHOP_KEY, SAVED_KEY, 'buyer-listing']) void qc.invalidateQueries({ queryKey: [key, baseUrl] });
+}
+
+/** Stops reads already in flight from landing on top of a guess made a moment later. */
+function holdCards(qc: ReturnType<typeof useQueryClient>, baseUrl: string) {
+  return Promise.all([FEED_KEY, SHOP_KEY, SAVED_KEY, 'buyer-listing'].map((key) => qc.cancelQueries({ queryKey: [key, baseUrl] })));
 }
 
 type FeedPages = { pages: { items: { seller: { id: string }; following: boolean }[] }[]; pageParams: unknown[] };
@@ -420,6 +445,90 @@ export function useAddressAction() {
     onSuccess: (profile) => {
       qc.setQueryData(queryKeys.buyerProfile(client.baseUrl), profile);
       void invalidate(qc, PROFILE_KEY);
+    },
+  });
+}
+
+// ---------- social: likes, saves, comments (M3.6) ----------
+
+/** Like or unlike a listing. The heart and the count change at once; the server's answer then replaces the guess, and a refusal puts it back. */
+export function useSetLike() {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ listingId, like }: { listingId: string; like: boolean }) => (like ? client.likeListing(listingId) : client.unlikeListing(listingId)),
+    onMutate: async ({ listingId, like }) => {
+      await holdCards(qc, client.baseUrl);
+      patchListing(qc, client.baseUrl, listingId, (c) => (c.liked === like ? {} : { liked: like, likeCount: Math.max(0, c.likeCount + (like ? 1 : -1)) }));
+    },
+    onSuccess: (state, { listingId }) => patchListing(qc, client.baseUrl, listingId, () => ({ liked: state.liked, likeCount: state.likeCount })),
+    onError: () => reloadCards(qc, client.baseUrl),
+  });
+}
+
+export function useSetSave() {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ listingId, save }: { listingId: string; save: boolean }) => (save ? client.saveListing(listingId) : client.unsaveListing(listingId)),
+    onMutate: async ({ listingId, save }) => {
+      await holdCards(qc, client.baseUrl);
+      patchListing(qc, client.baseUrl, listingId, () => ({ saved: save }));
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: [SAVED_KEY] });
+    },
+    onError: () => reloadCards(qc, client.baseUrl),
+  });
+}
+
+export function useSavedListings() {
+  const client = useApiClient();
+  return useInfiniteQuery({
+    queryKey: queryKeys.saved(client.baseUrl),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => client.listSaved(pageParam),
+    getNextPageParam: (last) => last.nextCursor,
+  });
+}
+
+/** A listing's comments, newest first, one page at a time. `side` is the app asking (a seller reads their own listing). */
+export function useComments(side: 'buyer' | 'seller', listingId: string | null) {
+  const client = useApiClient();
+  return useInfiniteQuery({
+    queryKey: queryKeys.comments(side, client.baseUrl, listingId),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => client.listComments(side, listingId as string, pageParam),
+    getNextPageParam: (last) => last.nextCursor,
+    enabled: !!listingId,
+  });
+}
+
+/** Posts a comment. Pass one `clientKey` and idempotency key per attempt and reuse them when retrying the same text. */
+export function usePostComment(side: 'buyer' | 'seller') {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ listingId, input, idempotencyKey }: { listingId: string; input: PostComment; idempotencyKey?: string }) => client.postComment(side, listingId, input, idempotencyKey),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [COMMENTS_KEY] });
+      void qc.invalidateQueries({ queryKey: [FEED_KEY] });
+      void qc.invalidateQueries({ queryKey: ['buyer-listing'] });
+      void qc.invalidateQueries({ queryKey: ['seller-listings'] });
+    },
+  });
+}
+
+export function useRemoveComment(side: 'buyer' | 'seller') {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (commentId: string) => client.removeComment(side, commentId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [COMMENTS_KEY] });
+      void qc.invalidateQueries({ queryKey: [FEED_KEY] });
+      void qc.invalidateQueries({ queryKey: ['buyer-listing'] });
+      void qc.invalidateQueries({ queryKey: ['seller-listings'] });
     },
   });
 }

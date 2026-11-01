@@ -19,7 +19,7 @@ export const ERROR_CODES = [
   // chat, reviews, requests
   'INVALID_LISTING', 'EMPTY', 'TOO_LONG', 'NOT_CONFIRMED', 'CLOSED', 'OWN_REQUEST', 'NOT_IN_CATEGORY', 'ALREADY_RESPONDED',
   // discovery
-  'OWN_SHOP', 'FOLLOW_LIMIT',
+  'OWN_SHOP', 'FOLLOW_LIMIT', 'SAVE_LIMIT',
 ] as const;
 export type ApiErrorCode = (typeof ERROR_CODES)[number];
 

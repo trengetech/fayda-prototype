@@ -46,7 +46,7 @@ describe('fromListing', () => {
     media: [{ mediaId: 'm1', kind: 'image', url: '/v1/media/m1', posterMediaId: null, posterUrl: null }, { mediaId: 'm2', kind: 'video', url: '/v1/media/m2', posterMediaId: 'p2', posterUrl: '/v1/media/p2' }],
     variants: [{ id: 'v1', label: 'M', stock: 3 }], bargaining: { mode: 'BOTH', expiryMinutes: 360 },
     rules: { autoAcceptAt: 110000, autoDeclineBelow: null, autoCounterAt: 130000 }, checkout: { channel: 'WEBSITE', productUrl: 'https://s.example/p' },
-    dealCodes: { accept: { type: 'CODE', value: 'A1B' }, counter: null }, publishedAt: 1, updatedAt: 2,
+    dealCodes: { accept: { type: 'CODE', value: 'A1B' }, counter: null }, publishedAt: 1, updatedAt: 2, stats: { likes: 0, saves: 0, comments: 0 },
   };
   it('round-trips through the form back to the same request', () => {
     const { values, media } = fromListing(saved);

@@ -47,7 +47,7 @@ export const sellerListing = (over: Record<string, unknown> = {}) => ({
   media: [{ mediaId: 'm1', kind: 'image', url: '/v1/media/m1', posterMediaId: null, posterUrl: null }],
   variants: [{ id: 'v1', label: 'M', stock: 3 }], bargaining: { mode: 'BUY_NOW', expiryMinutes: 1440 },
   rules: { autoAcceptAt: null, autoDeclineBelow: null, autoCounterAt: null }, checkout: { channel: 'DIRECT', productUrl: null },
-  dealCodes: { accept: null, counter: null }, publishedAt: null, updatedAt: 1, ...over,
+  dealCodes: { accept: null, counter: null }, publishedAt: null, updatedAt: 1, stats: { likes: 0, saves: 0, comments: 0 }, ...over,
 });
 
 export const sellerNegotiation = (over: Partial<SellerNegotiation> = {}): SellerNegotiation => ({

@@ -9,6 +9,10 @@ import {
   OtpRequestedSchema,
   ProblemSchema,
   BuyerFeedSchema,
+  CommentListSchema,
+  CommentSchema,
+  LikeStateSchema,
+  SaveStateSchema,
   FeedFacetsSchema,
   FollowStateSchema,
   FollowedShopListSchema,
@@ -59,6 +63,11 @@ import {
   type Health,
   type Me,
   type BuyerFeed,
+  type Comment,
+  type CommentList,
+  type LikeState,
+  type PostComment,
+  type SaveState,
   type FeedFacets,
   type FeedQuery,
   type FollowState,
@@ -161,6 +170,16 @@ export interface ApiClient {
   unfollowSeller(sellerId: string): Promise<FollowState>;
   listFollows(cursor?: string | null, limit?: number): Promise<FollowedShopList>;
   getBuyerListing(id: string): Promise<BuyerListing>;
+  /** Like, save and comment. Like and save are safe to repeat; a comment post takes the same `clientKey` and idempotency key when retried. */
+  likeListing(id: string): Promise<LikeState>;
+  unlikeListing(id: string): Promise<LikeState>;
+  saveListing(id: string): Promise<SaveState>;
+  unsaveListing(id: string): Promise<SaveState>;
+  listSaved(cursor?: string | null, limit?: number): Promise<BuyerFeed>;
+  /** `app` picks the audience route: the buyer reads live listings, the seller reads their own. */
+  listComments(app: 'buyer' | 'seller', listingId: string, cursor?: string | null, limit?: number): Promise<CommentList>;
+  postComment(app: 'buyer' | 'seller', listingId: string, input: PostComment, idempotencyKey?: string): Promise<Comment>;
+  removeComment(app: 'buyer' | 'seller', commentId: string): Promise<void>;
   /** Make a first offer on a size. Amounts are paise (whole rupees). Pass `idempotencyKey` to make a retry safe. */
   startOffer(listingId: string, variantId: string, amount: number, idempotencyKey?: string): Promise<BuyerNegotiation>;
   listBuyerNegotiations(): Promise<BuyerNegotiationList>;
@@ -354,6 +373,24 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
       return call(`/v1/buyer/follows${q.size ? `?${q}` : ''}`, FollowedShopListSchema, { auth: true });
     },
     getBuyerListing: (id) => call(`/v1/buyer/listings/${id}`, BuyerListingSchema, { auth: true }),
+    likeListing: (id) => call(`/v1/buyer/listings/${id}/like`, LikeStateSchema, { method: 'PUT', auth: true }),
+    unlikeListing: (id) => call(`/v1/buyer/listings/${id}/like`, LikeStateSchema, { method: 'DELETE', auth: true }),
+    saveListing: (id) => call(`/v1/buyer/listings/${id}/save`, SaveStateSchema, { method: 'PUT', auth: true }),
+    unsaveListing: (id) => call(`/v1/buyer/listings/${id}/save`, SaveStateSchema, { method: 'DELETE', auth: true }),
+    listSaved: (cursor, limit) => {
+      const q = new URLSearchParams();
+      if (limit) q.set('limit', String(limit));
+      if (cursor) q.set('cursor', cursor);
+      return call(`/v1/buyer/saved${q.size ? `?${q}` : ''}`, BuyerFeedSchema, { auth: true });
+    },
+    listComments: (app, listingId, cursor, limit) => {
+      const q = new URLSearchParams();
+      if (limit) q.set('limit', String(limit));
+      if (cursor) q.set('cursor', cursor);
+      return call(`/v1/${app}/listings/${listingId}/comments${q.size ? `?${q}` : ''}`, CommentListSchema, { auth: true });
+    },
+    postComment: (app, listingId, input, key) => call(`/v1/${app}/listings/${listingId}/comments`, CommentSchema, { method: 'POST', body: input, auth: true, ...idem(key) }),
+    removeComment: (app, commentId) => call(`/v1/${app}/comments/${commentId}`, NoBody, { method: 'DELETE', auth: true }),
     startOffer: (listingId, variantId, amount, key) => call(`/v1/buyer/listings/${listingId}/offers`, BuyerNegotiationSchema, { method: 'POST', body: { variantId, amount }, auth: true, ...idem(key) }),
     listBuyerNegotiations: () => call('/v1/buyer/negotiations', BuyerNegotiationListSchema, { auth: true }),
     getBuyerNegotiation: (id) => call(`/v1/buyer/negotiations/${id}`, BuyerNegotiationSchema, { auth: true }),
