@@ -62,8 +62,12 @@ export const RELEVANCE = {
   FUZZY_PERCENT: 60,
 } as const;
 
-/** The smallest word-similarity (pg_trgm) that counts as the same word misspelt, and the shortest word it is tried on. */
-export const FUZZY_MIN_SIMILARITY = 0.55;
+/**
+ * The smallest word-similarity (pg_trgm) that counts as the same word misspelt, and the shortest word it is tried on.
+ * 0.6 is pg_trgm's own default for its `<%` operator, which the search query uses so the trigram index can answer it; if the
+ * database setting `pg_trgm.word_similarity_threshold` is ever changed, the query and this number must change together.
+ */
+export const FUZZY_MIN_SIMILARITY = 0.6;
 export const FUZZY_MIN_CHARS = 4;
 
 /** Relevance points are multiplied by this before the ranking score is added, so relevance always wins and ranking breaks ties. */

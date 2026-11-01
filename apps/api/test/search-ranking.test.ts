@@ -5,7 +5,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RankingService } from '../src/discovery/ranking.service.js';
-import { feedImpressions, listings } from '../src/db/schema.js';
+import { feedImpressions, listingRankScores, listings } from '../src/db/schema.js';
 import { makeCaller, type Caller, type Json } from './api.js';
 import { makeBuyer, makeListing, makeShop, rupees, sellerIdOf } from './community-helpers.js';
 import { dbOf, startApp } from './helpers.js';
@@ -114,7 +114,9 @@ describe('search: relevance order', () => {
     expect(new Set(seen).size).toBe(seen.length);
     const first = await feed(asha, '?q=wear&limit=1');
     expect((await call('GET', `/v1/buyer/feed?q=wear&sort=NEWEST&cursor=${first.nextCursor}`, { token: asha })).status).toBe(400);
-    expect((await call('GET', `/v1/buyer/feed?q=wear&cursor=${first.nextCursor}x`, { token: asha })).status).toBe(400);
+    for (const broken of ['nonsense', Buffer.from('RANKED:abc:123').toString('base64url'), Buffer.from(`RANKED:5.5:not-a-uuid`).toString('base64url')]) {
+      expect((await call('GET', `/v1/buyer/feed?q=wear&cursor=${broken}`, { token: asha })).status).toBe(400);
+    }
   });
   it('NEWEST stays strictly newest first, also when searching', async () => {
     const b = await feed(asha, '?sort=NEWEST');
@@ -182,12 +184,71 @@ describe('For You ranking', () => {
     expect(text).not.toMatch(/rankScore|rank_score|rankKey|rankedAt|autoAccept|autoDecline|autoCounter|dealCodes|dealAccept|upiId/i);
   });
 
-  it('stores a score that changes with likes, and a refresh with nothing changed changes nothing', async () => {
+  it('stores each refresh as its own generation and keeps only the last 30 minutes', async () => {
     const db = dbOf(app).db;
-    const [a] = await db.select({ s: listings.rankScore }).from(listings).where(eq(listings.id, ids.dupatta!));
-    const [b] = await db.select({ s: listings.rankScore }).from(listings).where(eq(listings.id, ids.kurta!));
-    expect(a!.s).toBeGreaterThan(b!.s);
-    expect(await app.get(RankingService).refreshScores()).toBe(0);
+    const svc = app.get(RankingService);
+    const live = (await db.select({ id: listings.id }).from(listings).where(eq(listings.status, 'ACTIVE'))).length;
+    const now = Date.now();
+    expect(await svc.refreshScores(now + 1_000_000)).toBe(live);
+    const gens = async () => (await db.execute(sql`select distinct generation from listing_rank_scores order by 1`)) as unknown as { generation: string }[];
+    expect((await gens()).length).toBeGreaterThanOrEqual(2);
+    // a refresh 31 minutes later removes the older generations
+    await svc.refreshScores(now + 1_000_000 + 31 * 60_000);
+    expect((await gens()).length).toBe(1);
+    const [likedScore] = await db.select({ s: listingRankScores.score }).from(listingRankScores).where(eq(listingRankScores.listingId, ids.dupatta!));
+    const [plainScore] = await db.select({ s: listingRankScores.score }).from(listingRankScores).where(eq(listingRankScores.listingId, ids.kurta!));
+    expect(likedScore!.s).toBeGreaterThan(plainScore!.s);
+  });
+
+  it('keeps a scroll in one order when scores are refreshed between two pages', async () => {
+    const svc = app.get(RankingService);
+    const now = Date.now() + 5_000_000;
+    await svc.refreshScores(now);
+    const all = titles(await feed(meena, '?limit=50'));
+    const first: Json = await feed(meena, '?limit=3');
+    expect(titles(first)).toEqual(all.slice(0, 3));
+    // the listing on top sells out and a refresh runs: from now on it sinks to the bottom of a fresh scroll
+    await dbOf(app).db.execute(sql`update listing_variants set stock = 0 where listing_id = (select id from listings where title = ${all[0]!})`);
+    await svc.refreshScores(now + 6 * 60_000);
+    const fresh = titles(await feed(meena, '?limit=50'));
+    expect(fresh[fresh.length - 1]).toBe(all[0]);
+    // the scroll that began before the refresh still gets exactly the old order: nothing repeated, nothing skipped
+    const seen = titles(first);
+    let cursor: string | null = first.nextCursor;
+    for (let i = 0; i < 10 && cursor; i++) {
+      const b: Json = await feed(meena, `?limit=3&cursor=${cursor}`);
+      seen.push(...titles(b));
+      cursor = b.nextCursor;
+    }
+    expect(seen).toEqual(all);
+    // a marker whose generation has been deleted still works, on the newest scores
+    await svc.refreshScores(now + 60 * 60_000);
+    const old: Json = await call('GET', `/v1/buyer/feed?limit=3&cursor=${first.nextCursor}`, { token: meena });
+    expect(old.status).toBe(200);
+  });
+});
+
+describe('search text and index', () => {
+  it('finds a listing by a changed tag or a renamed shop, without a republish', async () => {
+    const db = dbOf(app).db;
+    expect(titles(await feed(asha, '?q=zebrastripe'))).toEqual([]);
+    await db.execute(sql`update listings set tags = array['zebrastripe'] where id = ${ids.sneakers}`);
+    expect(titles(await feed(asha, '?q=zebrastripe'))).toEqual(['Canvas sneakers']);
+    expect(titles(await feed(asha, '?q=quokkashop'))).toEqual([]);
+    await db.execute(sql`update sellers set name = 'Quokkashop' where handle = 'ravisr'`);
+    expect(titles(await feed(asha, '?q=quokkashop'))).toEqual(expect.arrayContaining(['Canvas sneakers', 'Linen shirt']));
+    await db.execute(sql`update sellers set name = 'Shop ravisr' where handle = 'ravisr'`);
+    expect(titles(await feed(asha, '?q=quokkashop'))).toEqual([]);
+  });
+
+  it('has a trigram index that answers both the word and the similar-word test', async () => {
+    const db = dbOf(app).db;
+    const plan = await db.transaction(async (tx) => {
+      await tx.execute(sql`set local enable_seqscan = off`);
+      const rows = (await tx.execute(sql`explain select id from listings where search_text ilike any (array['%kurta%']::text[]) or 'kurtaa' <% search_text`)) as unknown as { 'QUERY PLAN': string }[];
+      return rows.map((r) => r['QUERY PLAN']).join('\n');
+    });
+    expect(plan).toMatch(/listings_search_trgm_idx/);
   });
 });
 

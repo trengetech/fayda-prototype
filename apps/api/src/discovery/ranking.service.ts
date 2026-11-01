@@ -5,7 +5,7 @@ import { and, count, eq, gt, gte, inArray, sql } from 'drizzle-orm';
 import { CLOCK } from '../common/clock.js';
 import { loadSellerStats } from '../community/shared.js';
 import { DbService } from '../db/db.service.js';
-import { feedImpressions, likes, listingVariants, listingViews, listings, sellers } from '../db/schema.js';
+import { feedImpressions, likes, listingRankScores, listingVariants, listingViews, listings, sellers } from '../db/schema.js';
 import { SweepRunner, type SweepTask } from '../scheduler/sweep-runner.js';
 
 const HOUR_MS = 3_600_000;
@@ -14,6 +14,8 @@ const DAY_MS = 24 * HOUR_MS;
 export const RANK_REFRESH_MS = 5 * 60_000;
 const BATCH = 200;
 const VIEW_WINDOW_MS = 30 * DAY_MS;
+/** A score generation is kept this long, so a person scrolling for half an hour keeps one consistent order. */
+export const GENERATION_KEEP_MS = 30 * 60_000;
 /** Impressions are kept 90 days, pruned hourly; one buyer can report at most this many an hour (a runaway app, not a real person). */
 export const IMPRESSION_RETENTION_MS = 90 * DAY_MS;
 export const MAX_IMPRESSIONS_PER_HOUR = 1000;
@@ -56,14 +58,19 @@ export class RankingService implements SweepTask {
     return changed;
   }
 
-  /** Recomputes every live listing's score, 200 at a time. Returns how many scores changed. Safe to run on two instances at once (same inputs, same result). */
+  /**
+   * Recomputes every live listing's score and stores it as a new generation (the time in whole seconds), 200 listings at a time,
+   * then deletes generations older than GENERATION_KEEP_MS. Returns how many listings were scored. Two instances refreshing in
+   * the same second write the same rows (the insert ignores a row that exists), so that is safe.
+   */
   async refreshScores(now: number = this.clock.now()): Promise<number> {
-    let changed = 0;
+    const generation = Math.floor(now / 1000);
+    let scored = 0;
     let after = '00000000-0000-0000-0000-000000000000';
     const since = new Date(now - VIEW_WINDOW_MS);
     for (;;) {
       const batch = await this.db
-        .select({ id: listings.id, sellerId: listings.sellerId, publishedAt: listings.publishedAt, rankScore: listings.rankScore, sellerCreatedAt: sellers.createdAt })
+        .select({ id: listings.id, sellerId: listings.sellerId, publishedAt: listings.publishedAt, sellerCreatedAt: sellers.createdAt })
         .from(listings)
         .innerJoin(sellers, eq(sellers.id, listings.sellerId))
         .where(and(eq(listings.status, 'ACTIVE'), gt(listings.id, after)))
@@ -82,8 +89,7 @@ export class RankingService implements SweepTask {
       const likeBy = new Map(likeRows.map((r) => [r.id, r.n]));
       const viewBy = new Map(viewRows.map((r) => [r.id, r.n]));
       const stockBy = new Map(stockRows.map((r) => [r.id, r.n]));
-      const updates: { id: string; score: number }[] = [];
-      for (const l of batch) {
+      const rows = batch.map((l) => {
         const st = stats.get(l.sellerId);
         const score = rankScore({
           ageHours: Math.max(0, (now - (l.publishedAt?.getTime() ?? now)) / HOUR_MS),
@@ -95,13 +101,13 @@ export class RankingService implements SweepTask {
           sellerCompleted: st?.completed ?? 0,
           sellerMedianConfirmHours: st?.medianConfirmMs != null ? st.medianConfirmMs / HOUR_MS : null,
         });
-        if (score !== l.rankScore) updates.push({ id: l.id, score });
-      }
-      const at = new Date(now);
-      for (const u of updates) await this.db.update(listings).set({ rankScore: u.score, rankedAt: at }).where(eq(listings.id, u.id));
-      changed += updates.length;
+        return { generation, listingId: l.id, score };
+      });
+      await this.db.insert(listingRankScores).values(rows).onConflictDoNothing();
+      scored += rows.length;
     }
-    return changed;
+    await this.db.delete(listingRankScores).where(sql`${listingRankScores.generation} < ${generation - Math.floor(GENERATION_KEEP_MS / 1000)}`);
+    return scored;
   }
 
   /** Stores what the feed showed. Listings that are not live are skipped; a buyer over the hourly cap is quietly ignored. */

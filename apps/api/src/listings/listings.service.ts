@@ -19,12 +19,12 @@ import { AppError } from '../common/app-error.js';
 import { CLOCK } from '../common/clock.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { DbService } from '../db/db.service.js';
-import { follows, listingMedia, listingVariants, listings, media, sellerPaymentProfiles, sellers } from '../db/schema.js';
+import { follows, listingMedia, listingRankScores, listingVariants, listings, media, sellerPaymentProfiles, sellers } from '../db/schema.js';
 import { publicMediaUrl } from '../media/media.service.js';
 import type { NegotiationTouch } from '../negotiations/negotiation-events.js';
 import { NegotiationsService } from '../negotiations/negotiations.service.js';
 import { socialCounts } from '../social/social-counts.js';
-import { andAll, encodeFeedCursor, feedAfter, feedConditions, feedOrder, feedPlan, rankKeyExpr, rankerLabel, type FeedRequest } from './feed-query.js';
+import { andAll, cursorGeneration, encodeFeedCursor, feedAfter, feedConditions, feedOrder, feedPlan, rankKeyExpr, rankerLabel, type FeedRequest } from './feed-query.js';
 import { ChatService } from '../chat/chat.service.js';
 import { loadSellerStats, sellerRatings } from '../community/shared.js';
 
@@ -335,17 +335,31 @@ export class ListingsService {
     const req: FeedRequest = { ...input, ranker: input.ranker ?? this.config.feedRanker };
     const take = Math.min(Math.max(limit, 1), MAX_FEED_PAGE);
     const plan = feedPlan(req);
+    // A ranked page is cut from one score generation, named in its marker, so a refresh between pages changes nothing.
+    const generation = plan === 'RANKED' ? await this.rankGeneration(cursorGeneration(req, req.cursor)) : 0;
     const conditions = feedConditions(req);
     if (req.cursor) conditions.push(feedAfter(req, req.cursor));
     const columns = plan === 'RANKED' ? { ...CARD_COLUMNS, rankKey: sql<string>`${rankKeyExpr(req)}::text`.as('rank_key') } : CARD_COLUMNS;
-    const rows = await this.db.select(columns).from(listings).innerJoin(sellers, eq(sellers.id, listings.sellerId)).where(andAll(conditions)).orderBy(...feedOrder(req)).limit(take + 1);
+    const base = this.db.select(columns).from(listings).innerJoin(sellers, eq(sellers.id, listings.sellerId)).$dynamic();
+    const joined = plan === 'RANKED' ? base.leftJoin(listingRankScores, and(eq(listingRankScores.listingId, listings.id), eq(listingRankScores.generation, generation))) : base;
+    const rows = await joined.where(andAll(conditions)).orderBy(...feedOrder(req)).limit(take + 1);
     const page = rows.slice(0, take);
     const last = page[page.length - 1];
     return {
       items: await this.buildCards(page, req.userId),
-      nextCursor: rows.length > take && last ? encodeFeedCursor(plan, { ...last, rankKey: 'rankKey' in last ? last.rankKey : null }) : null,
+      nextCursor: rows.length > take && last ? encodeFeedCursor(plan, { ...last, rankKey: 'rankKey' in last ? last.rankKey : null }, generation) : null,
       ranker: rankerLabel(req),
     };
+  }
+
+  /** The score generation a ranked page uses: the one its marker names while it is still kept, else the newest (0 before the first refresh). */
+  private async rankGeneration(requested: number | null): Promise<number> {
+    if (requested != null) {
+      const [hit] = await this.db.select({ g: listingRankScores.generation }).from(listingRankScores).where(eq(listingRankScores.generation, requested)).limit(1);
+      if (hit) return requested;
+    }
+    const [m] = await this.db.select({ g: sql<number | null>`max(${listingRankScores.generation})::bigint` }).from(listingRankScores);
+    return Number(m?.g ?? 0);
   }
 
   /** The cards for these listings, in the order given. A listing that is not live is left out. Used by lists that order by something other than the feed's sorts (Saved). */

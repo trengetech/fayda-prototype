@@ -36,6 +36,9 @@ export const RANK_WEIGHTS = {
   MAX_SCORE: 9999,
 } as const;
 
+/** What a listing counts for before it has been scored: about a fresh listing from a new shop. */
+export const NEW_LISTING_START_SCORE = 4700;
+
 export interface RankSignals {
   ageHours: number;
   likes: number;
