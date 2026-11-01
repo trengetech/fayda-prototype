@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Image, Modal, Pressable, ScrollView, Text, TextInput, View, type ImageSourcePropType } from 'react-native';
+import { Button } from './components';
 import { fontFamily } from './fonts';
 import { Icon } from './icon';
 import { IconButton, Segmented } from './parts';
@@ -136,5 +137,24 @@ export function Composer({ value, onChangeText, onSend, canSend, sending, left }
         <Text style={{ color: colors.onAccent, fontFamily: fontFamily.bold, fontSize: 13 }}>{sending ? 'Sending…' : 'Send'}</Text>
       </Pressable>
     </View>
+  );
+}
+
+/** A centred question with Cancel and a confirm button (prototype `Confirm`). `danger` makes the confirm button red. */
+export function Confirm({ visible, title, body, confirmLabel, cancelLabel = 'Cancel', danger, busy, onConfirm, onCancel }: { visible: boolean; title: string; body?: string; confirmLabel: string; cancelLabel?: string; danger?: boolean; busy?: boolean; onConfirm: () => void; onCancel: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
+      <View style={{ flex: 1, backgroundColor: 'rgba(10,11,14,0.5)', alignItems: 'center', justifyContent: 'center', padding: 22 }}>
+        <View accessibilityViewIsModal accessibilityLabel={title} style={{ width: '100%', backgroundColor: colors.surface, borderRadius: 20, padding: 20, gap: 12 }}>
+          <Text accessibilityRole="header" style={{ color: colors.ink, fontFamily: fontFamily.extrabold, fontSize: 18 }}>{title}</Text>
+          {body ? <Text style={{ color: colors.muted, fontFamily: fontFamily.regular, fontSize: 14, lineHeight: 20 }}>{body}</Text> : null}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flex: 1 }}><Button title={cancelLabel} variant="outline" onPress={onCancel} /></View>
+            <View style={{ flex: 1 }}><Button title={confirmLabel} variant={danger ? 'danger' : 'primary'} loading={!!busy} onPress={onConfirm} /></View>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }

@@ -1,20 +1,23 @@
-import { useBuyerListing, useBuyerNegotiation, usePlaceOrder } from '@fayda/api-client';
+import { useApiClient, useBuyerListing, useBuyerNegotiation, usePlaceOrder } from '@fayda/api-client';
 import type { PlaceOrder } from '@fayda/contracts/schemas';
 import { formatRupees } from '@fayda/domain';
-import { AppText, Button, Card, ChipGroup, FieldError, Screen, describeError } from '@fayda/ui';
+import { ActionBar, AppText, Button, Card, Chip, ChoiceCard, FieldError, KeyValue, Screen, SectionTitle, Thumb, describeError, useTheme } from '@fayda/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { newKey, PAY_LABELS } from '../src/orders';
 import { useBuyerProfile } from '../src/profile';
 
 type Method = keyof typeof PAY_LABELS;
+const PAY_HELP: Record<Method, string> = { UPI: 'UPI ID or QR code, in any UPI app', BANK: 'NEFT, IMPS or RTGS to the seller’s account', LINK: 'The seller’s own payment page' };
 
 /**
  * Checkout for a direct listing: size, delivery address, and how you will pay the seller. The price is never sent; the server
  * takes it from the listing, or from the agreement when you are placing an agreed offer. Fayda does not take the payment.
  */
 export default function CheckoutScreen() {
+  const { colors } = useTheme();
+  const client = useApiClient();
   const params = useLocalSearchParams<{ listingId?: string; variantId?: string; negotiationId?: string }>();
   const router = useRouter();
   const negotiation = useBuyerNegotiation(params.negotiationId ?? null);
@@ -86,43 +89,75 @@ export default function CheckoutScreen() {
     );
   };
 
+  const saved = l.price - price;
+  const cover = l.media[0];
+  const coverUri = cover ? client.resolveUrl(cover.kind === 'video' ? (cover.posterUrl ?? '') : cover.url) : null;
+  const sizeLabel = l.variants.find((v) => v.id === sizeId)?.label;
   return (
-    <Screen>
-      <Card>
-        <AppText weight="bold">{l.title}</AppText>
-        <AppText tone="muted" size={13}>{l.seller.name} · {l.seller.area}</AppText>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <AppText>{agreed ? 'Agreed price' : 'Price'}</AppText>
-          <AppText weight="extrabold">{formatRupees(price)}</AppText>
+    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Thumb size={72} source={coverUri ? { uri: coverUri } : null} label={l.title} />
+          <View style={{ flex: 1 }}>
+            <AppText weight="extrabold">{l.title}</AppText>
+            <AppText tone="muted" size={12}>{sizeLabel ? `${sizeLabel} · ` : ''}Qty 1 · {l.seller.name}</AppText>
+            <AppText tone="muted" size={12}>{l.seller.area}</AppText>
+          </View>
         </View>
-        {agreed ? <AppText tone="muted" size={12}>Listed at {formatRupees(l.price)}. This price is held for you until the checkout window closes.</AppText> : null}
-      </Card>
 
-      {fixedSize ? (
-        <AppText>Size {l.variants.find((v) => v.id === sizeId)?.label ?? ''}</AppText>
-      ) : (
-        <ChipGroup label="Size" options={available.map((v) => v.id)} value={sizeId ? [sizeId] : []} onChange={(v) => changed(setVariantId)(v[0] ?? null)} format={(id) => l.variants.find((v) => v.id === id)?.label ?? ''} />
-      )}
+        {agreed ? (
+          <Card tone="success">
+            <AppText size={12}>Agreed price held for you until the checkout window closes.</AppText>
+          </Card>
+        ) : null}
 
-      {addresses.length ? (
-        <>
-          <ChipGroup label="Deliver to" options={addresses.map((a) => a.id)} value={addrId ? [addrId] : []} onChange={(v) => changed(setAddressId)(v[0] ?? null)} format={(id) => { const a = addresses.find((x) => x.id === id); return a ? `${a.name}, ${a.line1}, ${a.pin}` : ''; }} />
-          <Button title="Add or change address" variant="ghost" size="sm" onPress={() => router.push('/addresses?pick=1' as never)} />
-        </>
-      ) : (
+        {fixedSize ? null : (
+          <View style={{ gap: 8 }}>
+            <SectionTitle>Size</SectionTitle>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {available.map((v) => <Chip key={v.id} label={v.label} selected={sizeId === v.id} onPress={() => changed(setVariantId)(v.id)} />)}
+            </View>
+          </View>
+        )}
+
+        <View style={{ gap: 8 }}>
+          <SectionTitle>How you’ll pay the seller</SectionTitle>
+          {offered.length ? (
+            offered.map((m) => <ChoiceCard key={m} title={PAY_LABELS[m]} description={PAY_HELP[m]} selected={method === m} onPress={() => changed(setMethod)(m)} />)
+          ) : (
+            <Card tone="danger"><AppText weight="bold">No way to pay yet</AppText><AppText tone="muted" size={13}>This seller hasn’t added a way to be paid directly. Try again later or message them.</AppText></Card>
+          )}
+        </View>
+
+        <View style={{ gap: 8 }}>
+          <SectionTitle>Deliver to</SectionTitle>
+          {addresses.length ? (
+            <>
+              {addresses.map((a) => (
+                <ChoiceCard key={a.id} title={`${a.name}, ${a.line1}, ${a.pin}`} description={[a.line2, `${a.city}, ${a.state}`].filter(Boolean).join(' · ')} selected={addrId === a.id} onPress={() => changed(setAddressId)(a.id)} />
+              ))}
+              <Button title="Add or change address" variant="ghost" size="sm" block={false} onPress={() => router.push('/addresses?pick=1' as never)} />
+            </>
+          ) : (
+            <Card>
+              <AppText weight="bold">No delivery address</AppText>
+              <AppText tone="muted" size={13}>Add the address you want this order delivered to.</AppText>
+              <Button title="Add address" onPress={() => router.push('/addresses?pick=1&add=1' as never)} />
+            </Card>
+          )}
+        </View>
+
         <Card>
-          <AppText weight="bold">No delivery address</AppText>
-          <AppText tone="muted" size={13}>Add the address you want this order delivered to.</AppText>
-          <Button title="Add address" onPress={() => router.push('/addresses?pick=1&add=1' as never)} />
+          <KeyValue label="Item" value={formatRupees(l.price)} />
+          {saved > 0 ? <KeyValue label="Saved by bargaining" value={`− ${formatRupees(saved)}`} tone="success" /> : null}
+          <KeyValue label="Total to pay the seller" value={formatRupees(price)} strong />
         </Card>
-      )}
-
-      {offered.length ? null : <Card><AppText weight="bold">No way to pay yet</AppText><AppText tone="muted" size={13}>This seller hasn’t added a way to be paid directly. Try again later or message them.</AppText></Card>}
-      <ChipGroup label="How will you pay the seller?" options={offered} value={method ? [method] : []} onChange={(v) => changed(setMethod)(v[0] ?? null)} format={(m) => PAY_LABELS[m]} />
-      <AppText tone="muted" size={12}>You pay the seller directly after placing the order. Fayda does not handle payments or delivery. There is no cash on delivery.</AppText>
-
-      <Button title={`Place order · ${formatRupees(price)}`} disabled={!ready} loading={place.isPending} onPress={submit} />
-      <FieldError>{error?.message}</FieldError>
-    </Screen>
+        <AppText tone="muted" size={11}>You pay the seller directly after placing the order. Fayda does not handle payments or delivery. There is no cash on delivery.</AppText>
+      </ScrollView>
+      <ActionBar>
+        <FieldError>{error?.message}</FieldError>
+        <Button title={`Place order · ${formatRupees(price)}`} size="lg" disabled={!ready} loading={place.isPending} onPress={submit} />
+      </ActionBar>
+    </View>
   );
 }

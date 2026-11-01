@@ -1,6 +1,6 @@
 import { useApiClient, useBuyerNegotiation, useBuyerRespond, usePlaceOrder } from '@fayda/api-client';
 import { formatAgo, formatRupees, parseRupees, timeLeft } from '@fayda/domain';
-import { ActionBar, AppBar, AppText, Badge, Bubble, BubbleText, Button, ButtonRow, FieldError, SystemNote, TextField, Thumb, describeError, useTheme } from '@fayda/ui';
+import { ActionBar, AppBar, AppText, Badge, Bubble, BubbleText, Button, ButtonRow, Confirm, FieldError, SystemNote, TextField, Thumb, describeError, useTheme } from '@fayda/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
@@ -24,6 +24,7 @@ export default function NegotiationScreen() {
   const [dealNote, setDealNote] = useState<string | null>(null);
   const [counter, setCounter] = useState('');
   const [countering, setCountering] = useState(false);
+  const [confirm, setConfirm] = useState<'withdraw' | 'decline' | null>(null);
   const [error, setError] = useState<{ message: string; fields: Record<string, string> } | null>(null);
   const back = () => router.back();
 
@@ -141,9 +142,9 @@ export default function NegotiationScreen() {
           <AppText size={13}><AppText weight="extrabold" size={13}>Seller countered {formatRupees(last.amount)}</AppText> · respond within {timeLeft(last.expiresAt, now)}{!n.canCounter ? ' · last round: accept or decline' : ''}</AppText>
           <ButtonRow>
             <Button title={`Buy at ${formatRupees(last.amount)}`} loading={respond.isPending} onPress={() => run({ id: n.id, action: 'accept' })} />
-            {n.canCounter && bounds ? <Button title="Counter" variant="outline" onPress={() => setCountering(true)} /> : <Button title="Decline" variant="danger" loading={respond.isPending} onPress={() => run({ id: n.id, action: 'decline' })} />}
+            {n.canCounter && bounds ? <Button title="Counter" variant="outline" onPress={() => setCountering(true)} /> : <Button title="Decline" variant="danger" onPress={() => setConfirm('decline')} />}
           </ButtonRow>
-          {n.canCounter ? <Button title="Decline counter" variant="ghost" size="sm" onPress={() => run({ id: n.id, action: 'decline' })} /> : null}
+          {n.canCounter ? <Button title="Decline counter" variant="ghost" size="sm" onPress={() => setConfirm('decline')} /> : null}
         </>
       );
     }
@@ -151,7 +152,7 @@ export default function NegotiationScreen() {
       return (
         <>
           <AppText size={13}><AppText weight="extrabold" size={13}>Waiting for the seller</AppText> · your offer expires in {timeLeft(n.pendingExpiresAt ?? last?.expiresAt ?? now, now)}</AppText>
-          <Button title="Withdraw offer" variant="outline" loading={respond.isPending} onPress={() => run({ id: n.id, action: 'withdraw' })} />
+          <Button title="Withdraw offer" variant="outline" onPress={() => setConfirm('withdraw')} />
         </>
       );
     if (n.status === 'PURCHASED') return <Button title="View order" variant="dark" onPress={() => router.push(n.orderId ? (`/order/${n.orderId}` as never) : ('/orders' as never))} />;
@@ -181,6 +182,26 @@ export default function NegotiationScreen() {
         <SystemNote>Private negotiation: only you and the seller see this</SystemNote>
         {items.map((x) => <View key={x.key}>{x.node}</View>)}
       </ScrollView>
+      <Confirm
+        visible={confirm === 'withdraw'}
+        title="Withdraw this offer?"
+        body="The seller won’t be able to accept it. You can still buy at the listed price."
+        confirmLabel="Withdraw"
+        danger
+        busy={respond.isPending}
+        onCancel={() => setConfirm(null)}
+        onConfirm={() => { setConfirm(null); run({ id: n.id, action: 'withdraw' }); }}
+      />
+      <Confirm
+        visible={confirm === 'decline'}
+        title="Decline the seller’s counter?"
+        body={`This closes the negotiation. You can still buy later at the listed price of ${formatRupees(n.listing.price)}.`}
+        confirmLabel="Decline"
+        danger
+        busy={respond.isPending}
+        onCancel={() => setConfirm(null)}
+        onConfirm={() => { setConfirm(null); run({ id: n.id, action: 'decline' }); }}
+      />
       <ActionBar>
         {footer}
         <FieldError>{error && !Object.keys(error.fields).length ? error.message : undefined}</FieldError>

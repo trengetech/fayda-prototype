@@ -128,10 +128,11 @@ describe('offer screen', () => {
     await screen.findByText(/offered ₹/);
     await press('Decline offer');
     expect(declines).toHaveLength(0);
-    await press('Keep it');
-    expect(screen.queryByText('Decline this offer?')).not.toBeOnTheScreen();
+    expect(screen.getByText('Decline this offer?')).toBeOnTheScreen();
+    await press('Cancel');
+    expect(declines).toHaveLength(0);
     await press('Decline offer');
-    await press('Yes, decline');
+    await act(async () => void fireEvent.press(screen.getAllByText('Decline').at(-1) as never)); // the dialog's button
     expect((await screen.findAllByText('Offer declined')).length).toBeGreaterThan(0);
     expect(declines).toHaveLength(1);
   });

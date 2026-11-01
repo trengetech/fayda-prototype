@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Image, Pressable, ScrollView, Text, View, type ImageSourcePropType, type StyleProp, type ViewStyle } from 'react-native';
 import { fontFamily } from './fonts';
 import { Icon, type IconName } from './icon';
 import { useTheme } from './theme';
@@ -180,5 +180,118 @@ export function Tag({ label, tone = 'accent' }: { label: string; tone?: 'accent'
     <View style={{ alignSelf: 'flex-start', height: heights.badge, borderRadius: radii.pill, paddingHorizontal: 8, backgroundColor: tone === 'accent' ? colors.accentTint2 : colors.surface2, justifyContent: 'center' }}>
       <Text style={{ color: tone === 'accent' ? colors.accentStrong : colors.muted, fontFamily: fontFamily.extrabold, fontSize: type.tiny.fontSize }}>{label}</Text>
     </View>
+  );
+}
+
+/**
+ * A list row with a picture: thumbnail, title, a few small lines, and a badge on the right, with a divider under it
+ * (prototype `.listrow` with `Thumb`). `children` sit under the row, in line with the text (for buttons like "Buy again").
+ */
+export function ThumbRow({ source, title, lines, badge, onPress, accessibilityLabel, children }: { source?: ImageSourcePropType | null; title: string; lines?: ReactNode; badge?: ReactNode; onPress?: () => void; accessibilityLabel?: string; children?: ReactNode }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ borderBottomWidth: 1, borderBottomColor: colors.divider, backgroundColor: colors.surface }}>
+      <Pressable accessibilityRole="button" {...(accessibilityLabel ? { accessibilityLabel } : {})} onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 }}>
+        <View style={{ width: 56, height: 56, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.surface2 }}>
+          {source ? <Image source={source} style={{ width: 56, height: 56 }} resizeMode="cover" accessibilityIgnoresInvertColors /> : null}
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text numberOfLines={1} style={{ color: colors.ink, fontFamily: fontFamily.extrabold, fontSize: 14 }}>{title}</Text>
+          {lines}
+        </View>
+        {badge}
+      </Pressable>
+      {children ? <View style={{ flexDirection: 'row', gap: 8, paddingLeft: 84, paddingRight: 16, paddingBottom: 10, flexWrap: 'wrap' }}>{children}</View> : null}
+    </View>
+  );
+}
+
+/** A small muted line under a row's title. */
+export function RowLine({ children, strong }: { children: ReactNode; strong?: boolean }) {
+  const { colors } = useTheme();
+  return <Text numberOfLines={1} style={{ color: strong ? colors.ink : colors.muted, fontFamily: strong ? fontFamily.extrabold : fontFamily.regular, fontSize: strong ? 14 : 12 }}>{children}</Text>;
+}
+
+/** A section heading: small, bold, with room above (prototype `.section-title`). */
+export function SectionTitle({ children }: { children: ReactNode }) {
+  const { colors } = useTheme();
+  return <Text accessibilityRole="header" style={{ color: colors.ink, fontFamily: fontFamily.extrabold, fontSize: 13, marginTop: 10 }}>{children}</Text>;
+}
+
+/** One big selectable card with a title and a small description (prototype `.choice`): a payment method, an address. */
+export function ChoiceCard({ title, description, selected, onPress, disabled, children }: { title: string; description?: string; selected: boolean; onPress: () => void; disabled?: boolean; children?: ReactNode }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable accessibilityRole="radio" accessibilityLabel={title} accessibilityState={{ selected, checked: selected, disabled: !!disabled }} disabled={disabled} onPress={onPress}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18, borderWidth: 2, borderColor: selected ? colors.accent : colors.divider, backgroundColor: selected ? colors.accentTint : colors.surface, opacity: disabled ? 0.5 : 1 }}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={{ color: colors.ink, fontFamily: fontFamily.extrabold, fontSize: 14 }}>{title}</Text>
+        {description ? <Text style={{ color: colors.muted, fontFamily: fontFamily.regular, fontSize: 12 }}>{description}</Text> : null}
+        {children}
+      </View>
+      <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: selected ? colors.accent : colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? colors.accent : 'transparent' }}>
+        {selected ? <Icon name="check" size={13} color={colors.onAccent} strokeWidth={3} /> : null}
+      </View>
+    </Pressable>
+  );
+}
+
+/** A label on the left and a value on the right (prototype `.kv`). */
+export function KeyValue({ label, value, strong, tone }: { label: string; value: ReactNode; strong?: boolean; tone?: 'success' | 'danger' }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 5 }}>
+      <Text style={{ color: colors.muted, fontFamily: fontFamily.regular, fontSize: 14 }}>{label}</Text>
+      <Text style={{ flexShrink: 1, textAlign: 'right', color: tone === 'success' ? colors.success : tone === 'danger' ? colors.danger : colors.ink, fontFamily: strong ? fontFamily.extrabold : fontFamily.bold, fontSize: 14 }}>{value}</Text>
+    </View>
+  );
+}
+
+export interface StepItem { key: string; title: string; note: string; done: boolean; failed?: boolean }
+
+/** The order's steps down the page with a line between them; done steps are green with a tick (prototype `.status-steps`). */
+export function Steps({ steps }: { steps: readonly StepItem[] }) {
+  const { colors } = useTheme();
+  return (
+    <View>
+      {steps.map((st, i) => {
+        const fill = st.failed ? colors.danger : st.done ? colors.success : colors.surface;
+        const edge = st.failed ? colors.danger : st.done ? colors.success : colors.border;
+        return (
+          <View key={st.key} accessible accessibilityLabel={`${st.title}${st.done ? ', done' : ''}`} style={{ flexDirection: 'row', gap: 12, paddingBottom: i === steps.length - 1 ? 0 : 14 }}>
+            <View style={{ alignItems: 'center' }}>
+              <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: edge, backgroundColor: fill, alignItems: 'center', justifyContent: 'center' }}>
+                {st.done || st.failed ? <Icon name={st.failed ? 'x' : 'check'} size={12} color="#fff" strokeWidth={3} /> : null}
+              </View>
+              {i < steps.length - 1 ? <View style={{ position: 'absolute', top: 20, bottom: -14, width: 2, backgroundColor: colors.divider }} /> : null}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.ink, fontFamily: fontFamily.extrabold, fontSize: 14 }}>{st.title}</Text>
+              <Text style={{ color: colors.muted, fontFamily: fontFamily.regular, fontSize: 11 }}>{st.note}</Text>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * A row for a person or a shop: initial avatar, name, a line under it, an optional preview, and something on the right
+ * (a badge, a time). Full width with a divider, like the prototype's chat and follow lists.
+ */
+export function PersonRow({ name, subtitle, preview, right, onPress, accessibilityLabel, unread, tinted }: { name: string; subtitle?: string; preview?: string | null; right?: ReactNode; onPress?: () => void; accessibilityLabel?: string; unread?: boolean; tinted?: boolean }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable accessibilityRole="button" {...(accessibilityLabel ? { accessibilityLabel } : {})} onPress={onPress} disabled={!onPress}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.divider, backgroundColor: tinted ? colors.accentTint : colors.surface }}>
+      <Avatar name={name} />
+      <View style={{ flex: 1, gap: 1 }}>
+        <Text numberOfLines={1} style={{ color: colors.ink, fontFamily: fontFamily.extrabold, fontSize: 14 }}>{name}</Text>
+        {subtitle ? <Text numberOfLines={1} style={{ color: colors.muted, fontFamily: fontFamily.regular, fontSize: 11 }}>{subtitle}</Text> : null}
+        {preview ? <Text numberOfLines={1} style={{ color: colors.ink, fontFamily: unread ? fontFamily.bold : fontFamily.regular, fontSize: 13 }}>{preview}</Text> : null}
+      </View>
+      {right}
+    </Pressable>
   );
 }

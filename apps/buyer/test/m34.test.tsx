@@ -137,7 +137,8 @@ describe('order screen (view only)', () => {
   it('shows the timeline up to what the seller has done, and a cancelled order with its reason', async () => {
     fakeApi(order(buyerOrder({ status: 'CANCELLED', statusLabel: 'Cancelled', payment: null, cancelText: 'Payment not received' })), fetchMock);
     await renderWith(signedIn(), <OrderScreen />);
-    expect(await screen.findByText(/Cancelled · Payment not received/)).toBeOnTheScreen();
+    expect(await screen.findByText('Cancelled by seller')).toBeOnTheScreen();
+    expect(screen.getByText('Payment not received')).toBeOnTheScreen();
   });
 
   it('shows the seller’s contact while the order is open: chat with unread badge, WhatsApp with the order number, Call', async () => {
@@ -279,8 +280,9 @@ describe('checkout', () => {
       fetchMock,
     );
     await renderWith(signedIn(), <CheckoutScreen />);
-    await screen.findByText('Agreed price');
+    await screen.findByText(/Agreed price held for you/);
     expect(screen.getAllByText('₹1,400').length).toBeGreaterThan(0);
+    expect(screen.getByText('− ₹100')).toBeOnTheScreen(); // saved by bargaining
     await pressLabel('Bank transfer');
     await press('Place order · ₹1,400');
     await waitFor(() => expect(sent).toHaveLength(1));

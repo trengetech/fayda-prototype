@@ -136,6 +136,11 @@ describe('negotiation screen', () => {
     expect((await screen.findAllByText('₹1,000')).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Buy at/)).not.toBeOnTheScreen();
     await press('Withdraw offer');
+    expect(await screen.findByText('Withdraw this offer?')).toBeOnTheScreen(); // it asks first
+    expect(posts).toEqual([]);
+    await press('Cancel');
+    await press('Withdraw offer');
+    await press('Withdraw');
     expect((await screen.findAllByText('Offer withdrawn')).length).toBeGreaterThan(0);
     expect(posts).toEqual(['withdraw']);
     expect(screen.queryByText('Withdraw offer')).not.toBeOnTheScreen();

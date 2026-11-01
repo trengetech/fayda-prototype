@@ -1,7 +1,7 @@
 import { useApiClient, useSellerNegotiation, useSellerRespond } from '@fayda/api-client';
 import type { SellerNegotiation } from '@fayda/contracts/schemas';
 import { CLOSE_TEXT, formatRupees, parseRupees, timeLeft } from '@fayda/domain';
-import { ActionBar, AppBar, AppText, Badge, Bubble, BubbleText, Button, ButtonRow, ChipGroup, FieldError, SystemNote, TextField, Thumb, describeError, useTheme } from '@fayda/ui';
+import { ActionBar, AppBar, AppText, Badge, Bubble, BubbleText, Button, ButtonRow, ChipGroup, Confirm, FieldError, SystemNote, TextField, Thumb, describeError, useTheme } from '@fayda/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
@@ -89,23 +89,11 @@ export default function OfferScreen() {
         <>
           <AppText size={13}><AppText weight="extrabold" size={13}>{n.buyerName} offered {formatRupees(last.amount)}</AppText> ({pctOff(n.listing.price, last.amount)}% off) · expires in {timeLeft(last.expiresAt, now)}</AppText>
           {website ? <DealAccessFields type={dealType} value={dealValue} onType={setDealType} onValue={setDealValue} label="How does the buyer get the price?" error={error?.fields.dealAccess} /> : null}
-          {confirmDecline ? (
-            <>
-              <AppText weight="extrabold">Decline this offer?</AppText>
-              <ButtonRow>
-                <Button title="Keep it" variant="outline" onPress={() => setConfirmDecline(false)} />
-                <Button title="Yes, decline" variant="danger" loading={respond.isPending} onPress={() => run({ id: n.id, action: 'decline' })} />
-              </ButtonRow>
-            </>
-          ) : (
-            <>
-              <ButtonRow>
-                <Button title={`Accept ${formatRupees(last.amount)}`} loading={respond.isPending} onPress={() => run({ id: n.id, action: 'accept', dealAccess })} />
-                {n.canCounter && bounds ? <Button title="Counter" variant="outline" onPress={() => setCountering(true)} /> : <Button title="Decline" variant="danger" onPress={() => setConfirmDecline(true)} />}
-              </ButtonRow>
-              {n.canCounter && bounds ? <Button title="Decline offer" variant="ghost" size="sm" onPress={() => setConfirmDecline(true)} /> : <AppText tone="muted" size={12}>This negotiation has reached its offer limit. Accept or decline the last offer.</AppText>}
-            </>
-          )}
+          <ButtonRow>
+            <Button title={`Accept ${formatRupees(last.amount)}`} loading={respond.isPending} onPress={() => run({ id: n.id, action: 'accept', dealAccess })} />
+            {n.canCounter && bounds ? <Button title="Counter" variant="outline" onPress={() => setCountering(true)} /> : <Button title="Decline" variant="danger" onPress={() => setConfirmDecline(true)} />}
+          </ButtonRow>
+          {n.canCounter && bounds ? <Button title="Decline offer" variant="ghost" size="sm" onPress={() => setConfirmDecline(true)} /> : <AppText tone="muted" size={12}>This negotiation has reached its offer limit. Accept or decline the last offer.</AppText>}
           <FieldError>{error && !Object.keys(error.fields).length ? error.message : undefined}</FieldError>
         </>
       );
@@ -150,6 +138,16 @@ export default function OfferScreen() {
         })}
         {n.status === 'CLOSED' || n.status === 'LAPSED' ? <SystemNote>{CLOSE_TEXT[n.closeReason ?? ''] ?? 'Closed'}</SystemNote> : null}
       </ScrollView>
+      <Confirm
+        visible={confirmDecline}
+        title="Decline this offer?"
+        body="The buyer will be told you declined. They can still buy at the listed price."
+        confirmLabel="Decline"
+        danger
+        busy={respond.isPending}
+        onCancel={() => setConfirmDecline(false)}
+        onConfirm={() => { setConfirmDecline(false); run({ id: n.id, action: 'decline' }); }}
+      />
       <ActionBar>{footer}</ActionBar>
     </>,
   );

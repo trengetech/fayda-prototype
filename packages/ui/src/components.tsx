@@ -38,9 +38,11 @@ export function PrototypeBanner({ children }: { children?: ReactNode }) {
   );
 }
 
-export function Card({ children }: { children: ReactNode }) {
+/** A bordered block (prototype `.card`). `tone` tints it: tint = the orange highlight, success, info or danger. */
+export function Card({ children, tone }: { children: ReactNode; tone?: 'tint' | 'success' | 'info' | 'danger' }) {
   const { colors } = useTheme();
-  return <View style={{ backgroundColor: colors.surface, borderColor: colors.divider, borderWidth: 1.5, borderRadius: radii.lg, padding: spacing.lg, gap: spacing.md }}>{children}</View>;
+  const bg = { tint: [colors.accentTint, colors.accentTint2], success: [colors.successTint, colors.successTint], info: [colors.infoTint, colors.infoTint], danger: [colors.dangerTint, colors.dangerTint] }[tone ?? 'tint'];
+  return <View style={{ backgroundColor: tone ? bg[0] : colors.surface, borderColor: tone ? bg[1] : colors.divider, borderWidth: 1, borderRadius: 16, padding: 14, gap: 8 }}>{children}</View>;
 }
 
 export function Badge({ label, tone }: { label: string; tone: 'success' | 'danger' | 'info' | 'accent' }) {

@@ -196,7 +196,10 @@ describe('buyer product page', () => {
     serve(buyerListing({ media: [{ kind: 'video', url: '/v1/media/v1', posterUrl: '/v1/media/p1' }, { kind: 'image', url: '/v1/media/m2', posterUrl: null }] }));
     await renderWith(signedIn(), <ListingScreen />);
     expect((await screen.findByLabelText('Video cover 1 of 2: Cotton kurta')).props.source).toEqual({ uri: 'http://api.test/v1/media/p1' });
-    expect(screen.getByText('1 / 2')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Video 1')).toBeSelected(); // a chip for each item, the first one is showing
+    expect(screen.getByLabelText('Photo 2')).not.toBeSelected();
+    await act(async () => void fireEvent.press(screen.getByLabelText('Photo 2')));
+    expect(screen.getByLabelText('Photo 2')).toBeSelected();
     expect(mockPlayer).not.toHaveBeenCalled();
     await act(async () => void fireEvent.press(screen.getByText('Play video')));
     expect(screen.getByLabelText('Video player')).toBeOnTheScreen();
