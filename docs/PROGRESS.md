@@ -1,6 +1,6 @@
 # Progress
 
-**Where we are (1 Nov 2026): M3.0 to M3.7 are merged. M3.8 (hardening and internal Android release) is built and emulator-checked on branch `m3.8-seed-demo`, PR pending. The two-physical-phone test is deferred by the founder. Next: M3.9 search and ranking (I-39, proposed).**
+**Where we are (1 Nov 2026): M3.0 to M3.8 are merged (PRs #20 and #21) and the live server is deployed. M3.8 is complete except the founder's two-physical-phone run of `docs/DEMO_SCRIPT.md`. The two-physical-phone test is deferred by the founder. Next: M3.9 search and ranking (I-39, proposed).**
 
 
 
@@ -23,9 +23,15 @@ Branch `m3.8-seed-demo`. Earlier M3.8 work already merged: push proven on the em
 - **Break-it check, 18 breaks, all caught:** comment count filter (1); notifications (6: Orders switchable, muted kinds still shown, muted push still sent, always-on ignored by the sweep, read retention too long, delete not own-only); per-listing (6: shop's own replies counted, 7 day window uses 30, conversion off by 10x, drafts listed, any seller sees every listing, buyer views not limited to 30 days). One mutation run first did nothing (macOS `sed -i` needs a suffix) and was redone with Python.
 - **Emulator (local API on the dev database, new arm64 APKs):** seller: the notification centre shows Clear all, Notification settings and Delete per row; Delete removed a row and the unread count went 4 to 3; the settings screen shows Orders greyed out and locked; switching Comments off hid the comment notification (unread 3 to 2), and switching it on brought it back; the dashboard shows each listing with its own numbers and "Conversion: no views yet" where there are no views. Buyer: signed in as a demo buyer; the product page shows "1 view in the last 30 days" with 2 likes and 1 comment and no saves count. Pictures were grey because the seed uploaded them to the live server's disk, not to this local API: a quirk of the test setup.
 
+### Version check, PR #21 (I-40): built, tested, emulator-checked, deployed
+- `CONTRACT_LEVEL` (now 2) in the contracts; each app sends `X-Client-App` and `X-Client-Level`; `/v1/meta` reports `apiLevel` and `minClientLevel` per app (`MIN_CLIENT_LEVEL_BUYER` and `MIN_CLIENT_LEVEL_SELLER`, default 1). An app below its minimum gets 426 `CLIENT_TOO_OLD`; health, meta and the API description are exempt; no header passes. Both apps check `/v1/meta` on start: a blocking "Please update" screen, or a quiet note when the app is newer than the server. A response in the wrong shape now says the app may be out of date.
+- **Tested:** API 6, contracts 7, api-client 3, buyer 5 and seller 5 new tests; break-it check 12 breaks, all caught. Emulator: a seller app against a local API with the seller minimum at 3 showed "Please update Fayda Seller", and opened normally at 1.
+- **Deployed to the live server on 1 Nov 2026** (release `20261101110617`, health 200, `/v1/meta` shows `apiLevel` 2 and minimums 1). The final phone APKs (`apks/fayda-*-dev-0.1.0-phone.apk`) were built after this change and send the version header.
+- **Remember:** raise `CONTRACT_LEVEL` by one whenever a request or response changes in a way an older app cannot handle; nothing enforces it. To force an update, set `MIN_CLIENT_LEVEL_*` in `/etc/fayda/api.env` and restart. No store link on the update screen yet.
+
 ### Not done, or not seen
 - **No physical phone** (founder deferred). The demo script and the final APKs are untested on phones.
-- **Not deployed:** migration 0012 is on the dev database, but the live API is still the earlier release; deploy with `infra/deploy-api.sh` (and set `COMMENT_COUNT_MODE` in `/etc/fayda/api.env` only if `viewer` is wanted).
+- **Deployed** (see the version check below); `COMMENT_COUNT_MODE` stays at its default `all` on the live server.
 - The live dev database now holds the demo data and the emulator test's changes (a buyer view, a Comments switch toggled and restored). `unseed-demo.mjs --delete` removes them all.
 - Retention is checked hourly, not at night; "Notification settings" cannot yet mute per-person or set quiet hours.
 - Search and ranking are unchanged (M3.9).
