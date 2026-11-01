@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RankingService } from '../src/discovery/ranking.service.js';
 import { feedImpressions, listingRankScores, listings } from '../src/db/schema.js';
@@ -213,11 +213,12 @@ describe('For You ranking', () => {
     const all = titles(await feed(meena, '?limit=50'));
     const first: Json = await feed(meena, '?limit=3');
     expect(titles(first)).toEqual(all.slice(0, 3));
-    // the listing on top sells out and a refresh runs: from now on it sinks to the bottom of a fresh scroll
+    // the listing on top sells out and a refresh runs: from now on it sinks to the bottom of a fresh scroll, with the other
+    // sold-out listing (the jeans). Their order against each other is a tie, so only the pair is asserted.
     await dbOf(app).db.execute(sql`update listing_variants set stock = 0 where listing_id = (select id from listings where title = ${all[0]!})`);
     await svc.refreshScores(now + 6 * 60_000);
     const fresh = titles(await feed(meena, '?limit=50'));
-    expect(fresh[fresh.length - 1]).toBe(all[0]);
+    expect(new Set(fresh.slice(-2))).toEqual(new Set([all[0], 'Slim fit jeans']));
     // the scroll that began before the refresh still gets exactly the old order: nothing repeated, nothing skipped
     const seen = titles(first);
     let cursor: string | null = first.nextCursor;
@@ -231,6 +232,21 @@ describe('For You ranking', () => {
     await svc.refreshScores(now + 60 * 60_000);
     const old: Json = await call('GET', `/v1/buyer/feed?limit=3&cursor=${first.nextCursor}`, { token: meena });
     expect(old.status).toBe(200);
+  });
+
+  it('a second refresh in the same second replaces the first, so the newest scores always win', async () => {
+    const db = dbOf(app).db;
+    const svc = app.get(RankingService);
+    // whole seconds, so both refreshes land in the same generation; far ahead so it is the newest generation
+    const now = Math.floor((Date.now() + 20_000_000) / 1000) * 1000;
+    const gen = now / 1000;
+    await svc.refreshScores(now);
+    const [before] = await db.select({ s: listingRankScores.score }).from(listingRankScores).where(and(eq(listingRankScores.generation, gen), eq(listingRankScores.listingId, ids.kurta!)));
+    await db.execute(sql`update listing_variants set stock = 0 where listing_id = ${ids.kurta}`);
+    await svc.refreshScores(now + 400);
+    const [after] = await db.select({ s: listingRankScores.score }).from(listingRankScores).where(and(eq(listingRankScores.generation, gen), eq(listingRankScores.listingId, ids.kurta!)));
+    expect(after!.s).toBeLessThan(before!.s / 5);
+    await db.execute(sql`update listing_variants set stock = 5 where listing_id = ${ids.kurta}`);
   });
 });
 

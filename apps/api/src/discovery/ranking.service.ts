@@ -60,8 +60,8 @@ export class RankingService implements SweepTask {
 
   /**
    * Recomputes every live listing's score and stores it as a new generation (the time in whole seconds), 200 listings at a time,
-   * then deletes generations older than GENERATION_KEEP_MS. Returns how many listings were scored. Two instances refreshing in
-   * the same second write the same rows (the insert ignores a row that exists), so that is safe.
+   * then deletes generations older than GENERATION_KEEP_MS. Returns how many listings were scored. A second refresh in the same second
+   * (two instances, or a test) overwrites the first with fresh scores, so the newest refresh always wins.
    */
   async refreshScores(now: number = this.clock.now()): Promise<number> {
     const generation = Math.floor(now / 1000);
@@ -103,7 +103,7 @@ export class RankingService implements SweepTask {
         });
         return { generation, listingId: l.id, score };
       });
-      await this.db.insert(listingRankScores).values(rows).onConflictDoNothing();
+      await this.db.insert(listingRankScores).values(rows).onConflictDoUpdate({ target: [listingRankScores.generation, listingRankScores.listingId], set: { score: sql`excluded.score` } });
       scored += rows.length;
     }
     await this.db.delete(listingRankScores).where(sql`${listingRankScores.generation} < ${generation - Math.floor(GENERATION_KEEP_MS / 1000)}`);
