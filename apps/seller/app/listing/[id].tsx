@@ -2,13 +2,13 @@ import { useApiClient, useDeleteListingDraft, useSaveListing, useSellerListing, 
 import { CATEGORY_NAMES, type SellerListing, type SellerRequest } from '@fayda/contracts/schemas';
 import { RULES } from '@fayda/domain';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AppText, Button, Card, ChipGroup, FieldError, Screen, TextField, describeError, useTheme } from '@fayda/ui';
+import { AppBar, AppText, Button, Card, ChipGroup, ChoiceCard, FieldError, Icon, Screen, SectionTitle, TextField, describeError, useTheme } from '@fayda/ui';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { useEffect, useRef, useState } from 'react';
 import { Controller, useFieldArray, useForm, type FieldPath } from 'react-hook-form';
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, View } from 'react-native';
 import {
   EXPIRY_MINUTES,
   expiryLabel,
@@ -197,30 +197,38 @@ function Editor({ existing, request }: { existing: SellerListing | null; request
   const busy = save.isPending || mediaBusy;
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <AppBar title={existing ? 'Edit listing' : request ? 'Listing for a request' : 'New listing'} onBack={() => router.back()} />
     <Screen>
-      <AppText weight="extrabold" size={22}>{existing ? 'Edit listing' : request ? 'Listing for a request' : 'New listing'}</AppText>
       {request ? <AppText tone="muted" size={13}>Made for the buyer’s request “{request.title}”. When you publish, it is shared in your chat with the buyer.</AppText> : null}
 
       {/* Media */}
       <View style={{ gap: 8 }}>
         <AppText weight="semibold" size={13}>Photos and videos ({media.length}/{RULES.MAX_MEDIA_PER_LISTING})</AppText>
         <AppText tone="muted" size={12}>The first one is the cover. Reels up to {RULES.MAX_REEL_SECONDS} seconds (80 MB), photos up to 15 MB.</AppText>
-        {media.length ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-            {media.map((m, i) => (
-              <View key={m.mediaId} style={{ width: 96, gap: 4 }}>
-                <Image source={{ uri: src(m.previewUri) }} style={{ width: 96, height: 96, borderRadius: 10, backgroundColor: colors.border }} accessibilityIgnoresInvertColors />
-                <AppText size={11} tone="muted">{i === 0 ? 'Cover' : m.kind === 'video' ? 'Video' : 'Photo'}{i === 0 && m.kind === 'video' ? ' · Video' : ''}</AppText>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Pressable accessibilityLabel={`Move ${m.kind} ${i + 1} earlier`} onPress={() => move(i, -1)} hitSlop={8}><AppText>◀</AppText></Pressable>
-                  <Pressable accessibilityLabel={`Remove ${m.kind} ${i + 1}`} onPress={() => setMedia((cur) => cur.filter((x) => x.mediaId !== m.mediaId))} hitSlop={8}><AppText tone="danger">✕</AppText></Pressable>
-                  <Pressable accessibilityLabel={`Move ${m.kind} ${i + 1} later`} onPress={() => move(i, 1)} hitSlop={8}><AppText>▶</AppText></Pressable>
-                </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {media.map((m, i) => (
+            <View key={m.mediaId} style={{ width: '31%', aspectRatio: 4 / 5, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.surface2 }}>
+              <Image source={{ uri: src(m.previewUri) }} style={{ width: '100%', height: '100%' }} resizeMode="cover" accessibilityIgnoresInvertColors />
+              <View style={{ position: 'absolute', left: 4, bottom: 4, height: 22, paddingHorizontal: 8, borderRadius: 99, backgroundColor: colors.darkBtn, justifyContent: 'center' }}>
+                <AppText weight="extrabold" size={11} style={{ color: colors.darkBtnFg }}>{i === 0 ? (m.kind === 'video' ? 'Cover · Video' : 'Cover') : m.kind === 'video' ? 'Video' : 'Photo'}</AppText>
               </View>
-            ))}
-          </ScrollView>
-        ) : null}
-        <Button title={media.length ? 'Add more' : 'Add photos or videos'} variant="outline" size="sm" loading={mediaBusy} onPress={() => void addFiles()} disabled={busy} />
+              <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${m.kind} ${i + 1}`} onPress={() => setMedia((cur) => cur.filter((x) => x.mediaId !== m.mediaId))} hitSlop={6} style={{ position: 'absolute', top: 4, right: 4, width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="x" size={14} color="#fff" />
+              </Pressable>
+              <View style={{ position: 'absolute', top: 4, left: 4, flexDirection: 'row', gap: 4 }}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Move ${m.kind} ${i + 1} earlier`} onPress={() => move(i, -1)} hitSlop={6} style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}><Icon name="back" size={14} color="#fff" /></Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Move ${m.kind} ${i + 1} later`} onPress={() => move(i, 1)} hitSlop={6} style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '180deg' }] }}><Icon name="back" size={14} color="#fff" /></Pressable>
+              </View>
+            </View>
+          ))}
+          {media.length < RULES.MAX_MEDIA_PER_LISTING ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={media.length ? 'Add more' : 'Add photos or videos'} onPress={() => void addFiles()} disabled={busy} style={{ width: '31%', aspectRatio: 4 / 5, borderRadius: 12, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.border, backgroundColor: colors.surface3, alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+              <Icon name="upload" size={22} color={colors.muted} />
+              <AppText tone="muted" weight="bold" size={12}>{mediaBusy ? 'Uploading…' : media.length ? 'Add more' : 'Add photos or videos'}</AppText>
+            </Pressable>
+          ) : null}
+        </View>
         {mediaBusy ? <AppText tone="muted" size={12}>Uploading… keep this screen open.</AppText> : null}
         <FieldError>{mediaNote ?? (sectionErrors.media || undefined)}</FieldError>
       </View>
@@ -235,24 +243,32 @@ function Editor({ existing, request }: { existing: SellerListing | null; request
       <View style={{ gap: 8 }}>
         <AppText weight="semibold" size={13}>Sizes and stock</AppText>
         {sizes.fields.map((f, i) => (
-          <Card key={f.id}>
-            {tf(`variants.${i}.label` as FieldPath<EditorValues>, 'Size or option', { placeholder: 'M', maxLength: 60 })}
-            {tf(`variants.${i}.stock` as FieldPath<EditorValues>, 'Units in stock', { keyboardType: 'number-pad', maxLength: 5 })}
-            {sizes.fields.length > 1 ? <Button title="Remove this size" variant="ghost" size="sm" onPress={() => sizes.remove(i)} /> : null}
-          </Card>
+          <View key={f.id} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+            <View style={{ flex: 1 }}>{tf(`variants.${i}.label` as FieldPath<EditorValues>, 'Size or option', { placeholder: 'M', maxLength: 60 })}</View>
+            <View style={{ width: 110 }}>{tf(`variants.${i}.stock` as FieldPath<EditorValues>, 'Units in stock', { keyboardType: 'number-pad', maxLength: 5 })}</View>
+            {sizes.fields.length > 1 ? <Pressable accessibilityRole="button" accessibilityLabel="Remove this size" hitSlop={6} onPress={() => sizes.remove(i)} style={{ marginTop: 28, width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="trash" size={20} color={colors.danger} /></Pressable> : null}
+          </View>
         ))}
-        <Button title="Add a size" variant="outline" size="sm" onPress={() => sizes.append({ label: '', stock: '' })} />
+        <Button title="+ Add size" variant="ghost" size="sm" block={false} onPress={() => sizes.append({ label: '', stock: '' })} />
         <FieldError>{sectionErrors.variants || undefined}</FieldError>
       </View>
 
       {/* Bargaining */}
-      <Controller control={form.control} name="mode" render={({ field: f, fieldState }) => <ChipGroup label="How can buyers buy?" options={MODES} value={[f.value]} onChange={(v) => v[0] && f.onChange(v[0])} format={(m) => MODE_LABEL[m]} error={fieldState.error?.message} />} />
-      <AppText tone="muted" size={12}>{MODE_HINT[mode]}</AppText>
+      <SectionTitle>How can buyers buy?</SectionTitle>
+      <Controller control={form.control} name="mode" render={({ field: f, fieldState }) => (
+        <View style={{ gap: 8 }}>
+          {MODES.map((m) => <ChoiceCard key={m} title={MODE_LABEL[m]} description={MODE_HINT[m]} selected={f.value === m} onPress={() => f.onChange(m)} />)}
+          <FieldError>{fieldState.error?.message}</FieldError>
+        </View>
+      )} />
       {priced ? (
         <>
           <Controller control={form.control} name="expiryMinutes" render={({ field: f, fieldState }) => <ChipGroup label="Offers expire after" options={EXPIRY_MINUTES} value={[f.value]} onChange={(v) => v[0] && f.onChange(v[0])} format={expiryLabel} error={fieldState.error?.message} />} />
           <Card>
-            <AppText weight="bold">Your private rules</AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Icon name="lock" size={16} color={colors.accentStrong} />
+              <AppText weight="extrabold" size={12} style={{ color: colors.accentStrong }}>Your private rules</AppText>
+            </View>
             <AppText tone="muted" size={12}>Only you see these. Buyers never learn that a reply was automatic.</AppText>
             {tf('autoAcceptAt', 'Accept automatically at or above', { keyboardType: 'number-pad', prefix: '₹', optional: true, maxLength: 8, hint: 'Your lowest price.' })}
             {moreRules ? (
@@ -268,7 +284,13 @@ function Editor({ existing, request }: { existing: SellerListing | null; request
       ) : null}
 
       {/* Checkout */}
-      <Controller control={form.control} name="channel" render={({ field: f }) => <ChipGroup label="Where do buyers complete the purchase?" options={['DIRECT', 'WEBSITE'] as const} value={[f.value]} onChange={(v) => v[0] && f.onChange(v[0])} format={(c) => CHANNEL_LABEL[c]} error={sectionErrors.channel || undefined} />} />
+      <SectionTitle>Where do buyers complete the purchase?</SectionTitle>
+      <Controller control={form.control} name="channel" render={({ field: f }) => (
+        <View style={{ gap: 8 }}>
+          {(['DIRECT', 'WEBSITE'] as const).map((c) => <ChoiceCard key={c} title={CHANNEL_LABEL[c]} description={c === 'DIRECT' ? 'Buyers place an order here and pay you by UPI, bank transfer or a payment link.' : 'Buyers buy on your own website with a code or link. Fayda does not handle that purchase.'} selected={f.value === c} onPress={() => f.onChange(c)} />)}
+          <FieldError>{sectionErrors.channel || undefined}</FieldError>
+        </View>
+      )} />
       {channel === 'WEBSITE' ? (
         <>
           {tf('productUrl', 'Link to this product on your website', { autoCapitalize: 'none', placeholder: 'https://' })}
@@ -302,5 +324,6 @@ function Editor({ existing, request }: { existing: SellerListing | null; request
       )}
       <Button title="Cancel" variant="ghost" onPress={() => router.back()} />
     </Screen>
+    </View>
   );
 }

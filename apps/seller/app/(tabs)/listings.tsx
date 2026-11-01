@@ -1,11 +1,12 @@
 import { useApiClient, useSellerListings, useSellerNegotiations, useSetListingStatus } from '@fayda/api-client';
 import type { SellerListing } from '@fayda/contracts/schemas';
 import { formatCount, formatRupees } from '@fayda/domain';
-import { AppText, Badge, Button, Card, ChipGroup, FieldError, useTheme } from '@fayda/ui';
+import { AppText, Badge, Button, Card, ChipGroup, Confirm, FieldError, RowLine, ThumbRow, useTheme } from '@fayda/ui';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
 
+const MODE_NAME: Record<string, string> = { BUY_NOW: 'Buy now only', BOTH: 'Buy now + offers' };
 const FILTERS = ['All', 'Live', 'Paused', 'Drafts'] as const;
 type Filter = (typeof FILTERS)[number];
 const STATUS_OF: Record<Filter, SellerListing['status'] | null> = { All: null, Live: 'ACTIVE', Paused: 'PAUSED', Drafts: 'DRAFT' };
@@ -28,42 +29,47 @@ export const coverOf = (l: SellerListing): string | null => {
 };
 
 function Row({ l, onOpen, onComments, openOffers }: { l: SellerListing; onOpen: () => void; onComments: () => void; openOffers: number }) {
-  const { colors } = useTheme();
   const client = useApiClient();
   const setStatus = useSetListingStatus();
+  const [confirmPause, setConfirmPause] = useState(false);
   const cover = coverOf(l);
   const stock = l.variants.reduce((t, v) => t + v.stock, 0);
   const badge = BADGE[l.status];
+  const isLive = l.status === 'ACTIVE';
   return (
-    <Card>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Open ${l.title}`} onPress={onOpen} style={{ flexDirection: 'row', gap: 12 }}>
-        {cover ? (
-          <Image source={{ uri: client.resolveUrl(cover) }} style={{ width: 64, height: 64, borderRadius: 10, backgroundColor: colors.border }} accessibilityRole="image" accessibilityLabel={`Cover of ${l.title}`} accessibilityIgnoresInvertColors />
-        ) : (
-          <View style={{ width: 64, height: 64, borderRadius: 10, backgroundColor: colors.border }} />
-        )}
-        <View style={{ flex: 1, gap: 2 }}>
-          <AppText weight="bold" numberOfLines={1}>{l.title}</AppText>
-          <AppText>{formatRupees(l.price)}</AppText>
-          <AppText tone="muted" size={12}>{stock} in stock{l.bargaining.mode === 'BOTH' ? ' · takes offers' : ''}{openOffers ? ` · ${openOffers} open` : ''}</AppText>
-          {l.status !== 'DRAFT' ? <AppText tone="faint" size={12}>♥ {formatCount(l.stats.likes)} · Saved {formatCount(l.stats.saves)} · {formatCount(l.stats.comments)} {l.stats.comments === 1 ? 'comment' : 'comments'}</AppText> : null}
-        </View>
-        <Badge label={badge.label} tone={badge.tone} />
-      </Pressable>
-      {l.status !== 'DRAFT' ? (
-        <View style={{ gap: 4 }}>
-          <Button title={l.stats.comments ? `Comments (${l.stats.comments})` : 'Comments'} accessibilityLabel={`Comments on ${l.title}`} variant="ghost" size="sm" onPress={onComments} />
-          <Button
-            title={l.status === 'ACTIVE' ? 'Pause' : 'Resume'}
-            variant="outline"
-            size="sm"
-            loading={setStatus.isPending}
-            onPress={() => setStatus.mutate({ id: l.id, status: l.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' })}
-          />
-          <FieldError>{setStatus.error?.message}</FieldError>
-        </View>
-      ) : null}
-    </Card>
+    <>
+      <ThumbRow
+        source={cover ? { uri: client.resolveUrl(cover) } : null}
+        title={l.title}
+        imageLabel={`Cover of ${l.title}`}
+        accessibilityLabel={`Open ${l.title}`}
+        onPress={onOpen}
+        badge={<Badge label={badge.label} tone={badge.tone} />}
+        lines={
+          <>
+            <RowLine strong>{formatRupees(l.price)} · {MODE_NAME[l.bargaining.mode] ?? l.bargaining.mode}</RowLine>
+            <RowLine>{stock} in stock{openOffers ? ` · ${openOffers} open ${openOffers === 1 ? 'offer' : 'offers'}` : ''}</RowLine>
+            {l.status !== 'DRAFT' ? <RowLine>♥ {formatCount(l.stats.likes)} · Saved {formatCount(l.stats.saves)} · {formatCount(l.stats.comments)} {l.stats.comments === 1 ? 'comment' : 'comments'}</RowLine> : null}
+          </>
+        }
+      >
+        {l.status !== 'DRAFT' ? (
+          <>
+            <Button title={l.stats.comments ? `Comments (${l.stats.comments})` : 'Comments'} accessibilityLabel={`Comments on ${l.title}`} variant="ghost" size="sm" block={false} onPress={onComments} />
+            <Button title={isLive ? 'Pause' : 'Resume'} icon={isLive ? 'pause' : 'play'} variant="outline" size="sm" block={false} loading={setStatus.isPending} onPress={() => (isLive ? setConfirmPause(true) : setStatus.mutate({ id: l.id, status: 'ACTIVE' }))} />
+          </>
+        ) : null}
+      </ThumbRow>
+      {setStatus.error ? <View style={{ paddingHorizontal: 16 }}><FieldError>{setStatus.error.message}</FieldError></View> : null}
+      <Confirm
+        visible={confirmPause}
+        title="Pause this listing?"
+        body="It disappears from the buyer feed and any open offers close. Agreed offers stay valid until their checkout window ends."
+        confirmLabel="Pause listing"
+        onCancel={() => setConfirmPause(false)}
+        onConfirm={() => { setConfirmPause(false); setStatus.mutate({ id: l.id, status: 'PAUSED' }); }}
+      />
+    </>
   );
 }
 
@@ -98,7 +104,7 @@ export default function ListingsScreen() {
           <Button title="Try again" onPress={() => void listings.refetch()} />
         </Card>
       ) : items.length ? (
-        items.map((l) => <Row key={l.id} l={l} openOffers={openBy.get(l.id) ?? 0} onOpen={() => open(`/listing/${l.id}`)} onComments={() => open(`/comments/${l.id}`)} />)
+        <View style={{ marginHorizontal: -16 }}>{items.map((l) => <Row key={l.id} l={l} openOffers={openBy.get(l.id) ?? 0} onOpen={() => open(`/listing/${l.id}`)} onComments={() => open(`/comments/${l.id}`)} />)}</View>
       ) : (
         <Card>
           <AppText weight="bold">{filter === 'All' ? 'Nothing here yet' : `No ${filter.toLowerCase()}`}</AppText>

@@ -471,7 +471,8 @@ describe('asking sellers', () => {
     fakeApi({ 'GET /v1/buyer/requests': () => json({ items: [buyerRequest()] }) }, fetchMock);
     await renderWith(signedIn(), <RequestsScreen />);
     expect(await screen.findByText('Green silk saree')).toBeOnTheScreen();
-    expect(screen.getByText(/sent to 3 sellers · 1 reply/)).toBeOnTheScreen();
+    expect(screen.getByText(/sent to 3 sellers/)).toBeOnTheScreen();
+    expect(screen.getByText('1 response')).toBeOnTheScreen();
   });
 
   it('shows replies with the seller’s rating, price and message; I want this opens the chat', async () => {

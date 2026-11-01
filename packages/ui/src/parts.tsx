@@ -187,13 +187,13 @@ export function Tag({ label, tone = 'accent' }: { label: string; tone?: 'accent'
  * A list row with a picture: thumbnail, title, a few small lines, and a badge on the right, with a divider under it
  * (prototype `.listrow` with `Thumb`). `children` sit under the row, in line with the text (for buttons like "Buy again").
  */
-export function ThumbRow({ source, title, lines, badge, onPress, accessibilityLabel, children }: { source?: ImageSourcePropType | null; title: string; lines?: ReactNode; badge?: ReactNode; onPress?: () => void; accessibilityLabel?: string; children?: ReactNode }) {
+export function ThumbRow({ source, imageLabel, title, lines, badge, onPress, accessibilityLabel, children }: { source?: ImageSourcePropType | null; imageLabel?: string; title: string; lines?: ReactNode; badge?: ReactNode; onPress?: () => void; accessibilityLabel?: string; children?: ReactNode }) {
   const { colors } = useTheme();
   return (
     <View style={{ borderBottomWidth: 1, borderBottomColor: colors.divider, backgroundColor: colors.surface }}>
       <Pressable accessibilityRole="button" {...(accessibilityLabel ? { accessibilityLabel } : {})} onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 }}>
         <View style={{ width: 56, height: 56, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.surface2 }}>
-          {source ? <Image source={source} style={{ width: 56, height: 56 }} resizeMode="cover" accessibilityIgnoresInvertColors /> : null}
+          {source ? <Image source={source} style={{ width: 56, height: 56 }} resizeMode="cover" {...(imageLabel ? { accessibilityRole: 'image' as const, accessibilityLabel: imageLabel } : {})} accessibilityIgnoresInvertColors /> : null}
         </View>
         <View style={{ flex: 1, gap: 2 }}>
           <Text numberOfLines={1} style={{ color: colors.ink, fontFamily: fontFamily.extrabold, fontSize: 14 }}>{title}</Text>
