@@ -407,7 +407,7 @@ export class ListingsService {
       .where(and(eq(listings.id, listingId), eq(listings.status, 'ACTIVE')))
       .limit(1);
     if (!row) throw new AppError(404, 'NOT_FOUND', 'This listing is not available.');
-    const [mediaBy, variantsBy, stats, social] = await Promise.all([this.mediaOf([listingId]), this.variantsOf([listingId]), loadSellerStats(this.db, [row.l.sellerId]), socialCounts(this.db, viewerUserId, [listingId], this.config.commentCountMode)]);
+    const [mediaBy, variantsBy, stats, social] = await Promise.all([this.mediaOf([listingId]), this.variantsOf([listingId]), loadSellerStats(this.db, [row.l.sellerId]), socialCounts(this.db, viewerUserId, [listingId], this.config.commentCountMode, new Date(this.clock.now() - 30 * 86_400_000))]);
     const sc = social.get(listingId)!;
     const record = stats.get(row.l.sellerId)!;
     const variants = variantsBy.get(listingId) ?? [];
@@ -433,6 +433,7 @@ export class ListingsService {
       tags: l.tags,
       likeCount: sc.likeCount,
       commentCount: sc.commentCount,
+      viewCount: sc.viewCount,
       liked: sc.liked,
       saved: sc.saved,
       ownListing: row.sellerUserId === viewerUserId,

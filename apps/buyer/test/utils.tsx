@@ -48,7 +48,7 @@ export const feedItem = (over: Record<string, unknown> = {}) => ({
   id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', title: 'Cotton kurta', price: 150000, category: 'Ethnic wear', soldOut: false, acceptsOffers: true, coverUrl: '/v1/media/m1', hasVideo: false, video: null, following: false, ownShop: false, likeCount: 0, commentCount: 0, liked: false, saved: false, seller, ...over,
 });
 export const buyerListing = (over: Record<string, unknown> = {}) => ({
-  id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', title: 'Cotton kurta', description: 'Block print, soft cotton.', category: 'Ethnic wear', tags: ['cotton', 'summer wear'], price: 150000, soldOut: false, likeCount: 0, commentCount: 0, liked: false, saved: false, ownListing: false,
+  id: '0f7a9a6e-3b5c-4f8e-9d1a-2b3c4d5e6f70', title: 'Cotton kurta', description: 'Block print, soft cotton.', category: 'Ethnic wear', tags: ['cotton', 'summer wear'], price: 150000, soldOut: false, likeCount: 0, commentCount: 0, viewCount: 0, liked: false, saved: false, ownListing: false,
   media: [{ kind: 'image', url: '/v1/media/m1', posterUrl: null }],
   variants: [{ id: 'v1', label: 'M', available: true, low: false }],
   bargaining: { mode: 'BOTH', acceptsOffers: true, expiryMinutes: 1440 }, checkout: { channel: 'DIRECT', productUrl: null, payMethods: ['UPI', 'BANK'] }, seller: productSeller, ...over,

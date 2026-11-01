@@ -121,6 +121,8 @@ export const BuyerListingSchema = z
     soldOut: z.boolean(),
     likeCount: z.number().int(),
     commentCount: z.number().int(),
+    /** Public number shown on the product page: product-page opens in the last 30 days. Saves (I-28), offers, orders and conversion are never sent to buyers. */
+    viewCount: z.number().int(),
     liked: z.boolean(),
     saved: z.boolean(),
     /** True when the signed-in person owns this listing (they can't like it or buy it). */
