@@ -58,7 +58,8 @@ afterAll(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-const feed = async (token: string, qs = ''): Promise<Json> => (await call('GET', `/v1/buyer/feed${qs}`, { token })).body;
+// These tests are about filters, paging and newest-first order, so they ask for NEWEST. The default order (BEST, I-39) is tested in search-ranking.test.ts.
+const feed = async (token: string, qs = ''): Promise<Json> => (await call('GET', `/v1/buyer/feed${qs.includes('sort=') ? qs : `${qs}${qs ? '&' : '?'}sort=NEWEST`}`, { token })).body;
 const titles = (b: Json): string[] => b.items.map((i: Json) => i.title);
 
 describe('feed: search, filters and sort', () => {

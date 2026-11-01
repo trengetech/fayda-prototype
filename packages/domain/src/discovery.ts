@@ -12,7 +12,8 @@ export const TAG_MAX_CHARS = 24;
 export const MAX_SEARCH_TERMS = 5;
 export const SEARCH_TERM_MIN_CHARS = 2;
 export const SEARCH_TERM_MAX_CHARS = 40;
-export const FEED_SORTS = ['NEWEST', 'PRICE_LOW', 'PRICE_HIGH'] as const;
+/** BEST is the default: best match when searching, the For You ranking otherwise (I-39). NEWEST is strictly newest first. */
+export const FEED_SORTS = ['BEST', 'NEWEST', 'PRICE_LOW', 'PRICE_HIGH'] as const;
 export type FeedSort = (typeof FEED_SORTS)[number];
 export const FEED_SCOPES = ['FOR_YOU', 'FOLLOWING'] as const;
 export type FeedScope = (typeof FEED_SCOPES)[number];

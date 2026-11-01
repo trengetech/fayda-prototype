@@ -278,7 +278,7 @@ describe('what buyers can see', () => {
     let cursor: string | null = null;
     let pages = 0;
     do {
-      const r: { body: Json } = await call('GET', `/v1/buyer/feed?limit=2${cursor ? `&cursor=${cursor}` : ''}`, { token: buyer });
+      const r: { body: Json } = await call('GET', `/v1/buyer/feed?sort=NEWEST&limit=2${cursor ? `&cursor=${cursor}` : ''}`, { token: buyer });
       seen.push(...r.body.items.map((x: Json) => x.id));
       cursor = r.body.nextCursor;
       pages++;

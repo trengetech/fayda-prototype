@@ -24,7 +24,7 @@ import { publicMediaUrl } from '../media/media.service.js';
 import type { NegotiationTouch } from '../negotiations/negotiation-events.js';
 import { NegotiationsService } from '../negotiations/negotiations.service.js';
 import { socialCounts } from '../social/social-counts.js';
-import { andAll, encodeFeedCursor, feedAfter, feedConditions, feedOrder, type FeedRequest } from './feed-query.js';
+import { andAll, encodeFeedCursor, feedAfter, feedConditions, feedOrder, feedPlan, rankKeyExpr, rankerLabel, type FeedRequest } from './feed-query.js';
 import { ChatService } from '../chat/chat.service.js';
 import { loadSellerStats, sellerRatings } from '../community/shared.js';
 
@@ -331,14 +331,21 @@ export class ListingsService {
    * Live listings, newest first. Only public columns are read, and the response is built from buyer schemas, so private
    * rules and deal codes cannot appear. Until offers exist (M3.3) every unit in stock is available.
    */
-  async feed(req: FeedRequest, limit = FEED_PAGE): Promise<BuyerFeed> {
+  async feed(input: FeedRequest, limit = FEED_PAGE): Promise<BuyerFeed> {
+    const req: FeedRequest = { ...input, ranker: input.ranker ?? this.config.feedRanker };
     const take = Math.min(Math.max(limit, 1), MAX_FEED_PAGE);
+    const plan = feedPlan(req);
     const conditions = feedConditions(req);
-    if (req.cursor) conditions.push(feedAfter(req.sort, req.cursor));
-    const rows = await this.db.select(CARD_COLUMNS).from(listings).innerJoin(sellers, eq(sellers.id, listings.sellerId)).where(andAll(conditions)).orderBy(...feedOrder(req.sort)).limit(take + 1);
+    if (req.cursor) conditions.push(feedAfter(req, req.cursor));
+    const columns = plan === 'RANKED' ? { ...CARD_COLUMNS, rankKey: sql<string>`${rankKeyExpr(req)}::text`.as('rank_key') } : CARD_COLUMNS;
+    const rows = await this.db.select(columns).from(listings).innerJoin(sellers, eq(sellers.id, listings.sellerId)).where(andAll(conditions)).orderBy(...feedOrder(req)).limit(take + 1);
     const page = rows.slice(0, take);
     const last = page[page.length - 1];
-    return { items: await this.buildCards(page, req.userId), nextCursor: rows.length > take && last ? encodeFeedCursor(req.sort, last) : null };
+    return {
+      items: await this.buildCards(page, req.userId),
+      nextCursor: rows.length > take && last ? encodeFeedCursor(plan, { ...last, rankKey: 'rankKey' in last ? last.rankKey : null }) : null,
+      ranker: rankerLabel(req),
+    };
   }
 
   /** The cards for these listings, in the order given. A listing that is not live is left out. Used by lists that order by something other than the feed's sorts (Saved). */

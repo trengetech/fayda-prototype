@@ -11,13 +11,13 @@ export interface Filters {
   maxRupees: string;
 }
 
-export const NO_FILTERS: Filters = { category: null, size: null, acceptsOffers: false, sort: 'NEWEST', minRupees: '', maxRupees: '' };
+export const NO_FILTERS: Filters = { category: null, size: null, acceptsOffers: false, sort: 'BEST', minRupees: '', maxRupees: '' };
 
-export const SORT_LABELS: Record<FeedSort, string> = { NEWEST: 'Newest', PRICE_LOW: 'Price: low to high', PRICE_HIGH: 'Price: high to low' };
+export const SORT_LABELS: Record<FeedSort, string> = { BEST: 'Best match', NEWEST: 'Newest', PRICE_LOW: 'Price: low to high', PRICE_HIGH: 'Price: high to low' };
 
 /** How many filters are set (sort counts only when it is not the default). Shown on the Filters button. */
 export const activeFilterCount = (f: Filters): number =>
-  [f.category, f.size, f.acceptsOffers || null, f.sort !== 'NEWEST' || null, f.minRupees.trim() || null, f.maxRupees.trim() || null].filter(Boolean).length;
+  [f.category, f.size, f.acceptsOffers || null, f.sort !== 'BEST' || null, f.minRupees.trim() || null, f.maxRupees.trim() || null].filter(Boolean).length;
 
 /**
  * The query to send, or per-field messages when what was typed is not usable. Uses the same rules as the server

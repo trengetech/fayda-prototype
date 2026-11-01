@@ -12,6 +12,8 @@ const EnvSchema = z.object({
   SWEEP_ENABLED: z.enum(['true', 'false']).default('true'),
   /** `all`: card and product-page comment counts include everyone. `viewer`: they leave out people the viewer has blocked. */
   COMMENT_COUNT_MODE: z.enum(['all', 'viewer']).default('all'),
+  /** `scored`: For You is ordered by the ranking score (I-39). `newest`: newest first, the fallback. */
+  FEED_RANKER: z.enum(['newest', 'scored']).default('scored'),
   /** The oldest app contract level each app may use; older apps get 426 CLIENT_TOO_OLD. Raise it to force an update. */
   MIN_CLIENT_LEVEL_BUYER: z.coerce.number().int().min(1).max(1000).default(1),
   MIN_CLIENT_LEVEL_SELLER: z.coerce.number().int().min(1).max(1000).default(1),
@@ -38,6 +40,7 @@ export interface AppConfig {
   databaseUrl: string;
   corsOrigins: string[];
   sweepEnabled: boolean;
+  feedRanker: 'newest' | 'scored';
   jwtSecret: string;
   authProvider: 'dev-otp';
   accessTtlSeconds: number;
@@ -67,6 +70,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     databaseUrl: e.DATABASE_URL,
     corsOrigins: e.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
     sweepEnabled: e.SWEEP_ENABLED === 'true',
+    feedRanker: e.FEED_RANKER,
     commentCountMode: e.COMMENT_COUNT_MODE,
     minClientLevel: { buyer: e.MIN_CLIENT_LEVEL_BUYER, seller: e.MIN_CLIENT_LEVEL_SELLER },
     jwtSecret: e.JWT_SECRET,

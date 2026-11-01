@@ -177,11 +177,17 @@ export const listings = pgTable(
     dealAccept: jsonb('deal_accept').$type<DealAccess | null>(),
     dealCounter: jsonb('deal_counter').$type<DealAccess | null>(),
     publishedAt: timestamp('published_at', { withTimezone: true }),
+    /** For You score, 0 to 9999 (`rankScore` in the domain package), refreshed every few minutes by the sweep. 4700 is about what a fresh listing from a new shop scores. */
+    rankScore: integer('rank_score').notNull().default(4700),
+    rankedAt: timestamp('ranked_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('listings_seller_idx').on(t.sellerId, t.status),
+    index('listings_title_trgm_idx').using('gin', t.title.op('gin_trgm_ops')),
+    index('listings_description_trgm_idx').using('gin', t.description.op('gin_trgm_ops')),
+    index('listings_rank_idx').on(t.status, t.rankScore, t.id),
     index('listings_feed_idx').on(t.status, t.publishedAt, t.id),
     index('listings_tags_idx').using('gin', t.tags),
     index('listings_price_idx').on(t.status, t.pricePaise, t.id),
@@ -627,4 +633,22 @@ export const pushTickets = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   (t) => [uniqueIndex('push_tickets_ticket_idx').on(t.ticketId), index('push_tickets_created_idx').on(t.createdAt)],
+);
+
+/**
+ * What the feed showed a buyer (I-39 groundwork for later ranking from data). One row per listing shown, with its position and
+ * which ranker ordered the page. Buyer id and listing id only: nothing about the seller's private rules. Pruned after 90 days.
+ */
+export const feedImpressions = pgTable(
+  'feed_impressions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    listingId: uuid('listing_id').notNull().references(() => listings.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    scope: text('scope', { enum: ['FOR_YOU', 'FOLLOWING', 'SEARCH', 'SHOP'] }).notNull(),
+    ranker: text('ranker', { enum: ['NEWEST', 'SCORED', 'RELEVANCE', 'PRICE'] }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [index('feed_impressions_created_idx').on(t.createdAt), index('feed_impressions_listing_idx').on(t.listingId, t.createdAt)],
 );

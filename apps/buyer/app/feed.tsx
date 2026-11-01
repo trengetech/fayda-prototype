@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import type { FeedItem } from '../src/feed-card';
+import { useImpressionReporter } from '../src/impressions';
 import { ReelsPager } from '../src/reels';
 
 type Scope = 'FOR_YOU' | 'FOLLOWING';
@@ -23,6 +24,7 @@ export default function FeedScreen() {
   const [muted, setMuted] = useState(true);
   const feed = useBuyerFeed({ scope });
   const items = feed.data?.pages.flatMap((p) => p.items) ?? [];
+  const reportShown = useImpressionReporter(scope, feed.data?.pages[0]?.ranker);
   const { fetchNextPage, isFetchNextPageError: moreFailed } = feed; // read before the early returns narrow `feed`
 
   const open = (item: FeedItem, offer: boolean) => router.push((offer ? `/listing/${item.id}?offer=1` : `/listing/${item.id}`) as never);
@@ -47,6 +49,7 @@ export default function FeedScreen() {
           items={items}
           muted={muted}
           onOpen={open}
+          onShown={(item, position) => reportShown(item.id, position)}
           onOpenShop={(i) => router.push(`/shop/${i.seller.handle}` as never)}
           onEndReached={() => {
             if (feed.hasNextPage && !feed.isFetchingNextPage) void fetchNextPage();

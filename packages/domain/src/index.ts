@@ -13,3 +13,5 @@ export * from './requests.js';
 export * from './discovery.js';
 export * from './social.js';
 export * from './safety.js';
+export * from './search.js';
+export * from './ranking.js';

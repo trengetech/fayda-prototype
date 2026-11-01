@@ -90,6 +90,7 @@ import {
   type SaveState,
   type FeedFacets,
   type FeedQuery,
+  type ImpressionsBody,
   type FollowState,
   type FollowedShopList,
   type ShopView,
@@ -203,6 +204,8 @@ export interface ApiClient {
   unlikeListing(id: string): Promise<LikeState>;
   /** Counts one view of a product page. Fire and forget: it never fails the page. */
   recordListingView(id: string): Promise<void>;
+  /** Tell the server which listings the feed showed (for ranking later). Failure is harmless; callers ignore it. */
+  reportImpressions(body: ImpressionsBody): Promise<void>;
   saveListing(id: string): Promise<SaveState>;
   unsaveListing(id: string): Promise<SaveState>;
   listSaved(cursor?: string | null, limit?: number): Promise<BuyerFeed>;
@@ -429,6 +432,7 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     getBuyerListing: (id) => call(`/v1/buyer/listings/${id}`, BuyerListingSchema, { auth: true }),
     likeListing: (id) => call(`/v1/buyer/listings/${id}/like`, LikeStateSchema, { method: 'PUT', auth: true }),
     unlikeListing: (id) => call(`/v1/buyer/listings/${id}/like`, LikeStateSchema, { method: 'DELETE', auth: true }),
+    reportImpressions: (body) => call('/v1/buyer/feed/impressions', NoBody, { method: 'POST', auth: true, body }),
     recordListingView: (id) => call(`/v1/buyer/listings/${id}/view`, NoBody, { method: 'POST', auth: true }),
     saveListing: (id) => call(`/v1/buyer/listings/${id}/save`, SaveStateSchema, { method: 'PUT', auth: true }),
     unsaveListing: (id) => call(`/v1/buyer/listings/${id}/save`, SaveStateSchema, { method: 'DELETE', auth: true }),

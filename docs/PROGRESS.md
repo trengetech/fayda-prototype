@@ -1,6 +1,36 @@
 # Progress
 
-**Where we are (1 Nov 2026): M3.0 to M3.8 are merged (PRs #20 and #21) and the live server is deployed. M3.8 is complete except the founder's two-physical-phone run of `docs/DEMO_SCRIPT.md`. The two-physical-phone test is deferred by the founder. Next: M3.9 search and ranking (I-39, proposed).**
+**Where we are (1 Nov 2026): M3.0 to M3.8 are merged (PRs #20 and #21) and the live server is deployed. M3.8 is complete except the founder's two-physical-phone run of `docs/DEMO_SCRIPT.md`. The two-physical-phone test is deferred by the founder. M3.9 search and ranking (I-39, I-41, proposed) is 
+
+## M3.9: search and ranking (1 Nov 2026): built, tested; emulator and phones not checked
+
+Branch `m3.9-search-ranking`. Decisions I-39 (detail rewritten) and I-41 (admin-managed categories, later) in `docs/DECISIONS.md`, both **proposed**. Founder approved the plan on 1 Nov 2026, including `pg_trgm`, and asked that weights be tuned on test data.
+
+### Built
+- **Search** (`apps/api/src/listings/feed-query.ts`, `packages/domain/src/search.ts`): every word must match as itself, a synonym or plural, or a close misspelling (`pg_trgm` word similarity); relevance points by field (title 40, tags 30, category 25, shop 20, description 10). Synonym groups for kurti/kurta, sari/saree, lehenga/lehnga/ghagra, salwar, dupatta and more. **No `tsvector`** (see I-39 for why). GIN trigram indexes on title and description; tags and shop name still scan.
+- **For You ranking** (`packages/domain/src/ranking.ts`, `apps/api/src/discovery/ranking.service.ts`): a plain integer score stored in `listings.rank_score`, refreshed every 5 minutes by the sweep; a per-buyer follow boost added at request time. Saves are not an input. New default sort `BEST`; `NEWEST` stays strictly newest. `FEED_RANKER=newest` switches back with no code change.
+- **ML groundwork:** `feed_impressions` table and `POST /v1/buyer/feed/impressions` (batches of up to 50, 204, skips listings that are not live, 1000 an hour per buyer, pruned after 90 days). The page now says which `ranker` ordered it. Buyer app reports impressions from the reels screen (`apps/buyer/src/impressions.ts`), once per listing per visit, failures ignored.
+- **Migration 0013** (applied to the **test** database only; **not yet applied to the live dev database**): `pg_trgm`, `rank_score`, `ranked_at`, `feed_impressions`, indexes.
+- **Contracts:** additive only (`BEST` sort value, optional `ranker` on a page, the impressions route). Snapshot refreshed; `CONTRACT_LEVEL` not raised. Older apps keep working: they send `sort=NEWEST` and get newest-first as before.
+- **Buyer app:** Sort chips gain "Best match" and it is the default.
+
+### Weights tuned on test data
+A simulation of ten typical listings (`scratchpad/tune.mjs`, not committed) showed the first weights let a 2-hour-old listing with no likes outrank a 3-day-old listing with 20 likes and a good shop, and a fresh listing from a shop with a 20% delivery record outrank a proven 14-day-old one. Changed: recency 4000 to 3000, half-life 72 h to 96 h, likes cap 1250 to 1800, views cap 750 to 1000. Now a 3-day-old listing with 20 likes scores 5540 against 4568 for a fresh listing from a new shop with no likes, a fresh listing from a bad shop (4032) sits below a proven 14-day-old one (4515), and a sold-out viral listing sinks (607). **These are still guesses on synthetic data; tune again on real impressions.**
+
+### Tested
+- **Domain:** 105 pass (9 new: synonyms, score bounds, recency, likes and views diminishing, shop record, sold-out, new listing and shop head start).
+- **API (Vitest, real Postgres), new file `search-ranking.test.ts`, 19 tests:** spellings (kurta/kurti/kurtis/kurtaa, sari, lehnga, ghagra, shaadi), no look-alike matches (shirt vs skirt, milk), every word required, `%` and `_` as plain characters, relevance order, paging without repeats, a marker that only fits its own order, scored For You (likes lift, sold-out sinks, follow boost for that buyer only, paging), Following and shop pages newest, no score in buyer payloads, stored scores and an unchanged refresh changing nothing, impressions (recorded, skipped, refused, capped, pruned). Existing `discovery.test.ts` now asks for `sort=NEWEST` explicitly (17 pass).
+- **Other packages:** contracts 32, api-client 62, buyer 165 (3 new). Typecheck and lint clean across the repo.
+- **Break-it check (recipe in CLAUDE.md), 11 breaks, all caught after two corrections:** sold-out cut removed, saree synonym removed, likes ignored, every-word rule dropped, fuzzy threshold loosened to 0.3, follow boost removed, page marker not checked against its order, not-live listings not skipped on impressions, impression cap raised, ranker switch ignored. Two first results were my own mistakes, not gaps: the cap check removed a redundant early return (equivalent change), and the ranker-switch check used a test name that matched nothing (rerun with the right name, caught). A third idea, adding `rankScore` to the page object, is not a real break: the response schema drops fields it does not name, as with the earlier contact-number case. Baseline 52 s; each break 27 to 39 s.
+- **Not run locally:** the full API suite (CI runs it).
+
+### Not done, or not seen
+- **No emulator or phone check** of Best match, search spelling or reel impressions.
+- **Live server not updated:** migration 0013 and the new code are not deployed; the founder decides when.
+- Weights are provisional, tuned on synthetic data only.
+- Search still scans tags and shop name; the stored score refreshes every 5 minutes, so a new listing starts at the default 4700 until the next refresh and a page fetched across a refresh can repeat or skip a listing.
+- The category list is still fixed in code (I-41 records the admin-managed version for later).
+built and tested on branch `m3.9-search-ranking`; not yet merged, not yet checked on a phone or the emulator.**
 
 
 

@@ -1,10 +1,11 @@
-import { Controller, Delete, Get, Inject, Param, ParseUUIDPipe, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Param, ParseUUIDPipe, Post, Put, Query, UseGuards } from '@nestjs/common';
 import {
   BuyerFeedSchema,
   FeedFacetsSchema,
   FeedQuerySchema,
   FollowStateSchema,
   FollowedShopListSchema,
+  ImpressionsBodySchema,
   ShopViewSchema,
   z,
   type BuyerFeed,
@@ -12,6 +13,7 @@ import {
   type FeedQuery,
   type FollowState,
   type FollowedShopList,
+  type ImpressionsBody,
   type ShopView,
 } from '@fayda/contracts';
 import { validateFeedFilters } from '@fayda/domain';
@@ -21,6 +23,7 @@ import { AppError } from '../common/app-error.js';
 import { ZodPipe } from '../common/zod-pipe.js';
 import { ListingsService } from '../listings/listings.service.js';
 import { DiscoveryService } from './discovery.service.js';
+import { RankingService } from './ranking.service.js';
 import { FollowsService, MAX_FOLLOW_PAGE } from './follows.service.js';
 
 const IdParam = new ParseUUIDPipe();
@@ -33,7 +36,7 @@ function toFeedRequest(userId: string, q: FeedQuery, sellerId?: string) {
   return {
     userId,
     scope: q.scope ?? 'FOR_YOU',
-    sort: q.sort ?? 'NEWEST',
+    sort: q.sort ?? 'BEST',
     ...(q.cursor ? { cursor: q.cursor } : {}),
     ...(q.q ? { q: q.q } : {}),
     ...(q.category ? { category: q.category } : {}),
@@ -57,11 +60,19 @@ export class BuyerDiscoveryController {
     @Inject(ListingsService) private readonly listings: ListingsService,
     @Inject(DiscoveryService) private readonly discovery: DiscoveryService,
     @Inject(FollowsService) private readonly follows: FollowsService,
+    @Inject(RankingService) private readonly ranking: RankingService,
   ) {}
 
   @Get('feed')
   async feed(@Auth() who: AccessClaims, @Query(new ZodPipe(FeedQuerySchema)) q: FeedQuery): Promise<BuyerFeed> {
     return BuyerFeedSchema.parse(await this.listings.feed(toFeedRequest(who.userId, q), q.limit));
+  }
+
+  /** What the feed showed, for ranking later (I-39). Never fails the feed: a bad or unknown listing is skipped. */
+  @Post('feed/impressions')
+  @HttpCode(204)
+  async impressions(@Auth() who: AccessClaims, @Body(new ZodPipe(ImpressionsBodySchema)) body: ImpressionsBody): Promise<void> {
+    await this.ranking.recordImpressions(who.userId, body);
   }
 
   @Get('feed/facets')

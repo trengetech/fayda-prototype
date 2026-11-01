@@ -7,7 +7,7 @@ import { BuyerOrderListSchema, BuyerOrderSchema, CancelOrderSchema, ConfirmOrder
 import { AcceptSchema, BuyerNegotiationListSchema, BuyerNegotiationSchema, CounterSchema, SellerNegotiationListSchema, SellerNegotiationSchema, StartOfferSchema } from './negotiations.js';
 import { ChatThreadListSchema, ChatThreadSchema, BuyerRequestListSchema, BuyerRequestSchema, CreateRequestSchema, PutReviewSchema, RespondSchema, SellerRequestListSchema, SellerRequestSchema, SendMessageSchema, ShopReviewListSchema } from './community.js';
 import { ReviewViewSchema } from './orders.js';
-import { FeedFacetsSchema, FeedQuerySchema, FollowStateSchema, FollowedShopListSchema, ShopViewSchema } from './discovery.js';
+import { FeedFacetsSchema, FeedQuerySchema, ImpressionsBodySchema, FollowStateSchema, FollowedShopListSchema, ShopViewSchema } from './discovery.js';
 import { CommentListSchema, CommentQuerySchema, CommentSchema, LikeStateSchema, PostCommentSchema, SaveStateSchema } from './social.js';
 import { NotificationListSchema, NotificationQuerySchema, PushTokenInputSchema, UnreadCountSchema } from './notifications.js';
 import { BlockInputSchema, BlockedListSchema, BlockedPersonSchema, ReportInputSchema, ReportReceiptSchema } from './safety.js';
@@ -82,6 +82,7 @@ export function buildOpenApiDocument(version: string): OpenApiDocument {
   const buyer = (route: RouteConfig): RouteConfig => ({ tags: ['buyer'], security: bearer, ...route });
   const handle = { params: z.object({ handle: z.string() }) };
   const sellerParam = { params: z.object({ sellerId: z.string().uuid() }) };
+  registry.registerPath(buyer({ method: 'post', path: '/v1/buyer/feed/impressions', summary: 'Report the listings the feed showed (up to 50 at a time), for ranking later. Always answers 204; listings that are not live are skipped.', request: body(ImpressionsBodySchema), responses: { 204: { description: 'Noted' }, 400: fail[400], 401: fail[401] } }));
   registry.registerPath(buyer({ method: 'get', path: '/v1/buyer/feed/facets', summary: 'The filter choices: categories, sizes in stock and the price span', responses: { 200: { description: 'Facets', content: json(FeedFacetsSchema) }, 401: fail[401] } }));
   registry.registerPath(buyer({ method: 'get', path: '/v1/buyer/shops/{handle}', summary: 'A shop page by handle: public profile and record, never contact or payment details', request: handle, responses: { 200: { description: 'Shop', content: json(ShopViewSchema) }, 404: { description: 'No such shop', content: problem }, 401: fail[401] } }));
   registry.registerPath(buyer({ method: 'get', path: '/v1/buyer/shops/{handle}/listings', summary: 'A shop’s live listings, with the same search, filters and sort as the feed', request: { ...handle, query: FeedQuerySchema }, responses: { 200: { description: 'A page of listings', content: json(BuyerFeedSchema) }, 400: fail[400], 404: { description: 'No such shop', content: problem }, 401: fail[401] } }));
