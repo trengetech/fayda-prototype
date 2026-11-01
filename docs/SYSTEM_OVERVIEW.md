@@ -43,7 +43,7 @@ Fayda **never handles payments or delivery**. Buyers pay sellers directly (UPI, 
 | Environment | API | Database | Push | Status |
 |---|---|---|---|---|
 | **Local (laptop)** | `node dist/main.js` on `127.0.0.1:3000` (emulator reaches it at `10.0.2.2:3000` or via `adb reverse tcp:3000 tcp:3000`) | `fayda-dev` | `PUSH_PROVIDER=expo` for tests, otherwise `off` | Used for all emulator testing. |
-| **Deployed "dev"** | the Oracle VM above, `APP_ENV=development` | `fayda-dev` (shared with local) | `off` (see section 8) | Running. **It is behind `dev`**: it still runs the 31 Oct release, which has no notifications, push, report/block, dashboard or listing views, even though their database migrations are applied to `fayda-dev`. |
+| **Deployed "dev"** | the Oracle VM above, `APP_ENV=development` | `fayda-dev` (shared with local) | `expo` (set 1 Nov 2026; `/v1/meta` shows push as not simulated) | Running release `20261101072946` = `dev` at merge of PR #14 (M3.7 plus push setup). Migrations 0009 and 0010 are applied to `fayda-dev`. |
 | Staging / production | not created | not created | | App variants (`dev`, `staging`, `prod`) exist in `app.config.ts`; their package ids, Firebase apps and servers do not. |
 
 Because local and deployed share one database, people created while testing locally also exist on the deployed server. It is development data, not customer data.
@@ -114,10 +114,11 @@ pnpm workspaces plus Turborepo; TypeScript strict. Exact library versions are in
 
 ## 8. State of things on 1 Nov 2026 (read this before relying on it)
 
-- **The deployed server is not current.** It runs the 31 Oct release. Deploying the latest `dev` and setting `PUSH_PROVIDER=expo` in `/etc/fayda/api.env` are **pending the founder's go-ahead** (the founder said do it; the permission check blocked the assistant from running the deploy, so it has to be run by the founder, see `PROGRESS.md`). Until then push works only when the API runs on the laptop.
-- Push is proven on the **Android emulator only** (both apps, app backgrounded and process killed, tap opens the right screen, sign-out stops it). Not yet on a physical phone.
+- **The deployed server is current** (release `20261101072946`, dev at PR #14) and has `PUSH_PROVIDER=expo`. Deployed with `infra/deploy-api.sh` (health check passed); the setting was appended to `/etc/fayda/api.env` and the service restarted. It was verified through `/v1/health` (200) and `/v1/meta`.
+- Push is proven end to end only on the **Android emulator with the API running on the laptop** (both apps, app backgrounded and process killed, tap opens the right screen, sign-out stops it). **Not yet proven through the deployed server** (that needs APKs built with `EXPO_PUBLIC_API_URL` set to the deployed address, which `infra/build-apk.sh` does by default) **and not on a physical phone.**
 - **iOS is not built or tested** (decision I-32: later; keep every library cross-platform).
 - **No admin console** (DECISIONS L1): reports can only be read in the database.
+- A deploy needs a Bash permission rule for `infra/deploy-api.sh` in Claude Code; the founder added it on 1 Nov 2026.
 
 ## 9. Known risks and gaps
 
