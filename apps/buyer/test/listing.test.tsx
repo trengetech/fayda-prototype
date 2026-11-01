@@ -115,7 +115,8 @@ describe('buyer product page', () => {
     expect(screen.getByRole('button', { name: 'Make offer' })).toBeEnabled();
     await act(async () => void fireEvent.press(screen.getByText('Buy')));
     expect(mockRouter.push).toHaveBeenCalledWith(`/checkout?listingId=${ID}`);
-    expect(fetchMock).toHaveBeenCalledTimes(1); // only the page load: Buy itself sends nothing
+    // The page reads the listing and its comments; Buy itself sends nothing (no write of any kind).
+    expect(fetchMock.mock.calls.every(([, init]) => (init?.method ?? 'GET') === 'GET')).toBe(true);
   });
 
   it('a website listing says Fayda does not handle that purchase and opens the seller’s site', async () => {

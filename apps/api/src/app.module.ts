@@ -15,6 +15,8 @@ import { ListingsService } from './listings/listings.service.js';
 import { BuyerDiscoveryController } from './discovery/discovery.controller.js';
 import { DiscoveryService } from './discovery/discovery.service.js';
 import { FollowsService } from './discovery/follows.service.js';
+import { BuyerSocialController, SellerSocialController } from './social/social.controller.js';
+import { SocialService } from './social/social.service.js';
 import { BuyerNegotiationsController, SellerNegotiationsController } from './negotiations/negotiations.controller.js';
 import { BuyerOrdersController, PublicShopsController, SellerOrdersController } from './orders/orders.controller.js';
 import { OrdersService } from './orders/orders.service.js';
@@ -42,7 +44,7 @@ export class AppModule {
     return {
       module: AppModule,
       imports: [ScheduleModule.forRoot()],
-      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController, BuyerMediaController, SellerListingsController, BuyerCatalogController, BuyerDiscoveryController, BuyerNegotiationsController, SellerNegotiationsController, BuyerOrdersController, SellerOrdersController, PublicShopsController, BuyerChatController, SellerChatController, BuyerReviewsController, SellerReviewsController, ShopReviewsController, BuyerRequestsController, SellerRequestsController],
+      controllers: [SystemController, AuthController, BuyerController, SellerController, MediaController, BuyerMediaController, SellerListingsController, BuyerCatalogController, BuyerDiscoveryController, BuyerSocialController, SellerSocialController, BuyerNegotiationsController, SellerNegotiationsController, BuyerOrdersController, SellerOrdersController, PublicShopsController, BuyerChatController, SellerChatController, BuyerReviewsController, SellerReviewsController, ShopReviewsController, BuyerRequestsController, SellerRequestsController],
       providers: [
         { provide: APP_CONFIG, useValue: config },
         { provide: CLOCK, useValue: clock },
@@ -56,6 +58,7 @@ export class AppModule {
         ListingsService,
         DiscoveryService,
         FollowsService,
+        SocialService,
         NegotiationEvents,
         NegotiationsService,
         ChatService,

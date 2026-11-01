@@ -1,6 +1,6 @@
 import { useApiClient, useSellerListings, useSellerNegotiations, useSetListingStatus } from '@fayda/api-client';
 import type { SellerListing } from '@fayda/contracts/schemas';
-import { formatRupees } from '@fayda/domain';
+import { formatCount, formatRupees } from '@fayda/domain';
 import { AppText, Badge, Button, Card, ChipGroup, FieldError, useTheme } from '@fayda/ui';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -27,7 +27,7 @@ export const coverOf = (l: SellerListing): string | null => {
   return m ? (m.kind === 'image' ? m.url : m.posterUrl) : null;
 };
 
-function Row({ l, onOpen, openOffers }: { l: SellerListing; onOpen: () => void; openOffers: number }) {
+function Row({ l, onOpen, onComments, openOffers }: { l: SellerListing; onOpen: () => void; onComments: () => void; openOffers: number }) {
   const { colors } = useTheme();
   const client = useApiClient();
   const setStatus = useSetListingStatus();
@@ -46,11 +46,13 @@ function Row({ l, onOpen, openOffers }: { l: SellerListing; onOpen: () => void; 
           <AppText weight="bold" numberOfLines={1}>{l.title}</AppText>
           <AppText>{formatRupees(l.price)}</AppText>
           <AppText tone="muted" size={12}>{stock} in stock{l.bargaining.mode === 'BOTH' ? ' · takes offers' : ''}{openOffers ? ` · ${openOffers} open` : ''}</AppText>
+          {l.status !== 'DRAFT' ? <AppText tone="faint" size={12}>♥ {formatCount(l.stats.likes)} · Saved {formatCount(l.stats.saves)} · {formatCount(l.stats.comments)} {l.stats.comments === 1 ? 'comment' : 'comments'}</AppText> : null}
         </View>
         <Badge label={badge.label} tone={badge.tone} />
       </Pressable>
       {l.status !== 'DRAFT' ? (
         <View style={{ gap: 4 }}>
+          <Button title={l.stats.comments ? `Comments (${l.stats.comments})` : 'Comments'} accessibilityLabel={`Comments on ${l.title}`} variant="ghost" size="sm" onPress={onComments} />
           <Button
             title={l.status === 'ACTIVE' ? 'Pause' : 'Resume'}
             variant="outline"
@@ -99,7 +101,7 @@ export default function ListingsScreen() {
           <Button title="Try again" onPress={() => void listings.refetch()} />
         </Card>
       ) : items.length ? (
-        items.map((l) => <Row key={l.id} l={l} openOffers={openBy.get(l.id) ?? 0} onOpen={() => open(`/listing/${l.id}`)} />)
+        items.map((l) => <Row key={l.id} l={l} openOffers={openBy.get(l.id) ?? 0} onOpen={() => open(`/listing/${l.id}`)} onComments={() => open(`/comments/${l.id}`)} />)
       ) : (
         <Card>
           <AppText weight="bold">{filter === 'All' ? 'Nothing here yet' : `No ${filter.toLowerCase()}`}</AppText>

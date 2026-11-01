@@ -10,6 +10,8 @@ export const RECORD_KEY = 'record';
 export const FEED_KEY = 'buyer-feed';
 export const SHOP_KEY = 'shop';
 export const FOLLOWS_KEY = 'follows';
+export const SAVED_KEY = 'saved';
+export const COMMENTS_KEY = 'comments';
 /** The buyer's own profile (addresses, contact). */
 export const PROFILE_KEY = 'buyer-profile';
 
@@ -33,6 +35,8 @@ export const queryKeys = {
   shop: (baseUrl: string, handle: string | null) => [SHOP_KEY, baseUrl, handle] as const,
   shopListings: (baseUrl: string, handle: string | null, params: unknown) => [SHOP_KEY, baseUrl, handle, 'listings', params] as const,
   follows: (baseUrl: string) => [FOLLOWS_KEY, baseUrl] as const,
+  saved: (baseUrl: string) => [SAVED_KEY, baseUrl] as const,
+  comments: (side: Side, baseUrl: string, listingId: string | null) => [COMMENTS_KEY, side, baseUrl, listingId] as const,
 } as const;
 
 /**
@@ -49,8 +53,10 @@ export function invalidationFor(e: RealtimeEvent): string[] {
       return [THREADS_KEY, ORDERS_KEY];
     case 'request.updated':
       return [REQUESTS_KEY, THREADS_KEY];
+    case 'comment.created':
+      return [COMMENTS_KEY, 'seller-listings', 'seller-listing'];
   }
 }
 
 /** Everything a reconnect refreshes: updates may have been missed while the socket was down. */
-export const ALL_LIVE_KEYS: readonly string[] = [NEGOTIATIONS_KEY, 'buyer-listing', ORDERS_KEY, THREADS_KEY, REQUESTS_KEY, RECORD_KEY, REVIEWS_KEY];
+export const ALL_LIVE_KEYS: readonly string[] = [NEGOTIATIONS_KEY, 'buyer-listing', ORDERS_KEY, THREADS_KEY, REQUESTS_KEY, RECORD_KEY, REVIEWS_KEY, COMMENTS_KEY];

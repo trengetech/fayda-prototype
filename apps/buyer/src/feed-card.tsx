@@ -1,6 +1,6 @@
 import { useApiClient } from '@fayda/api-client';
 import type { BuyerFeed } from '@fayda/contracts/schemas';
-import { formatRupees } from '@fayda/domain';
+import { formatCount, formatRupees } from '@fayda/domain';
 import { AppText, Badge, Card, useTheme } from '@fayda/ui';
 import { Image, Pressable, View } from 'react-native';
 
@@ -25,6 +25,7 @@ export function FeedCard({ item, onOpen }: { item: FeedItem; onOpen: () => void 
           {item.hasVideo ? <Badge label="Video" tone="info" /> : null}
         </View>
         <AppText tone="muted" size={12}>{item.seller.name} · {item.seller.area}</AppText>
+        {item.likeCount || item.commentCount ? <AppText tone="faint" size={12}>{item.likeCount ? `♥ ${formatCount(item.likeCount)}` : ''}{item.likeCount && item.commentCount ? ' · ' : ''}{item.commentCount ? `${formatCount(item.commentCount)} ${item.commentCount === 1 ? 'comment' : 'comments'}` : ''}</AppText> : null}
       </Pressable>
     </Card>
   );

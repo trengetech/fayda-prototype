@@ -11,3 +11,4 @@ export * from './chat.js';
 export * from './reviews.js';
 export * from './requests.js';
 export * from './discovery.js';
+export * from './social.js';

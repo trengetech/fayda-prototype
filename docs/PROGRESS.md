@@ -1,6 +1,6 @@
 # Progress
 
-**Where we are (1 Nov 2026): M3.5 (discovery) is built, tested and emulator-checked; its PR into `dev` follows this note. M3.6 to M3.8 are next, built one after the other with the same checks (the founder asked for them to run without waiting for approval).** M3.3 and M3.4 are merged. The physical-phone test of M3.3 and M3.4 is deferred by the founder.
+**Where we are (1 Nov 2026): M3.6 (social) is built, tested and emulator-checked; its PR into `dev` follows this note. M3.7 and M3.8 are next, built one after the other with the same checks (the founder asked for them to run without waiting for approval).** M3.3, M3.4 and M3.5 are merged. The physical-phone test of M3.3 to M3.6 is deferred by the founder.
 
 ## M3.0a — Backend foundation (31 Oct 2026): built, awaiting your review
 
@@ -108,6 +108,43 @@ Decisions D11 to D18 are merged into `docs/DECISIONS.md`. Founder choices: revie
 | 1 to 8, 10 | **Not started** (need M3.1 to M3.4) |
 
 Next, when you are ready: M3.1 needs your answers on dev OTP, separate sessions per app, and `jose` plus `@fastify/rate-limit`.
+
+## M3.6: social (1 Nov 2026): built, tested and emulator-checked; not yet run on a physical phone
+
+Branch `m3.6-social` from `dev`. Decisions recorded as proposed: I-28 (likes and saves), I-29 (comments, including that report and block are a public-release blocker), I-30 (share link scheme).
+
+### What was built
+- **Database (migration 0008):** `likes` and `saves` (generic edge tables like `follows`: user, target type, target id, unique edge, target index), `comments` (soft removal with `removed_at` and `removed_by`; unique per author and client key), and `notifications.listing_id`.
+- **Domain (`packages/domain/src/social.ts`):** comment checks (300 characters, trimmed, not empty), 20 comments an hour, 1,000 saves, who may like (not your own listing) and save, who may remove a comment (author or the listing's seller), count and "time ago" formatting. 9 tests.
+- **API:**
+  - Likes and saves: `PUT` and `DELETE /v1/buyer/listings/:id/like` and `/save`, repeat-safe; `GET /v1/buyer/saved` (newest save first, paged, listings no longer live are left out). A per-person lock keeps the 1,000-save limit exact when taps race.
+  - Comments: buyers `GET` and `POST /v1/buyer/listings/:id/comments`, `DELETE /v1/buyer/comments/:id` (own only); sellers `GET` and `POST /v1/seller/listings/:id/comments` (replies are marked as the shop) and `DELETE /v1/seller/comments/:id` (any comment on their listing). Comments name people by first name only. A new buyer comment makes a `NEW_COMMENT` notification for the seller and a `comment.created` realtime event (ids only).
+  - Feed cards, the product page and the Saved list carry `likeCount`, `commentCount`, `liked`, `saved`; seller listings carry `stats {likes, saves, comments}` (counts only, never who).
+  - All eleven routes are in the OpenAPI document.
+- **api-client:** like, save, comment methods; hooks `useSetLike`, `useSetSave` (flip at once, roll back on refusal, and patch every cached card), `useSavedListings`, `useComments`, `usePostComment`, `useRemoveComment`; `comment.created` refreshes comments.
+- **Buyer app:** a reaction row (Like, Comments, Save, Share) on every reel and on the product page; a comments section with post and remove; a Saved screen from the home screen; the Android share sheet sends "title, price on Fayda" with a `faydabuyer://listing/<id>` link (I-30).
+- **Seller app:** a stats line on each listing row ("♥ n · Saved n · n comments") and a Comments screen to reply as the shop and remove any comment.
+
+### Tests
+domain 89, contracts 18, api-client 50, ui 6, buyer 140, seller 102 (all green); API social tests 21 (real `fayda-test` database). Typecheck and lint clean in all packages.
+- **API suite run locally:** only the files M3.6 touches (social, discovery, listings, realtime, system: 67 tests) were run here, because the full suite takes over an hour on the remote test database (2 of 18 files in 9 minutes). The pull request's CI runs the whole suite.
+- **Break-it check (recipe in CLAUDE.md), 10 breaks, all caught (about 9 minutes):** your own listing can be liked; anyone may remove any comment; no hourly comment limit; a buyer reads a paused listing's comments; removed comments still listed; a buyer's surname shown; the owner notified of their own reply; another shop can reply on this listing; another person's saves leak into the Saved list; the per-person lock removed (save limit race).
+
+### Review of this diff before the pull request
+A separate review pass found 10 points. Fixed (each with a test): a comment client key reused on another listing returned the first listing's comment (now refused with 409); the 20-an-hour comment limit could be passed by parallel posts (now one lock per person; 30 at once let exactly 20 through); a Saved page could be empty yet carry a cursor when the newest saves were paused (the page is now built from live listings only); the owner could read a question on a paused listing but not answer it (the shop may reply on a paused listing, never on a draft); a seller could save their own listing and inflate their saves (refused, like likes); a failed like or save left a wrong heart on the shop page and Saved list (every patched cache is reloaded, and reads in flight are cancelled before the guess); OpenAPI said "oldest first" for comments that are newest first. Left as they are, noted below: orphan likes and saves if a listing were hard-deleted (only drafts are deleted, and drafts have none); the notification is written outside the comment's transaction; every comment page also counts the total.
+
+### Checked on the Android emulator (1 Nov 2026, local API on the dev database, new APKs for both apps)
+- Buyer: Like flipped to "Unlike (1 likes)" and the server agreed; Save showed "Saved" and the Saved screen listed it with "1 like, 1 comment"; Share opened the Android sheet with the title, price and the `faydabuyer://` link; a comment posted from the product page showed at once as "Meera, just now".
+- Seller: the listing row showed "♥ 1 · Saved 1 · 1 comment"; the Comments screen showed the buyer's comment; a reply posted as "Reels Two, Your shop"; removing the buyer's comment asked first, then it disappeared and the API agreed (1 comment left).
+- **Found and fixed while testing:** on the product page the keyboard covered the comment box (the page did not scroll to it). The field now brings the page to it on focus (`onFocus` added to `TextField`); typecheck is clean, but I did not rebuild the APK to look at this one fix.
+- Not exercised by hand: opening a shared link from another app, the `NEW_COMMENT` row on screen (there is no notification screen until M3.7; the API test checks the row), a second device, a mid-range phone.
+
+### Known limits
+- Saves on a listing that is later paused still count toward the 1,000 limit until the person removes them; the Saved list shows live listings only.
+- **No report or block on comments (I-29).** Play's user-generated-content policy requires them before a public release. This is a blocker for public release, not for the internal build.
+- Comments are flat, with no replies to a reply, edits, or likes on comments.
+- Likes and saves count real people, but there is no ranking by them yet (For You is still newest first, I-26).
+- The shared link only opens the buyer app where it is installed; there is no web page yet.
 
 ## M3.5: discovery (1 Nov 2026): built, tested and emulator-checked; not yet run on a physical phone
 

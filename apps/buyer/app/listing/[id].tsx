@@ -2,18 +2,20 @@ import { useBuyerListing } from '@fayda/api-client';
 import { formatRupees } from '@fayda/domain';
 import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View, type ScrollViewInstance } from 'react-native';
 import { bargainingLabel, sizeNote } from '../../src/listing-view';
 import { openExternal } from '../../src/orders';
 import { ratingLine } from '../../src/stars';
 import { MediaCarousel } from '../../src/media-carousel';
 import { OfferSheet } from '../../src/offer-sheet';
+import { CommentsSection, ReactionRow } from '../../src/social';
 
 /** The product page: media, price, sizes, seller card and the bargaining label. Buy opens checkout (direct) or the seller's website; Make offer opens the offer sheet. */
 export default function ListingScreen() {
   const { colors } = useTheme();
+  const scroller = useRef<ScrollViewInstance>(null);
   const { id, offer } = useLocalSearchParams<{ id: string; offer?: string }>();
   const q = useBuyerListing(id ?? null);
   const l = q.data;
@@ -23,6 +25,8 @@ export default function ListingScreen() {
 
   return (
     <ScrollView
+      ref={scroller}
+      keyboardShouldPersistTaps="handled"
       style={{ flex: 1, backgroundColor: colors.surface }}
       contentContainerStyle={{ paddingBottom: 24 }}
       refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => void q.refetch()} />}
@@ -46,6 +50,7 @@ export default function ListingScreen() {
               <AppText weight="extrabold" size={18}>{formatRupees(l.price)}</AppText>
               {l.soldOut ? <Badge label="Sold out" tone="danger" /> : <Badge label={bargainingLabel(l.bargaining)} tone={l.bargaining.acceptsOffers ? 'accent' : 'info'} />}
             </View>
+            <ReactionRow item={l} />
             <Card>
               <Pressable accessibilityRole="button" accessibilityLabel={`Open shop ${l.seller.name}`} onPress={() => router.push(`/shop/${l.seller.handle}` as never)}>
                 <AppText weight="bold">{l.seller.name} ›</AppText>
@@ -88,6 +93,7 @@ export default function ListingScreen() {
               {siteNote ? <AppText tone="danger" size={12} accessibilityRole="alert">{siteNote}</AppText> : null}
             </Card>
             {offering && l.bargaining.acceptsOffers ? <OfferSheet listing={l} onSent={(nid) => { setOffering(false); router.push(`/negotiation/${nid}` as never); }} /> : null}
+            <CommentsSection listingId={l.id} onFocusInput={() => setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 300)} />
           </View>
         </>
       )}

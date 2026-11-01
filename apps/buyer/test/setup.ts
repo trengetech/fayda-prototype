@@ -9,3 +9,6 @@ configure({ asyncUtilTimeout: 5_000 });
 
 // The clipboard is native; tests read what was copied from this mock (`jest.requireMock('expo-clipboard').setStringAsync`).
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true) }));
+
+// The share link is built from the app's own address scheme; tests read it from this mock.
+jest.mock('expo-linking', () => ({ createURL: (path: string) => `faydabuyer://${path}` }));

@@ -57,6 +57,13 @@
       "when": 1793475216183,
       "tag": "0007_discovery",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793480025355,
+      "tag": "0008_social",
+      "breakpoints": true
     }
   ]
 }

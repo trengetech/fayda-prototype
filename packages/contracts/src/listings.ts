@@ -54,6 +54,8 @@ export const SellerListingSchema = z
     dealCodes: z.object({ accept: DealAccessSchema.nullable(), counter: DealAccessSchema.nullable() }),
     publishedAt: EpochMsSchema.nullable(),
     updatedAt: EpochMsSchema,
+    /** Counts only; the seller never sees who liked or saved. */
+    stats: z.object({ likes: z.number().int(), saves: z.number().int(), comments: z.number().int() }),
   })
   .openapi('SellerListing');
 export type SellerListing = z.infer<typeof SellerListingSchema>;
@@ -94,6 +96,11 @@ export const BuyerFeedItemSchema = z
     video: z.object({ url: z.string(), posterUrl: z.string().nullable() }).nullable(),
     /** Whether the signed-in buyer follows this seller. */
     following: z.boolean(),
+    likeCount: z.number().int(),
+    commentCount: z.number().int(),
+    /** Whether the signed-in buyer has liked or saved this listing. */
+    liked: z.boolean(),
+    saved: z.boolean(),
     /** True when the signed-in person owns this shop (they can't follow or buy from it). */
     ownShop: z.boolean(),
     seller: PublicSellerSchema,
@@ -112,6 +119,12 @@ export const BuyerListingSchema = z
     tags: z.array(z.string()),
     price: PaiseSchema,
     soldOut: z.boolean(),
+    likeCount: z.number().int(),
+    commentCount: z.number().int(),
+    liked: z.boolean(),
+    saved: z.boolean(),
+    /** True when the signed-in person owns this listing (they can't like it or buy it). */
+    ownListing: z.boolean(),
     media: z.array(ListingMediaSchema.omit({ mediaId: true, posterMediaId: true })),
     variants: z.array(z.object({ id: z.string(), label: z.string(), available: z.boolean(), low: z.boolean() })),
     bargaining: z.object({ mode: z.string(), acceptsOffers: z.boolean(), expiryMinutes: z.number().int() }),
