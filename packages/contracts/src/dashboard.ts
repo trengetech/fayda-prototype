@@ -1,10 +1,12 @@
 import { SellerRecordSchema } from './orders.js';
 import { z } from './zod.js';
 
-/** What happened in a window. Listing views are not tracked yet, so reach is shown as likes, saves and comments. */
+/** What happened in a window. */
 export const DashboardWindowSchema = z
   .object({
     days: z.number().int(),
+    /** Buyers opening the product page: one per person per listing per hour, your own opens excluded. */
+    views: z.number().int(),
     offersReceived: z.number().int(),
     offersAgreed: z.number().int(),
     ordersPlaced: z.number().int(),

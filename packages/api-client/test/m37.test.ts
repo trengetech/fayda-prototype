@@ -55,6 +55,14 @@ describe('notifications and push', () => {
   });
 });
 
+describe('listing views', () => {
+  it('counts a view with a POST and asks for nothing back', async () => {
+    const { c, calls } = spy(null, 204);
+    await c.recordListingView(id);
+    expect(calls).toEqual([{ url: `http://api.test/v1/buyer/listings/${id}/view`, method: 'POST' }]);
+  });
+});
+
 describe('report, block and dashboard', () => {
   it('reports a comment and a message on the audience route', async () => {
     const { c, calls } = spy({ received: true }, 201);

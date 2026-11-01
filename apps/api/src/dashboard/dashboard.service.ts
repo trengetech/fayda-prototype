@@ -5,7 +5,7 @@ import { and, count, eq, gte, isNull, ne, sql } from 'drizzle-orm';
 import { AppError } from '../common/app-error.js';
 import { CLOCK } from '../common/clock.js';
 import { DbService } from '../db/db.service.js';
-import { comments, likes, listings, negotiations, orders, saves, sellers } from '../db/schema.js';
+import { comments, likes, listingViews, listings, negotiations, orders, saves, sellers } from '../db/schema.js';
 import { NegotiationsService } from '../negotiations/negotiations.service.js';
 import { OrdersService } from '../orders/orders.service.js';
 
@@ -13,8 +13,7 @@ const DAY = 86_400_000;
 const WINDOWS = [7, 30] as const;
 
 /**
- * The seller's own numbers. Only their data, from rows the API already keeps. Listing views are not tracked yet, so reach is
- * shown as likes, saves and comments. "Delivered" counts orders now delivered that were last touched in the window.
+ * The seller's own numbers. Only their data, from rows the API already keeps. Reach is views (product page opens, once per person per hour), likes, saves and comments. "Delivered" counts orders now delivered that were last touched in the window.
  */
 @Injectable()
 export class DashboardService {
@@ -33,7 +32,8 @@ export class DashboardService {
     const since = new Date(now - days * DAY);
     const mine = eq(listings.sellerId, sellerId);
     const n = async (q: Promise<{ n: number }[]>): Promise<number> => (await q)[0]?.n ?? 0;
-    const [offersReceived, offersAgreed, ordersPlaced, ordersConfirmed, ordersDelivered, likeCount, saveCount, commentCount] = await Promise.all([
+    const [views, offersReceived, offersAgreed, ordersPlaced, ordersConfirmed, ordersDelivered, likeCount, saveCount, commentCount] = await Promise.all([
+      n(this.db.select({ n: count() }).from(listingViews).innerJoin(listings, and(eq(listings.id, listingViews.listingId), mine)).where(gte(listingViews.createdAt, since))),
       n(this.db.select({ n: count() }).from(negotiations).where(and(eq(negotiations.sellerId, sellerId), gte(negotiations.createdAt, since)))),
       n(this.db.select({ n: count() }).from(negotiations).where(and(eq(negotiations.sellerId, sellerId), sql`${negotiations.agreement} is not null and (${negotiations.agreement}->>'at')::bigint >= ${since.getTime()}`))),
       n(this.db.select({ n: count() }).from(orders).where(and(eq(orders.sellerId, sellerId), gte(orders.createdAt, since)))),
@@ -44,7 +44,7 @@ export class DashboardService {
       // Other people's comments only; the shop's own replies are not "reach".
       n(this.db.select({ n: count() }).from(comments).innerJoin(listings, and(eq(listings.id, comments.listingId), mine)).where(and(isNull(comments.removedAt), ne(comments.authorUserId, sellerUserId), gte(comments.createdAt, since)))),
     ]);
-    return { days, offersReceived, offersAgreed, ordersPlaced, ordersConfirmed, ordersDelivered, likes: likeCount, saves: saveCount, comments: commentCount };
+    return { days, views, offersReceived, offersAgreed, ordersPlaced, ordersConfirmed, ordersDelivered, likes: likeCount, saves: saveCount, comments: commentCount };
   }
 
   async forSeller(userId: string): Promise<SellerDashboard> {

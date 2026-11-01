@@ -29,13 +29,18 @@ Decisions: I-31 (report and block), I-32 (iOS follows Android), I-33 (notificati
 - Seller: home showed "Notifications (2 new)"; the centre listed the two `NEW_COMMENT` rows as unread; **a comment posted through the API while the screen was open appeared in about 4 s with the unread count at 3**; tapping it opened that listing's comments and the count dropped; Dashboard showed Needs you, the 7 and 30 day windows (3 comments) and the record.
 - **The comment box with the keyboard open (M3.6 fix) is visible above the keyboard.**
 
+### Follow-up checks on the emulator (1 Nov 2026, after the merge of PR #10)
+- **Chat report and block, seen on the buyer app** with a seeded order (FD-100004) and rude messages from the seller: Report asked for a reason and said "Reported. Thank you."; Block asked first, then the message box was replaced by "You can't send messages in this chat. You blocked this person..." with the history kept; the seller's send was refused (403); Blocked people listed the seller, and Unblock brought the message box back.
+- **Found and fixed:** after Report, the Block link was gone (first the whole row was replaced, then in a narrow chat bubble the link was cut off). The row now wraps and keeps Block; seen on the emulator.
+- **Found and fixed (build process):** gradle did not rebuild the JavaScript bundle when only `packages/ui` changed, so three "rebuilt" APKs were the old code (the APK file date gave it away). To force it: `./gradlew :app:createBundleReleaseJsAndAssets --rerun` before `assembleRelease`.
+- **Listing views (I-35):** opening a product page in the buyer app made one row in `listing_views`, and the seller dashboard showed "Listing views 1" in the 7 and 30 day windows.
+
 ### Not done, or not seen
+- **M3.8 starts with a push check (founder, 1 Nov 2026):** the founder will set up Expo/EAS and Firebase (I-33) and say when it is done. Then: add the project id and `google-services.json`, set `PUSH_PROVIDER=expo`, and prove a real push on a phone (app closed, tap opens the right screen). Until then push is untested end to end.
 - **Real push to a phone.** The server path is tested against the Expo request shape only. It needs: an Expo/EAS project id in `app.config.ts`; a Firebase project with each variant's `google-services.json` (`GOOGLE_SERVICES_JSON`) and the FCM key in EAS; `PUSH_PROVIDER=expo` on the server. For iOS later: an Apple Developer account and APNs key. Not run on a device, not on iOS.
-- Report and block **in chat** were checked by tests only, not on the emulator (no order chat was seeded). The chat Block link and the blocked notice are covered by mobile tests.
-- A report review screen does not exist: reports sit in the `reports` table (status OPEN). No moderation tooling, no email to a moderator.
+- A report review screen does not exist: reports sit in the `reports` table (status OPEN). No moderation tooling, no email to a moderator. **Admin console is later work (DECISIONS L1); founder agreed 1 Nov 2026.**
 - The comment count on cards and the product page still counts comments from blocked people (counts are public); the list hides them.
-- After one tap on Report the link is replaced by "Reported. Thank you." (Block stays). This one-line fix (it first hid Block too) was made after the APK build and is covered by the mobile tests, not re-seen on the emulator.
-- Dashboard: no listing views (not tracked); "delivered" counts orders now delivered whose last change is in the window.
+- Dashboard: "delivered" counts orders now delivered whose last change is in the window (founder accepted this). **Listing views were added after the first merge (I-35, migration 0010):** counted when the buyer product page opens, once per person per listing per hour, own opens excluded; shown on the dashboard. Not counted: reel impressions, shop pages; no per-listing view number yet.
 - Notifications are never deleted or expired; no per-type mute settings; one row per chat message.
 
 ## M3.0a — Backend foundation (31 Oct 2026): built, awaiting your review

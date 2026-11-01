@@ -6,7 +6,7 @@ import { AppError } from '../common/app-error.js';
 import { CLOCK } from '../common/clock.js';
 import { firstName } from '../community/shared.js';
 import { DbService } from '../db/db.service.js';
-import { comments, likes, listings, notifications, saves, sellers, userBlocks, users } from '../db/schema.js';
+import { comments, likes, listingViews, listings, notifications, saves, sellers, userBlocks, users } from '../db/schema.js';
 import { blockedBy } from '../safety/blocks.js';
 import { ListingsService } from '../listings/listings.service.js';
 import { NegotiationEvents } from '../negotiations/negotiation-events.js';
@@ -114,6 +114,17 @@ export class SocialService {
     const page = rows.slice(0, take);
     const last = page[page.length - 1];
     return { items: await this.listingsService.cardsFor(userId, page.map((r) => r.listingId)), nextCursor: rows.length > take && last ? encode(last.at, last.id) : null };
+  }
+
+  /**
+   * Counts a view: a live listing that is not the person's own, once per person per listing per hour. Quiet by design: a draft,
+   * a paused listing or your own listing is simply not counted, so the answer never reveals anything about a listing.
+   */
+  async recordView(userId: string, listingId: string): Promise<void> {
+    const [l] = await this.db.select({ status: listings.status, ownerUserId: sellers.userId }).from(listings).innerJoin(sellers, eq(sellers.id, listings.sellerId)).where(eq(listings.id, listingId)).limit(1);
+    if (!l || l.status !== 'ACTIVE' || l.ownerUserId === userId) return;
+    const now = this.clock.now();
+    await this.db.insert(listingViews).values({ listingId, viewerUserId: userId, hourBucket: Math.floor(now / HOUR), createdAt: new Date(now) }).onConflictDoNothing();
   }
 
   // ---------- comments ----------

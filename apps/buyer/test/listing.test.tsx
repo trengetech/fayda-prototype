@@ -30,6 +30,15 @@ beforeEach(() => {
 });
 
 describe('buyer product page', () => {
+  it('counts one view when the page opens, and a failing count never breaks the page', async () => {
+    fakeApi({ [`GET /v1/buyer/listings/${ID}`]: () => json(buyerListing()), [`POST /v1/buyer/listings/${ID}/view`]: () => problem(500, 'INTERNAL') }, fetchMock);
+    await renderWith(signedIn(), <ListingScreen />);
+    expect(await screen.findByText('Cotton kurta')).toBeOnTheScreen();
+    const views = fetchMock.mock.calls.filter((c) => String(c[0]).endsWith('/view'));
+    expect(views).toHaveLength(1);
+    expect(views[0]![1]?.method).toBe('POST');
+  });
+
   it('shows a loading state, then the error with Try again', async () => {
     fetchMock.mockImplementation(() => new Promise(() => {}));
     await renderWith(signedIn(), <ListingScreen />);
@@ -115,8 +124,9 @@ describe('buyer product page', () => {
     expect(screen.getByRole('button', { name: 'Make offer' })).toBeEnabled();
     await act(async () => void fireEvent.press(screen.getByText('Buy')));
     expect(mockRouter.push).toHaveBeenCalledWith(`/checkout?listingId=${ID}`);
-    // The page reads the listing and its comments; Buy itself sends nothing (no write of any kind).
-    expect(fetchMock.mock.calls.every(([, init]) => (init?.method ?? 'GET') === 'GET')).toBe(true);
+    // The page reads the listing and its comments and counts one view when it opens; Buy itself sends nothing (no other write).
+    const writes = fetchMock.mock.calls.filter(([, init]) => (init?.method ?? 'GET') !== 'GET').map(([url]) => String(url).replace('http://api.test', ''));
+    expect(writes).toEqual([`/v1/buyer/listings/${ID}/view`]);
   });
 
   it('a website listing says Fayda does not handle that purchase and opens the seller’s site', async () => {

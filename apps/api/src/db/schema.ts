@@ -582,3 +582,20 @@ export const reports = pgTable(
   },
   (t) => [uniqueIndex('reports_once_idx').on(t.reporterUserId, t.targetType, t.targetId), index('reports_status_idx').on(t.status, t.createdAt), index('reports_reporter_idx').on(t.reporterUserId, t.createdAt)],
 );
+
+/**
+ * A buyer opening a listing's product page (I-35). One row per person per listing per hour, so a reload or a back-and-forth
+ * is one view, and a seller's own opens are never counted. The seller sees counts only, never who.
+ */
+export const listingViews = pgTable(
+  'listing_views',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    listingId: uuid('listing_id').notNull().references(() => listings.id, { onDelete: 'cascade' }),
+    viewerUserId: uuid('viewer_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    /** Whole hours since 1970, the dedup bucket. */
+    hourBucket: bigint('hour_bucket', { mode: 'number' }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex('listing_views_once_idx').on(t.listingId, t.viewerUserId, t.hourBucket), index('listing_views_listing_idx').on(t.listingId, t.createdAt)],
+);

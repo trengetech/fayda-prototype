@@ -19,6 +19,7 @@ function WindowCard({ w }: { w: DashboardWindow }) {
     <Card>
       <AppText weight="bold">Last {w.days} days</AppText>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        <Stat label="Listing views" value={w.views} />
         <Stat label="Offers received" value={w.offersReceived} />
         <Stat label="Offers agreed" value={w.offersAgreed} />
         <Stat label="Orders placed" value={w.ordersPlaced} />
@@ -73,7 +74,7 @@ export default function DashboardScreen() {
               <Stat label="Rating" value={d.record.rating != null ? `${d.record.rating.toFixed(1)} (${d.record.reviewCount})` : '—'} />
             </View>
           </Card>
-          <AppText tone="muted" size={12}>Listing views are not counted yet, so reach is shown as likes, saves and comments. “Delivered” counts orders now delivered that changed in that period.</AppText>
+          <AppText tone="muted" size={12}>A view is a buyer opening your product page, counted once per person per listing per hour; your own opens are not counted, and views before 1 Nov 2026 were not recorded. “Delivered” counts orders now delivered that changed in that period.</AppText>
         </>
       ) : null}
     </ScrollView>
