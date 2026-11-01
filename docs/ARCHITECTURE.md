@@ -1,5 +1,7 @@
 # Architecture (as built in M3.0a)
 
+> **Start with `SYSTEM_OVERVIEW.md`** for the whole system: hosts, environments, deployment, secrets and current state. This file is the deeper, older note on the API and domain internals (written at M3.0a, so its "Known limits" at the end are out of date: most things listed there are now built and deployed).
+
 ## Layout
 
 ```
