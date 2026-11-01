@@ -115,7 +115,7 @@ pnpm workspaces plus Turborepo; TypeScript strict. Exact library versions are in
 ## 8. State of things on 1 Nov 2026 (read this before relying on it)
 
 - **The deployed server is current** (release `20261101072946`, dev at PR #14) and has `PUSH_PROVIDER=expo`. Deployed with `infra/deploy-api.sh` (health check passed); the setting was appended to `/etc/fayda/api.env` and the service restarted. It was verified through `/v1/health` (200) and `/v1/meta`.
-- Push is proven end to end on the **Android emulator**, both with the API on the laptop and **through the deployed server** (APKs built with `EXPO_PUBLIC_API_URL` set to the deployed address): the app's process killed, push arrives, tap opens the right screen; sign-out stops it. **Not proven on a physical phone.** Known gap: tokens of apps that were uninstalled (not signed out) are not cleaned up, because Expo reports that only in receipts, which the server does not read yet.
+- Push is proven end to end on the **Android emulator**, both with the API on the laptop and **through the deployed server** (APKs built with `EXPO_PUBLIC_API_URL` set to the deployed address): the app's process killed, push arrives, tap opens the right screen; sign-out stops it. **Not proven on a physical phone.** Tokens of apps that were uninstalled (not signed out) are removed by the receipt check (from 10 minutes after a push; fixed in M3.8, PR #18).
 - **iOS is not built or tested** (decision I-32: later; keep every library cross-platform).
 - **No admin console** (DECISIONS L1): reports can only be read in the database.
 - A deploy needs a Bash permission rule for `infra/deploy-api.sh` in Claude Code; the founder added it on 1 Nov 2026.
