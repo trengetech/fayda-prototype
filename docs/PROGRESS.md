@@ -1,7 +1,34 @@
 # Progress
 
-**Where we are (1 Nov 2026): M3.7 (notifications, push, report and block, seller dashboard) is built, tested and emulator-checked on its own branch `m3.7-notifications-safety`. M3.6 is merged. M3.8 is next.** The physical-phone test of M3.3 to M3.7 is deferred by the founder. **Push is built but cannot reach a phone until the founder sets up Firebase and EAS (I-33).**
+**Where we are (1 Nov 2026): M3.0 to M3.7 are merged. M3.8 (hardening and internal Android release) is built and emulator-checked on branch `m3.8-seed-demo`, PR pending. The two-physical-phone test is deferred by the founder. Next: M3.9 search and ranking (I-39, proposed).**
 
+
+
+## M3.8: hardening and internal Android release (1 Nov 2026): built, tested, emulator-checked; physical phones not tested
+
+Branch `m3.8-seed-demo`. Earlier M3.8 work already merged: push proven on the emulator and through the live server (PRs #15 to #19), receipts and stale-token cleanup (PR #18). Decisions I-36 to I-39 (**proposed**).
+
+### Built
+- **Demo seed and rollback** (`infra/seed/`): `seed-demo.mjs` goes through the real API (3 shops, 9 listings with generated pictures, 2 buyers, a delivered order, an order waiting, likes, a comment); waits out the 20-a-minute sign-in limit; skips a shop that already has listings. `unseed-demo.mjs` finds every row that belongs to the 5 demo phones by following foreign keys and deletes children first in one transaction (dry run by default, `--delete` to remove). **Run against the live dev server on 1 Nov 2026**; the delete was run for real on a partial first seed (2 users, 6 listings) and left 0 demo users and the 9 existing users untouched. Not yet run on the full seed.
+- **Demo script** `docs/DEMO_SCRIPT.md` (two phones, about 15 minutes). **Written from the code, not yet run on phones**; steps marked "expected" are to be confirmed.
+- **`docs/LIMITATIONS.md`**: the honest list for anyone testing the APKs.
+- **Phone-only APKs**: `infra/build-apk.sh` takes `ARCHS` (e.g. `arm64-v8a`) and `APK_SUFFIX`; phone builds are about 33 MB (buyer) and 38 MB (seller) instead of 55 and 67. The Apple Silicon emulator also runs arm64, so one build serves both; an x86_64-only build fails to install there (`INSTALL_FAILED_NO_MATCHING_ABIS`).
+- **Comment count mode (I-36)**: `COMMENT_COUNT_MODE=all|viewer` (default `all`).
+- **Notification housekeeping (I-37)**, migration 0012 (`notification_settings`, applied to dev and test): delete one, clear all; per-kind switches for push and for the centre (Orders, Offers, Messages, Requests, Comments, Reviews; Orders cannot be switched off, `ALWAYS_ON`); a muted kind is hidden from the list and unread count, not deleted, and sends no push or real-time event; read notifications are deleted after 90 days and unread after 180 by an hourly check in the sweep (1000 rows at a time). Settings screen and Delete / Clear all in both apps.
+- **Per-listing numbers (I-38)**: the seller dashboard lists each live or paused listing with views, likes, saves, comments (others' only), offers, orders and conversion (orders per 100 views), for 7 and 30 days, busiest first. The buyer product page shows "N views in the last 30 days" next to likes and comments. **Saves stay private to buyers (I-28)** even though the founder asked for buyers to see per-listing data; offers, orders and conversion are seller-only.
+
+### Tested
+- **API (Vitest, real Postgres), new:** comment count 3, notification settings, delete, retention and sweep 10, per-listing numbers 6. Regression passed: notifications 15, views 3, listings 17, social 21. **The full API suite was not run locally (over an hour on the remote database); CI runs it.**
+- **Mobile (jest-expo):** buyer 154 and seller 120 pass, including 5 new tests per app for delete, clear all (asks first), settings and the Orders lock, plus dashboard rows and the views line. api-client 58. Lint and typecheck clean.
+- **Break-it check, 18 breaks, all caught:** comment count filter (1); notifications (6: Orders switchable, muted kinds still shown, muted push still sent, always-on ignored by the sweep, read retention too long, delete not own-only); per-listing (6: shop's own replies counted, 7 day window uses 30, conversion off by 10x, drafts listed, any seller sees every listing, buyer views not limited to 30 days). One mutation run first did nothing (macOS `sed -i` needs a suffix) and was redone with Python.
+- **Emulator (local API on the dev database, new arm64 APKs):** seller: the notification centre shows Clear all, Notification settings and Delete per row; Delete removed a row and the unread count went 4 to 3; the settings screen shows Orders greyed out and locked; switching Comments off hid the comment notification (unread 3 to 2), and switching it on brought it back; the dashboard shows each listing with its own numbers and "Conversion: no views yet" where there are no views. Buyer: signed in as a demo buyer; the product page shows "1 view in the last 30 days" with 2 likes and 1 comment and no saves count. Pictures were grey because the seed uploaded them to the live server's disk, not to this local API: a quirk of the test setup.
+
+### Not done, or not seen
+- **No physical phone** (founder deferred). The demo script and the final APKs are untested on phones.
+- **Not deployed:** migration 0012 is on the dev database, but the live API is still the earlier release; deploy with `infra/deploy-api.sh` (and set `COMMENT_COUNT_MODE` in `/etc/fayda/api.env` only if `viewer` is wanted).
+- The live dev database now holds the demo data and the emulator test's changes (a buyer view, a Comments switch toggled and restored). `unseed-demo.mjs --delete` removes them all.
+- Retention is checked hourly, not at night; "Notification settings" cannot yet mute per-person or set quiet hours.
+- Search and ranking are unchanged (M3.9).
 
 ## M3.7: notifications, push, report and block, seller dashboard (1 Nov 2026): built, tested, emulator-checked; push needs founder setup
 
