@@ -140,3 +140,35 @@ pnpm workspaces plus Turborepo; TypeScript strict. Exact library versions are in
 | API and domain internals, the pooler finding, sweep design | `ARCHITECTURE.md` |
 | Original plan and rules R1 to R17 | `FAYDA_PROJECT_FOUNDATION.md` |
 | Deploy and VM scripts | `infra/` |
+
+## 11. Secrets: how each is created and set (and the go-live procedure)
+
+**Rules for every secret:** created by a random generator, never typed by hand; created and kept only on the machine that needs it (or in the provider's dashboard); never committed, never pasted into chat, tickets or email; a **different value per environment** (laptop, test, staging, production); a recovery copy only in a password manager. If one is ever exposed, replace it and restart.
+
+| Secret | What it is | How it is created | Where it is set | If it changes or leaks |
+|---|---|---|---|---|
+| **`JWT_SECRET`** | The one password the API uses to sign and check sign-in tokens (access tokens last 15 minutes). The apps never hold it. Minimum 32 characters; the API refuses to start with less. | Random, 48 bytes: `openssl rand -base64 48` (about 64 characters). Or `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. | One line, `JWT_SECRET=...`, in `/etc/fayda/api.env` on the server (`apps/api/.env` on the laptop, `apps/api/.env.test` for tests). Restart `fayda-api` after changing it. | **Leak:** anyone who has it can forge a token for any user, including a seller: replace at once. **Change:** every signed-in person is signed out and signs in again; accounts and data are not affected. There is no overlap period (only one secret is read), so rotation is a global sign-out. |
+| `DATABASE_URL` | Connection string the running API uses (Supabase transaction pooler, port 6543). Contains the database password. | The password is set in the Supabase dashboard (project settings, database). Copy the pooler connection string from there. | `/etc/fayda/api.env` (server), `apps/api/.env` (laptop). | Resetting the database password in Supabase breaks every service using the old string until each file is updated and the service restarted. |
+| `DATABASE_URL_DIRECT` | Session pooler (port 5432), for migrations. | Same Supabase page. | **Laptop only** (`apps/api/.env`); never on the server. | Same as above. |
+| `EXPO_ACCESS_TOKEN` (optional) | Only if the Expo project requires an access token to send push. | expo.dev, account settings, access tokens. | `/etc/fayda/api.env`. | Revoke at expo.dev and create a new one. |
+| Firebase `google-services.json` (per app) | Identifies the app to Firebase. Not very sensitive, but not for git. | Firebase console, project settings, the Android app, download. | Laptop, `~/fayda-secrets/`; passed at build time with `GOOGLE_SERVICES_JSON`. | Re-download; rebuild the app. |
+| Firebase service-account key | Lets Expo send push through Google's FCM. Sensitive. | Firebase console, project settings, service accounts, generate new private key. | Uploaded to each Expo project with `eas credentials`; **do not keep a copy in a synced folder**. | Generate a new key, upload it to both Expo projects, delete the old key in Firebase. |
+| SSH key `fayda_oracle` | Access to the server. | `ssh-keygen`; the public half is on the VM. | Laptop `~/.ssh/`. | Remove the public key from the VM, create a new pair. |
+
+### How `JWT_SECRET` was set today (honest record)
+The development values (laptop, test, and the dev server) were created in an earlier session and **the method was not written down**. From their shape (about 62 characters of base64-style random text) they look machine-generated, and the laptop, test and server values differ from each other. Treat all three as **development-only**: do not reuse any of them for production.
+
+### Go-live procedure for the production `JWT_SECRET`
+1. Create the production server and its `/etc/fayda` folder (`infra/oracle-vm-setup.sh` does the folder; the file is made by hand).
+2. Create the file with the right permissions (owner root, group ubuntu, mode 640) from the template `api.env.example`:
+   `sudo install -m 640 -o root -g ubuntu /dev/null /etc/fayda/api.env`
+3. **Generate the secret on the production server itself**, so it never exists on a laptop or in a chat, and append it in one step:
+   `echo "JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')" | sudo tee -a /etc/fayda/api.env >/dev/null`
+4. Add the other lines from `api.env.example` (`DATABASE_URL` for the **production** database, `APP_ENV=production`, `UPLOADS_DIR`, `PUSH_PROVIDER=expo`) with `sudo nano /etc/fayda/api.env`.
+5. Check without printing it: `sudo awk -F= '/^JWT_SECRET=/{print length(substr($0,12))}' /etc/fayda/api.env` should print about 64 (never below 32).
+6. Start the service and check `/v1/health` and `/v1/meta` (`environment` should say `production`).
+7. Recovery: decide now, before launch, whether to keep a copy in the password manager (then losing the server does not sign everyone out) or accept that losing the server means a new secret and everyone signs in again. Write the decision in `DECISIONS.md`.
+8. Never copy the development `JWT_SECRET` to production, and do not log or echo it in any script or CI job.
+
+**Also before going live (secrets-related):** replace the dev OTP with real SMS sign-in (the signing secret protects tokens, not the sign-in step), move the Firebase service-account key out of the OneDrive Downloads folder, and use a Play Store signing key (the current APKs are debug-signed).
+
