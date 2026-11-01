@@ -45,5 +45,5 @@ For anyone demoing or testing the internal APKs. Written 1 Nov 2026 from `docs/P
 - The sign-in limit is 20 a minute per address on the live server; scripts and demos that sign in many times must wait.
 
 ## Demo data
-- `infra/seed/seed-demo.mjs` creates 3 demo shops, 9 listings with generated placeholder pictures, 2 buyers and a little history. `infra/seed/unseed-demo.mjs --delete` removes exactly those rows (dry run by default). Uploaded picture files stay on the server's disk.
+- `infra/seed/seed-demo.mjs` creates 3 demo shops, 9 listings with generated placeholder pictures (plain gradients; run `infra/seed/refresh-demo-media.mjs` afterwards for the illustrated pictures and 60-second reels), 2 buyers and a little history. `infra/seed/unseed-demo.mjs --delete` removes exactly those rows (dry run by default). Uploaded picture files stay on the server's disk.
 - Placeholder pictures are plain gradients, so cards look simple. That is the data, not a display fault.

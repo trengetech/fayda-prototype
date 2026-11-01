@@ -39,3 +39,9 @@ The QE test-plan site (https://trengetech.github.io/fayda-qe-testplan/, repo `tr
 
 ### 4. Demo data and sign-in
 The demo shops, listings, buyers and orders already exist on the dev server. Reset or re-seed only when asked: `node infra/seed/seed-demo.mjs https://fayda.140-245-219-163.sslip.io --yes` and `cd apps/api && node --env-file=.env ../../infra/seed/unseed-demo.mjs --delete`. Sign-in code for every number is `123456`. People and numbers: `docs/DEMO_SCRIPT.md`.
+
+**After any re-seed, run the media refresh.** `seed-demo.mjs` makes plain gradient pictures and no videos. The illustrated pictures and the 60-second reels come from a second step, which changes only the demo listings' media (orders, offers, likes and comments stay):
+```
+node infra/seed/refresh-demo-media.mjs https://fayda.140-245-219-163.sslip.io --yes
+```
+It needs `rsvg-convert` (`brew install librsvg`) and `swiftc` (Xcode command line tools) on a Mac. Add `--force` to redo listings that already have the new media. The pictures and reels are illustrations, not photographs.
