@@ -29,6 +29,11 @@ A simulation of ten typical listings (`scratchpad/tune.mjs`, not committed) show
 - **Search scanned tags and shop name** (the earlier title and description indexes were also never used, because the match was inside a `CASE`). Now `search_text` has one trigram index and every search word first passes a test that index can answer, then the exact per-field points decide. Tests: a changed tag and a renamed shop are found with no republish; the plan uses the index. The similar-word test is now pg_trgm's strict word similarity (whole words only) at 0.5, its own default, so the index and the points agree. The live server showed plain word similarity matching "sari" to "Kolhapuri sandals" across two words; a test now covers it.
 - **Break-it, 2 more breaks, both caught:** the generation in the marker ignored; old generations never deleted. A third (the shop-rename trigger removed) cannot be run as a code change because the migration is already applied; the test covers it.
 
+### Deployed to the dev server (1 Nov 2026, at the founder's request, before merge)
+- Migrations 0013 to 0015 applied to the dev database (`pg_trgm` present, 35 listings' search text filled, `rank_score` columns gone). API released with `infra/deploy-api.sh` from branch `m3.9-search-ranking` (release `20261101123419`, then a second release with the strict-word fix); health 200.
+- Checked on the live API as demo buyer `9000000001`: For You answers `SCORED` and pages 3 at a time through all listings with no repeat; `kurtaa` finds the kurtas, `dupata` the dupattas, `jhumka` the jhumkas, `sari` the sarees. **First live check found a false match** ("sari" matched leather sandals across two words); fixed with `strict_word_similarity` and a test, redeployed, rechecked.
+- The live server runs code that is **not yet merged into `dev`** (PR #24). `FEED_RANKER` is not set on the VM, so it is `scored` (set `newest` in `/etc/fayda/api.env` and restart to fall back). The phone APKs are unchanged: the installed apps still send `sort=NEWEST` and get the old order; a new buyer APK is needed to get Best match and impressions.
+
 ### Not done, or not seen
 - **No emulator or phone check** of Best match, search spelling or reel impressions.
 - Weights are provisional, tuned on synthetic data only.
