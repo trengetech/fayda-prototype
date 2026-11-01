@@ -10,7 +10,9 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "format": "prettier --write .",
-    "db:migrate": "pnpm --filter @fayda/api db:migrate"
+    "db:migrate": "pnpm --filter @fayda/api db:migrate",
+    "graph": "GRAPHIFY_BACKEND=none graphify extract . --code-only --force --allow-dedup-shrink && GRAPHIFY_BACKEND=none graphify cluster-only . --no-label --no-viz",
+    "graph:update": "GRAPHIFY_BACKEND=none graphify update ."
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

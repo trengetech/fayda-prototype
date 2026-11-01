@@ -14,6 +14,9 @@ apps/*/expo-env.d.ts
 apks/
 apps/api/uploads/
 
+# graphify's code graph: generated on each machine (pnpm graph), never committed
+graphify-out/
+
 # Firebase / Google credentials: never commit
 google-services*.json
 *firebase-adminsdk*.json

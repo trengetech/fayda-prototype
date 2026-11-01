@@ -57,6 +57,12 @@ Checked against the npm registry on 31 Oct 2026. **Installed** means it is in th
 
 `expo install --fix` decides final patch versions in 3.0b; this table is then updated.
 
+## Developer tools (outside the app, not part of any build)
+
+| Tool | Version | Notes |
+|---|---|---|
+| graphify (`graphifyy` on PyPI, Python 3.10+) | **0.9.92** (released 16 Oct 2026; the newest was hours old when chosen, so one more than two weeks old was pinned) | **Approved by the founder on 1 Nov 2026 (I-42, proposed).** Builds a local code graph of the repo (tree-sitter, no network, no API key) for questions such as "what calls this" and "what does changing this affect". Installed per developer with `pipx install "graphifyy==0.9.92"`; not a dependency of any package, and CI does not use it. Always run with `GRAPHIFY_BACKEND=none` (the `pnpm graph` scripts do) so no code or text is ever sent to an AI provider. The generated `graphify-out/` is git-ignored. Docs, PDFs and images are not indexed (`--code-only`). |
+
 ## Hosting (decided, see DECISIONS I-1 to I-3)
 
 Supabase Postgres 17.11, two projects in Mumbai (`fayda-dev`, `fayda-test`). API on an Oracle Always Free VM in Hyderabad (Ubuntu 24.04, Caddy 2.11.7 for HTTPS, systemd). Nothing is deployed yet.

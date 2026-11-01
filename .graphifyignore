@@ -1,0 +1,19 @@
+# Files graphify must not index (gitignore syntax). Anything in .gitignore is skipped as well.
+# Secrets and credentials, in case they are ever present locally:
+.env
+.env.*
+!.env.example
+*.key
+*firebase-adminsdk*.json
+google-services*.json
+# Generated, lock or snapshot files: huge, no code in them:
+pnpm-lock.yaml
+apps/api/drizzle/meta/
+packages/contracts/contracts.snapshot.json
+prototype/dist/
+prototype/fayda-prototype.html
+# Binary, scratch or tool output:
+*.apk
+*.png
+.playwright-mcp/
+graphify-out/
