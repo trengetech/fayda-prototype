@@ -9,7 +9,6 @@ export default function NotificationSettingsScreen() {
   const set = useSetNotificationSetting('buyer');
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.surface }} contentContainerStyle={{ padding: 16, gap: 12 }}>
-      <AppText weight="extrabold" size={20}>Notification settings</AppText>
       <AppText tone="muted" size={13}>Choose what reaches you. Switching a kind off in the centre only hides it; turn it back on and it returns. Orders can’t be switched off.</AppText>
       {q.isPending ? <ActivityIndicator color={colors.accent} /> : null}
       {q.isError ? (

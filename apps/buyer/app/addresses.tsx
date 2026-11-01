@@ -82,7 +82,6 @@ export default function AddressesScreen() {
 
   return (
     <Screen>
-      <AppText weight="extrabold" size={20}>Delivery addresses</AppText>
       <AppText tone="muted" size={13}>Orders keep the address you chose when you placed them, so changing or deleting one here never changes an order.</AppText>
       {addresses.map((a) => (
         <Card key={a.id}>

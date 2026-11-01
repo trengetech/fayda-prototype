@@ -64,7 +64,6 @@ export default function CommentsScreen() {
       }}
       ListHeaderComponent={
         <View style={{ gap: 12 }}>
-          <AppText weight="extrabold" size={20}>Comments</AppText>
           <AppText tone="muted" size={13}>{listing.data?.title ?? ''}{total ? ` · ${total} ${total === 1 ? 'comment' : 'comments'}` : ''}</AppText>
           <Card>
             <TextField label="Reply as your shop" value={text} onChangeText={change} multiline maxLength={COMMENT_MAX_CHARS * 2} error={error ?? undefined} hint={`Public. Up to ${COMMENT_MAX_CHARS} characters.`} />

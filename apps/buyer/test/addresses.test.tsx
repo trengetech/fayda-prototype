@@ -170,7 +170,7 @@ describe('checkout and addresses', () => {
     mockParams = { listingId: LID };
     fakeApi(routes({ 'GET /v1/buyer/profile': () => json(profile()) }), fetchMock);
     await renderWith(signedIn(), <CheckoutScreen />);
-    await screen.findByText('Checkout');
+    await screen.findByText('Cotton kurta');
     await press('Add or change address');
     expect(mockRouter.push).toHaveBeenCalledWith('/addresses?pick=1');
   });
@@ -190,7 +190,7 @@ describe('checkout and addresses', () => {
       fetchMock,
     );
     await renderWith(signedIn(), <><CheckoutScreen /><AddressesScreen /></>);
-    await screen.findByText('Checkout');
+    await screen.findByText('Cotton kurta');
     await pressLabel('L');
     await pressLabel('UPI');
     await fillNew();

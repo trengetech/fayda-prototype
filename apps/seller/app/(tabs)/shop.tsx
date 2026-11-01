@@ -1,11 +1,14 @@
 import { useApiClient, useSellerRecord, useSellerReviews } from '@fayda/api-client';
 import { useQuery } from '@tanstack/react-query';
-import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
+import { AppText, Badge, Button, Card, ListRow, useTheme } from '@fayda/ui';
+import { useRouter } from 'expo-router';
+import { AccountCard } from '../../src/account-card';
+import { SHOW_GALLERY } from '../../src/config';
 import { useState } from 'react';
 import { ActivityIndicator, Image, RefreshControl, ScrollView, View } from 'react-native';
-import { CopyButton } from '../src/copy';
-import { openLink } from '../src/links';
-import { formatDuration } from '../src/orders';
+import { CopyButton } from '../../src/copy';
+import { openLink } from '../../src/links';
+import { formatDuration } from '../../src/orders';
 
 
 const Stars = ({ n }: { n: number }) => <AppText accessibilityLabel={`${n} out of 5 stars`}>{'★'.repeat(n)}{'☆'.repeat(5 - n)}</AppText>;
@@ -13,6 +16,7 @@ const Stars = ({ n }: { n: number }) => <AppText accessibilityLabel={`${n} out o
 /** The shop as buyers see it, the seller's public order record, and the reviews buyers have left. */
 export default function ShopScreen() {
   const { colors } = useTheme();
+  const router = useRouter();
   const client = useApiClient();
   const profile = useQuery({ queryKey: ['seller-profile', client.baseUrl], queryFn: () => client.getSellerProfile() });
   const record = useSellerRecord();
@@ -94,6 +98,16 @@ export default function ShopScreen() {
       ) : (
         <Card><AppText tone="muted" size={13}>No reviews yet.</AppText></Card>
       )}
+
+      <AppText weight="extrabold" size={15} style={{ marginTop: 8 }}>More</AppText>
+      <View style={{ marginHorizontal: -16 }}>
+        <ListRow icon="bell" title="Notifications" onPress={() => router.push('/notifications' as never)} />
+        <ListRow icon="msg" title="Messages" onPress={() => router.push('/messages' as never)} />
+        <ListRow icon="shield" title="Blocked people" onPress={() => router.push('/blocked' as never)} />
+        <ListRow icon="clock" title="App status" subtitle="Server connection and environment" onPress={() => router.push('/status' as never)} />
+        {SHOW_GALLERY ? <ListRow icon="image" title="Design-system gallery (dev)" onPress={() => router.push('/gallery' as never)} last /> : null}
+      </View>
+      <AccountCard />
     </ScrollView>
   );
 }

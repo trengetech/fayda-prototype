@@ -10,7 +10,6 @@ export default function MessagesScreen() {
   const q = useThreads('buyer');
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.surface }} contentContainerStyle={{ padding: 16, gap: 12 }} refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => void q.refetch()} />}>
-      <AppText weight="extrabold" size={20}>Messages</AppText>
       {q.isPending ? (
         <Card><View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><ActivityIndicator color={colors.accent} /><AppText>Loading your messages…</AppText></View></Card>
       ) : q.isError ? (

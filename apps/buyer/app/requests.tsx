@@ -10,10 +10,7 @@ export default function RequestsScreen() {
   const q = useBuyerRequests();
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.surface }} contentContainerStyle={{ padding: 16, gap: 12 }} refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => void q.refetch()} />}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <AppText weight="extrabold" size={20}>Your requests</AppText>
-        <Button title="New request" size="sm" onPress={() => router.push('/request/new' as never)} />
-      </View>
+      <Button title="New request" icon="plus" size="sm" block={false} onPress={() => router.push('/request/new' as never)} />
       {q.isPending ? (
         <Card><View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><ActivityIndicator color={colors.accent} /><AppText>Loading your requests…</AppText></View></Card>
       ) : q.isError ? (

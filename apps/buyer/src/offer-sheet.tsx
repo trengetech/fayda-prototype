@@ -1,32 +1,35 @@
-import { useMakeOffer } from '@fayda/api-client';
+import { useApiClient, useMakeOffer } from '@fayda/api-client';
 import type { BuyerListing } from '@fayda/contracts/schemas';
-import { formatRupees, parseRupees, priceAfterPercentOff } from '@fayda/domain';
-import { AppText, Button, Card, ChipGroup, TextField, describeError } from '@fayda/ui';
+import { formatRupees, platformFloor } from '@fayda/domain';
+import { AmountInput, AppText, Button, Chip, Sheet, Thumb, amountFromInput, describeError, type AmountMode } from '@fayda/ui';
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
 import { newAttemptKey } from './offers';
 
-const PERCENTS = [10, 15, 20, 30] as const;
-
 /**
- * Make an offer on one size. The amount is typed in rupees, or picked as a percent off the listed price. The seller's
- * lowest price is never sent to this screen, so nothing here can hint at it.
+ * The "Make an offer" sheet. The amount is typed in rupees, or as a percent off the listed price. The seller's lowest
+ * price is never sent to this screen, so nothing here can hint at it. Offers are always private (B-1), so there is no
+ * public/private choice.
  */
-export function OfferSheet({ listing, onSent }: { listing: BuyerListing; onSent: (negotiationId: string) => void }) {
+export function OfferSheet({ listing, visible, initialVariantId, onClose, onSent }: { listing: BuyerListing; visible: boolean; initialVariantId?: string | null | undefined; onClose: () => void; onSent: (negotiationId: string) => void }) {
+  const client = useApiClient();
   const available = listing.variants.filter((v) => v.available);
-  const [variantId, setVariantId] = useState<string | null>(available.length === 1 ? (available[0]?.id ?? null) : null);
-  const [by, setBy] = useState<'AMOUNT' | 'PERCENT'>('AMOUNT');
-  const [amountText, setAmountText] = useState('');
-  const [percent, setPercent] = useState<number | null>(null);
+  const [variantId, setVariantId] = useState<string | null>(initialVariantId ?? (available.length === 1 ? (available[0]?.id ?? null) : null));
+  const [mode, setMode] = useState<AmountMode>('inr');
+  const [value, setValue] = useState('');
   const [error, setError] = useState<{ message: string; fields: Record<string, string> } | null>(null);
   const key = useRef(newAttemptKey());
   const make = useMakeOffer();
 
-  const paise = by === 'AMOUNT' ? (parseRupees(amountText) ?? 0) * 100 : percent == null ? 0 : priceAfterPercentOff(listing.price, percent);
+  const rupees = amountFromInput(mode, value, listing.price);
+  const paise = rupees != null && Number.isFinite(rupees) && rupees > 0 ? rupees * 100 : 0;
   const ready = !!variantId && paise > 0;
+  const cover = listing.media[0];
+  const coverUri = cover ? client.resolveUrl(cover.kind === 'video' ? (cover.posterUrl ?? '') : cover.url) : null;
 
   const send = () => {
-    if (!variantId || paise <= 0) return;
+    if (!variantId) return setError({ message: 'Choose a size first.', fields: {} });
+    if (paise <= 0) return setError({ message: 'Enter your offer.', fields: {} });
     setError(null);
     make.mutate(
       { listingId: listing.id, variantId, amount: paise, idempotencyKey: key.current },
@@ -41,29 +44,44 @@ export function OfferSheet({ listing, onSent }: { listing: BuyerListing; onSent:
     );
   };
   // A different offer is a different attempt.
-  const changed = <T,>(set: (v: T) => void) => (v: T) => {
+  const fresh = () => {
     key.current = newAttemptKey();
-    set(v);
+    setError(null);
   };
 
   return (
-    <Card>
-      <AppText weight="bold">Make an offer</AppText>
-      <ChipGroup label="Size" options={available.map((v) => v.id)} value={variantId ? [variantId] : []} onChange={(v) => changed(setVariantId)(v[0] ?? null)} format={(id) => listing.variants.find((v) => v.id === id)?.label ?? ''} />
-      <ChipGroup label="Offer by" options={['AMOUNT', 'PERCENT'] as const} value={[by]} onChange={(v) => v[0] && changed(setBy)(v[0])} format={(b) => (b === 'AMOUNT' ? 'Amount (₹)' : 'Discount (%)')} />
-      {by === 'AMOUNT' ? (
-        <TextField label="Your offer" prefix="₹" keyboardType="number-pad" value={amountText} onChangeText={changed(setAmountText)} hint={`Listed at ${formatRupees(listing.price)}. Whole rupees.`} error={error?.fields.amount} />
-      ) : (
-        <View style={{ gap: 6 }}>
-          <ChipGroup label="Percent off the listed price" options={PERCENTS} value={percent == null ? [] : [percent]} onChange={(v) => changed(setPercent)(v[0] ?? null)} format={(p) => `${p}% off`} />
-          {percent != null ? <AppText tone="muted" size={13}>Your offer: {formatRupees(paise)}</AppText> : null}
+    <Sheet
+      visible={visible}
+      title="Make an offer"
+      onClose={onClose}
+      footer={<Button title={paise > 0 ? `Send offer · ${formatRupees(paise)}` : 'Send offer'} size="lg" disabled={!ready} loading={make.isPending} onPress={send} />}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Thumb size={56} source={coverUri ? { uri: coverUri } : null} label={listing.title} />
+        <View style={{ flex: 1 }}>
+          <AppText weight="extrabold" numberOfLines={1}>{listing.title}</AppText>
+          <AppText tone="muted" size={12}>Listed at {formatRupees(listing.price)} · {listing.seller.name}</AppText>
         </View>
-      )}
-      <Button title="Send offer" disabled={!ready} loading={make.isPending} onPress={send} />
-      {error && !error.fields.amount ? <AppText tone="danger" size={12} accessibilityRole="alert">{error.message}</AppText> : null}
-      <AppText tone="muted" size={12}>The seller can accept, counter or decline. Offers expire after {expiryText(listing.bargaining.expiryMinutes)} with no reply.</AppText>
-    </Card>
+      </View>
+      {listing.variants.length > 1 ? (
+        <View style={{ gap: 6 }}>
+          <AppText weight="bold" size={13}>Size</AppText>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {listing.variants.map((v) => <Chip key={v.id} label={v.label} selected={variantId === v.id} disabled={!v.available} onPress={() => { fresh(); setVariantId(v.id); }} />)}
+          </View>
+        </View>
+      ) : null}
+      <View style={{ gap: 6 }}>
+        <AppText weight="bold" size={13}>Your offer</AppText>
+        <AmountInput listPrice={listing.price} value={value} onChange={(v) => { fresh(); setValue(v); }} mode={mode} onMode={(m) => { fresh(); setMode(m); setValue(''); }} invalid={!!error} label="Your offer" />
+        {error ? (
+          <AppText tone="danger" size={12} accessibilityRole="alert">{error.fields.amount ?? error.message}</AppText>
+        ) : (
+          <AppText tone="muted" size={12}>Offer below {formatRupees(listing.price)}. Offers under {formatRupees(platformFloor(listing.price))} aren’t allowed. The seller has {expiryText(listing.bargaining.expiryMinutes)} to respond.</AppText>
+        )}
+      </View>
+    </Sheet>
   );
 }
 
-const expiryText = (m: number): string => (m < 60 ? `${m} minutes` : m === 60 ? '1 hour' : `${m / 60} hours`);
+const expiryText = (m: number): string => (m < 60 ? `${m} min` : `${m / 60} h`);

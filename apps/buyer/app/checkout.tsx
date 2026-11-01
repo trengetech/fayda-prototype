@@ -88,7 +88,6 @@ export default function CheckoutScreen() {
 
   return (
     <Screen>
-      <AppText weight="extrabold" size={20}>Checkout</AppText>
       <Card>
         <AppText weight="bold">{l.title}</AppText>
         <AppText tone="muted" size={13}>{l.seller.name} · {l.seller.area}</AppText>

@@ -1,9 +1,9 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import { json, managerWith, renderWith } from './utils';
-import StatusScreen from '../app/index';
+import StatusScreen from '../app/status';
 
-const mockRouter = { push: jest.fn() };
+const mockRouter = { push: jest.fn(), back: jest.fn() };
 jest.mock('expo-router', () => ({ Link: ({ children }: { children: ReactElement }) => children, useRouter: () => mockRouter }));
 
 const time = '2026-10-31T10:00:00.000Z';
@@ -33,15 +33,6 @@ describe('status screen', () => {
     expect(await screen.findByText('Connecting to the API…')).toBeOnTheScreen();
     expect(screen.queryByText('Online')).not.toBeOnTheScreen();
     expect(screen.queryByText("Can't connect")).not.toBeOnTheScreen();
-  });
-
-  it('opens the reels, search and the shops you follow from the home buttons', async () => {
-    fetchMock.mockImplementation(() => new Promise(() => {}));
-    await renderScreen();
-    for (const [label, path] of [['Browse reels', '/feed'], ['Search', '/search'], ['Saved', '/saved'], ['Shops you follow', '/follows']] as const) {
-      await act(async () => void fireEvent.press(screen.getByText(label)));
-      expect(mockRouter.push).toHaveBeenLastCalledWith(path);
-    }
   });
 
   it('shows the API, database, environment and simulated providers on success', async () => {

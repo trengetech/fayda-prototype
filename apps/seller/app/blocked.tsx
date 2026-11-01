@@ -9,7 +9,6 @@ export default function BlockedScreen() {
   const { unblock } = useBlockActions('seller');
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.surface }} contentContainerStyle={{ padding: 16, gap: 12 }}>
-      <AppText weight="extrabold" size={20}>Blocked people</AppText>
       <AppText tone="muted" size={13}>You don’t see their comments, and neither of you can message the other. Orders and past chats stay as they are.</AppText>
       {q.isPending ? <ActivityIndicator color={colors.accent} /> : null}
       {q.isError ? (

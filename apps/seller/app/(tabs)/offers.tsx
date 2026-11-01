@@ -5,7 +5,7 @@ import { AppText, Badge, Button, Card, ChipGroup, useTheme } from '@fayda/ui';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { FILTERS, inFilter, latestOffer, statusText, type Filter } from '../src/offers';
+import { FILTERS, inFilter, latestOffer, statusText, type Filter } from '../../src/offers';
 
 function Row({ n, onOpen }: { n: SellerNegotiation; onOpen: () => void }) {
   const { colors } = useTheme();
@@ -49,7 +49,6 @@ export default function OffersScreen() {
       contentContainerStyle={{ padding: 16, gap: 12 }}
       refreshControl={<RefreshControl refreshing={offers.isRefetching} onRefresh={() => void offers.refetch()} />}
     >
-      <AppText weight="extrabold" size={20}>Offers</AppText>
       <ChipGroup label="Show" options={FILTERS} value={[filter]} onChange={(v) => v[0] && setFilter(v[0])} />
       {offers.isPending ? (
         <Card><View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><ActivityIndicator color={colors.accent} /><AppText>Loading offers…</AppText></View></Card>

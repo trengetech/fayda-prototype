@@ -14,7 +14,7 @@ describe('buyer sign-in', () => {
   it('asks for the number first, and will not send a code for a short number', async () => {
     const m = managerWith('buyer', fetchMock);
     await renderWith(m, <SignIn />);
-    expect(screen.getByText('Sign in to Fayda Buyer')).toBeOnTheScreen();
+    expect(screen.getByText(/Sign in to Fayda Buyer/)).toBeOnTheScreen();
     await type('Mobile number', '98765');
     expect(screen.getByText('Send code')).toBeDisabled();
     expect(fetchMock).not.toHaveBeenCalled();
@@ -61,6 +61,6 @@ describe('buyer sign-in', () => {
     await type('Mobile number', '9876543210');
     await press('Send code');
     await press('Use a different number');
-    expect(await screen.findByText('Sign in to Fayda Buyer')).toBeOnTheScreen();
+    expect(await screen.findByText(/Sign in to Fayda Buyer/)).toBeOnTheScreen();
   });
 });

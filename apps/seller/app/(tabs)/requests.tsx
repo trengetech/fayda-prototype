@@ -6,9 +6,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Image, RefreshControl, ScrollView, View } from 'react-native';
-import { newNonce } from '../src/listing-form';
-import { REQUEST_TABS, RESPONSE_LABEL, inRequestTab, validateRespondForm, type RequestTab } from '../src/requests';
-import { sizeOf, uploadMedia } from '../src/upload';
+import { newNonce } from '../../src/listing-form';
+import { REQUEST_TABS, RESPONSE_LABEL, inRequestTab, validateRespondForm, type RequestTab } from '../../src/requests';
+import { sizeOf, uploadMedia } from '../../src/upload';
 
 function Photos({ media }: { media: SellerRequest['media'] }) {
   const client = useApiClient();
@@ -124,7 +124,6 @@ export default function RequestsScreen() {
       contentContainerStyle={{ padding: 16, gap: 12 }}
       refreshControl={<RefreshControl refreshing={reqs.isRefetching} onRefresh={() => void reqs.refetch()} />}
     >
-      <AppText weight="extrabold" size={20}>Requests</AppText>
       <ChipGroup label="Show" options={REQUEST_TABS} value={[tab]} onChange={(v) => v[0] && setTab(v[0])} format={(t) => (t === 'New' && reqs.data?.newCount ? `New (${reqs.data.newCount})` : t)} />
       {reqs.isPending ? (
         <Card><View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><ActivityIndicator color={colors.accent} /><AppText>Loading requests…</AppText></View></Card>

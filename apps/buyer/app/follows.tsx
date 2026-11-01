@@ -25,7 +25,6 @@ export default function FollowsScreen() {
       onEndReached={() => {
         if (q.hasNextPage && !q.isFetchingNextPage) void fetchNextPage();
       }}
-      ListHeaderComponent={<AppText weight="extrabold" size={20}>Shops you follow</AppText>}
       renderItem={({ item }) => (
         <Card>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

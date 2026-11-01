@@ -5,7 +5,7 @@ import { AppText, Badge, Button, Card, ChipGroup, useTheme } from '@fayda/ui';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { FILTERS, matchesFilter, statusTone, type Filter } from '../src/orders';
+import { FILTERS, matchesFilter, statusTone, type Filter } from '../../src/orders';
 
 function Row({ o }: { o: BuyerOrder }) {
   const { colors } = useTheme();
@@ -38,7 +38,6 @@ function Row({ o }: { o: BuyerOrder }) {
 /** Every order this buyer has placed, newest first, with a filter and an unread-message badge per row. */
 export default function OrdersScreen() {
   const { colors } = useTheme();
-  const router = useRouter();
   const orders = useBuyerOrders();
   const [filter, setFilter] = useState<Filter>('All');
   const items = (orders.data?.items ?? []).filter((o) => matchesFilter(o, filter));
@@ -48,10 +47,6 @@ export default function OrdersScreen() {
       contentContainerStyle={{ padding: 16, gap: 12 }}
       refreshControl={<RefreshControl refreshing={orders.isRefetching} onRefresh={() => void orders.refetch()} />}
     >
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <AppText weight="extrabold" size={20}>My orders</AppText>
-        <Button title="Messages" size="sm" variant="outline" onPress={() => router.push('/messages' as never)} />
-      </View>
       <ChipGroup label="Show" options={FILTERS} value={[filter]} onChange={(v) => v[0] && setFilter(v[0])} />
       {orders.isPending ? (
         <Card><View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><ActivityIndicator color={colors.accent} /><AppText>Loading your orders…</AppText></View></Card>

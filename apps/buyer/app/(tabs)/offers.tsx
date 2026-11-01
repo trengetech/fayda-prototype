@@ -4,7 +4,7 @@ import { formatRupees, timeLeft } from '@fayda/domain';
 import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { statusBadge } from '../src/offers';
+import { statusBadge } from '../../src/offers';
 
 function Row({ n, onOpen }: { n: BuyerNegotiation; onOpen: () => void }) {
   const { colors } = useTheme();
@@ -46,7 +46,6 @@ export default function MyOffersScreen() {
       contentContainerStyle={{ padding: 16, gap: 12 }}
       refreshControl={<RefreshControl refreshing={offers.isRefetching} onRefresh={() => void offers.refetch()} />}
     >
-      <AppText weight="extrabold" size={20}>My offers</AppText>
       {offers.isPending ? (
         <Card><View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><ActivityIndicator color={colors.accent} /><AppText>Loading your offers…</AppText></View></Card>
       ) : offers.isError ? (
@@ -61,7 +60,7 @@ export default function MyOffersScreen() {
         <Card>
           <AppText weight="bold">No offers yet</AppText>
           <AppText tone="muted" size={13}>Open a listing that takes offers and tap Make offer.</AppText>
-          <Button title="Browse listings" onPress={() => router.push('/feed' as never)} />
+          <Button title="Browse listings" onPress={() => router.push('/' as never)} />
         </Card>
       )}
     </ScrollView>

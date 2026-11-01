@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View, type KeyboardTypeOptions } from 'react-native';
 import { AppText } from './components';
 import { fontFamily } from './fonts';
+import { Chip } from './parts';
 import { useTheme } from './theme';
 import { heights, radii, spacing, type } from './tokens';
 
@@ -21,6 +22,8 @@ export function FieldError({ children }: { children?: string | undefined }) {
 }
 
 export interface TextFieldProps {
+  /** Big, centred, letter-spaced digits for a one-time code. */
+  otp?: boolean;
   label: string;
   value: string;
   onChangeText: (v: string) => void;
@@ -38,7 +41,7 @@ export interface TextFieldProps {
   onFocus?: () => void;
 }
 
-export function TextField({ label, value, onChangeText, error, hint, placeholder, keyboardType, maxLength, multiline, autoCapitalize, prefix, optional, onFocus }: TextFieldProps) {
+export function TextField({ label, value, onChangeText, error, hint, placeholder, keyboardType, maxLength, multiline, autoCapitalize, prefix, optional, onFocus, otp }: TextFieldProps) {
   const { colors } = useTheme();
   return (
     <View style={{ gap: 6 }}>
@@ -46,7 +49,7 @@ export function TextField({ label, value, onChangeText, error, hint, placeholder
         {label}
         {optional ? <AppText tone="faint" size={13}> (optional)</AppText> : null}
       </AppText>
-      <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: multiline ? 96 : heights.input, borderRadius: radii.md, borderWidth: 1.5, borderColor: error ? colors.danger : colors.border, backgroundColor: colors.surface, paddingHorizontal: 12, gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: multiline ? 96 : otp ? heights.otp : heights.input, borderRadius: radii.md, borderWidth: 1.5, borderColor: error ? colors.danger : colors.border, backgroundColor: colors.surface, paddingHorizontal: 12, gap: 8 }}>
         {prefix ? <AppText tone="muted">{prefix}</AppText> : null}
         <TextInput
           accessibilityLabel={label}
@@ -60,7 +63,7 @@ export function TextField({ label, value, onChangeText, error, hint, placeholder
           multiline={multiline}
           autoCapitalize={autoCapitalize ?? 'sentences'}
           autoCorrect={false}
-          style={{ flex: 1, color: colors.ink, fontFamily: fontFamily.regular, fontSize: type.input.fontSize, paddingVertical: multiline ? 12 : 0, textAlignVertical: multiline ? 'top' : 'center' }}
+          style={{ flex: 1, color: colors.ink, fontFamily: otp ? fontFamily.extrabold : fontFamily.regular, fontSize: otp ? 24 : type.input.fontSize, ...(otp ? { letterSpacing: 12, textAlign: 'center' as const } : {}), paddingVertical: multiline ? 12 : 0, textAlignVertical: multiline ? 'top' : 'center' }}
         />
       </View>
       {hint && !error ? <AppText tone="muted" size={12}>{hint}</AppText> : null}
@@ -70,22 +73,15 @@ export function TextField({ label, value, onChangeText, error, hint, placeholder
 }
 
 /** Pick one or several of a short list (categories, delivery times). */
-export function ChipGroup<T extends string | number>({ label, options, value, onChange, multiple, error, format }: { label: string; options: readonly T[]; value: T[]; onChange: (v: T[]) => void; multiple?: boolean; error?: string | undefined; format?: (v: T) => string }) {
-  const { colors } = useTheme();
+export function ChipGroup<T extends string | number>({ label, options, value, onChange, multiple, error, format }: { label: string; options: readonly T[]; value: T[]; onChange: (v: T[]) => void; multiple?: boolean; error?: string | undefined; format?: (o: T) => string }) {
   const toggle = (o: T) => onChange(multiple ? (value.includes(o) ? value.filter((x) => x !== o) : [...value, o]) : [o]);
   return (
     <View style={{ gap: 6 }}>
-      <AppText weight="semibold" size={13}>{label}</AppText>
+      {label && label !== 'Show' ? <AppText weight="semibold" size={13}>{label}</AppText> : null}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-        {options.map((o) => {
-          const on = value.includes(o);
-          const text = format ? format(o) : String(o);
-          return (
-            <Pressable key={String(o)} accessibilityRole={multiple ? 'checkbox' : 'radio'} accessibilityState={{ selected: on, checked: on }} accessibilityLabel={text} onPress={() => toggle(o)} style={{ minHeight: heights.btnSm, paddingHorizontal: 14, borderRadius: radii.pill, borderWidth: 1.5, borderColor: on ? colors.accent : colors.border, backgroundColor: on ? colors.accentTint : colors.surface, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: on ? colors.accentStrong : colors.ink, fontFamily: on ? fontFamily.bold : fontFamily.medium, fontSize: 13 }}>{text}</Text>
-            </Pressable>
-          );
-        })}
+        {options.map((o) => (
+          <Chip key={String(o)} label={format ? format(o) : String(o)} selected={value.includes(o)} onPress={() => toggle(o)} />
+        ))}
       </View>
       <FieldError>{error}</FieldError>
     </View>

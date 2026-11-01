@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import { json, managerWith, renderWith } from './utils';
-import StatusScreen from '../app/index';
+import StatusScreen from '../app/status';
 
 const mockRouter = { push: jest.fn() };
 jest.mock('expo-router', () => ({ Link: ({ children }: { children: ReactElement }) => children, useRouter: () => mockRouter }));
@@ -73,12 +73,5 @@ describe('status screen', () => {
     await renderScreen();
     expect(await screen.findByText("Can't connect")).toBeOnTheScreen();
     expect(screen.getByText(/not with what this app expects/)).toBeOnTheScreen();
-  });
-
-  it('opens My listings', async () => {
-    fetchMock.mockImplementation((url: string) => Promise.resolve(String(url).endsWith('health') ? json(health) : json(meta)));
-    await renderScreen();
-    await act(async () => void fireEvent.press(screen.getByText('My listings')));
-    expect(mockRouter.push).toHaveBeenCalledWith('/listings');
   });
 });

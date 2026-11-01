@@ -49,7 +49,6 @@ export default function ContactScreen() {
 
   return (
     <Screen>
-      <AppText weight="extrabold" size={20}>Contact for orders</AppText>
       <AppText tone="muted" size={13}>Sellers you order from see these numbers only while an order is open (placed, confirmed or shipped). Add at least one.</AppText>
       <TextField label="Phone" prefix="+91" keyboardType="number-pad" value={phone} onChangeText={setPhone} maxLength={10} error={error?.fields.phone ?? error?.fields.contactPhone} />
       <TextField label="WhatsApp" prefix="+91" keyboardType="number-pad" value={whatsapp} onChangeText={setWhatsapp} maxLength={10} optional error={error?.fields.whatsapp ?? error?.fields.contactWhatsapp} />

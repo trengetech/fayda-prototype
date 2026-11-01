@@ -15,7 +15,6 @@ export default function MessagesScreen() {
       contentContainerStyle={{ padding: 16, gap: 12 }}
       refreshControl={<RefreshControl refreshing={threads.isRefetching} onRefresh={() => void threads.refetch()} />}
     >
-      <AppText weight="extrabold" size={20}>Messages</AppText>
       {threads.isPending ? (
         <Card><View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><ActivityIndicator color={colors.accent} /><AppText>Loading messages…</AppText></View></Card>
       ) : threads.isError ? (

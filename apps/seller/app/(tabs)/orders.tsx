@@ -5,7 +5,7 @@ import { AppText, Badge, Button, Card, ChipGroup, useTheme } from '@fayda/ui';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { TABS, inTab, statusBadge, tabCounts, type Tab } from '../src/orders';
+import { TABS, inTab, statusBadge, tabCounts, type Tab } from '../../src/orders';
 
 function Row({ o, onOpen }: { o: SellerOrder; onOpen: () => void }) {
   const { colors } = useTheme();
@@ -50,10 +50,6 @@ export default function OrdersScreen() {
       contentContainerStyle={{ padding: 16, gap: 12 }}
       refreshControl={<RefreshControl refreshing={orders.isRefetching} onRefresh={() => void orders.refetch()} />}
     >
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <AppText weight="extrabold" size={20}>Orders</AppText>
-        <Button title={orders.data?.unread ? `Messages (${orders.data.unread})` : 'Messages'} size="sm" variant="outline" onPress={() => router.push('/messages' as never)} />
-      </View>
       <ChipGroup label="Show" options={TABS} value={[tab]} onChange={(v) => v[0] && setTab(v[0])} format={(t) => `${t} (${counts[t]})`} />
       {orders.isPending ? (
         <Card><View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><ActivityIndicator color={colors.accent} /><AppText>Loading orders…</AppText></View></Card>

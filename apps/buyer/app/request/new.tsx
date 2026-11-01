@@ -52,7 +52,6 @@ export default function NewRequestScreen() {
 
   return (
     <Screen>
-      <AppText weight="extrabold" size={20}>Ask sellers</AppText>
       <AppText tone="muted" size={13}>Describe what you’re looking for. Sellers who sell this category can reply with a photo, a price and a message. You choose who to talk to.</AppText>
       <ChipGroup label="Category" options={CATEGORIES} value={category ? [category] : []} onChange={(v) => changed(setCategory)(v[0] ?? null)} error={errors.category} />
       <TextField label="What are you looking for?" value={title} onChangeText={changed(setTitle)} maxLength={80} error={errors.title} placeholder="Green silk saree, size free" />

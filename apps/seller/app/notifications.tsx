@@ -42,7 +42,6 @@ export default function NotificationsScreen() {
       }}
       ListHeaderComponent={
         <View style={{ gap: 8, marginBottom: 4 }}>
-          <AppText weight="extrabold" size={20}>Notifications</AppText>
           <AppText tone="muted" size={13}>{unread ? `${unread} unread` : 'You’re all caught up.'}</AppText>
           {unread ? <Button title="Mark all as read" variant="outline" size="sm" loading={readAll.isPending} onPress={() => readAll.mutate()} /> : null}
           {items.length ? <Button title="Clear all" variant="outline" size="sm" loading={clear.isPending} onPress={confirmClear} /> : null}

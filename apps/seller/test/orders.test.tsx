@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, within } from '@testing-library/react-native';
 import { Linking, StyleSheet } from 'react-native';
-import OrdersScreen from '../app/orders';
+import OrdersScreen from '../app/(tabs)/orders';
 import OrderScreen from '../app/order/[id]';
 import { fakeApi, json, managerWith, renderWith, sellerOrder } from './utils';
 
@@ -53,7 +53,6 @@ describe('orders list', () => {
     expect(screen.getByText(/FD-100002/)).toBeOnTheScreen();
     await act(async () => void fireEvent.press(screen.getByLabelText('Closed (1)')));
     expect(screen.getByText(/FD-100004/)).toBeOnTheScreen();
-    expect(screen.getByText('Messages (2)')).toBeOnTheScreen();
   });
 
   it('keeps the status and unread labels in the text column, under the title (not in a squeezed side column)', async () => {

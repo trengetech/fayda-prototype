@@ -86,10 +86,7 @@ export default function ListingsScreen() {
       contentContainerStyle={{ padding: 16, gap: 12 }}
       refreshControl={<RefreshControl refreshing={listings.isRefetching} onRefresh={() => void listings.refetch()} />}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <AppText weight="extrabold" size={20}>My listings</AppText>
-        <Button title="New listing" size="sm" onPress={() => open('/listing/new')} />
-      </View>
+      <Button title="New listing" icon="plus" size="sm" block={false} onPress={() => open('/listing/new')} />
       <ChipGroup label="Show" options={FILTERS} value={[filter]} onChange={(v) => v[0] && setFilter(v[0])} />
 
       {listings.isPending ? (

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type TextProps, type ViewStyle } from 'react-native';
 import { fontFamily } from './fonts';
+import { Icon, type IconName } from './icon';
 import { useTheme } from './theme';
 import { heights, radii, spacing, type } from './tokens';
 
@@ -12,16 +13,16 @@ export function AppText({ weight = 'regular', tone = 'ink', size, style, ...rest
   return <Text {...rest} style={[{ fontFamily: fontFamily[weight], color: colors[tone], fontSize: size ?? type.body.fontSize, lineHeight: size ? Math.round(size * 1.45) : type.body.lineHeight }, style]} />;
 }
 
-export function Button({ title, onPress, variant = 'primary', size = 'md', disabled, loading, accessibilityLabel }: { title: string; accessibilityLabel?: string; onPress?: () => void; variant?: 'primary' | 'dark' | 'outline' | 'ghost' | 'danger'; size?: 'sm' | 'md' | 'lg'; disabled?: boolean; loading?: boolean }) {
+export function Button({ title, onPress, variant = 'primary', size = 'md', disabled, loading, accessibilityLabel, icon, block = true }: { icon?: IconName; block?: boolean; title: string; accessibilityLabel?: string; onPress?: () => void; variant?: 'primary' | 'dark' | 'outline' | 'ghost' | 'danger'; size?: 'sm' | 'md' | 'lg'; disabled?: boolean; loading?: boolean }) {
   const { colors } = useTheme();
   const bg = { primary: colors.accent, dark: colors.darkBtn, outline: colors.surface, ghost: 'transparent', danger: colors.surface }[variant];
   const fg = { primary: colors.onAccent, dark: colors.darkBtnFg, outline: colors.ink, ghost: colors.accent, danger: colors.danger }[variant];
   const border = variant === 'outline' ? colors.border : variant === 'danger' ? colors.danger : 'transparent';
   const h = size === 'lg' ? heights.btnLg : size === 'sm' ? heights.btnSm : heights.btn;
-  const style: ViewStyle = { height: h, borderRadius: size === 'sm' ? 11 : radii.lg, backgroundColor: bg, borderColor: border, borderWidth: 1.5, paddingHorizontal: size === 'sm' ? 12 : 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, opacity: disabled ? 0.45 : 1 };
+  const style: ViewStyle = { height: h, borderRadius: size === 'sm' ? 11 : radii.lg, backgroundColor: bg, borderColor: border, borderWidth: 1.5, paddingHorizontal: size === 'sm' ? 12 : 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, opacity: disabled ? 0.45 : 1, ...(block ? {} : { alignSelf: 'flex-start' }) };
   return (
     <Pressable accessibilityRole="button" {...(accessibilityLabel ? { accessibilityLabel } : {})} accessibilityState={{ disabled: !!disabled }} disabled={disabled || loading} onPress={onPress} style={style}>
-      {loading ? <ActivityIndicator color={fg} /> : <Text style={{ color: fg, fontFamily: fontFamily.bold, fontSize: size === 'sm' ? 13 : size === 'lg' ? 16 : type.button.fontSize }}>{title}</Text>}
+      {loading ? <ActivityIndicator color={fg} /> : <>{icon ? <Icon name={icon} size={size === 'sm' ? 16 : 20} color={fg} /> : null}<Text style={{ color: fg, fontFamily: fontFamily.bold, fontSize: size === 'sm' ? 13 : size === 'lg' ? 16 : type.button.fontSize }}>{title}</Text></>}
     </Pressable>
   );
 }
