@@ -213,11 +213,12 @@ describe('For You ranking', () => {
     const all = titles(await feed(meena, '?limit=50'));
     const first: Json = await feed(meena, '?limit=3');
     expect(titles(first)).toEqual(all.slice(0, 3));
-    // the listing on top sells out and a refresh runs: from now on it sinks to the bottom of a fresh scroll
+    // the listing on top sells out and a refresh runs: from now on it sinks to the bottom of a fresh scroll, with the other
+    // sold-out listing (the jeans). Their order against each other is a tie, so only the pair is asserted.
     await dbOf(app).db.execute(sql`update listing_variants set stock = 0 where listing_id = (select id from listings where title = ${all[0]!})`);
     await svc.refreshScores(now + 6 * 60_000);
     const fresh = titles(await feed(meena, '?limit=50'));
-    expect(fresh[fresh.length - 1]).toBe(all[0]);
+    expect(new Set(fresh.slice(-2))).toEqual(new Set([all[0], 'Slim fit jeans']));
     // the scroll that began before the refresh still gets exactly the old order: nothing repeated, nothing skipped
     const seen = titles(first);
     let cursor: string | null = first.nextCursor;
