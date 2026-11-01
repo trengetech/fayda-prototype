@@ -63,11 +63,13 @@ export const RELEVANCE = {
 } as const;
 
 /**
- * The smallest word-similarity (pg_trgm) that counts as the same word misspelt, and the shortest word it is tried on.
- * 0.6 is pg_trgm's own default for its `<%` operator, which the search query uses so the trigram index can answer it; if the
- * database setting `pg_trgm.word_similarity_threshold` is ever changed, the query and this number must change together.
+ * The smallest strict word-similarity (pg_trgm `strict_word_similarity`) that counts as the same word misspelt, and the shortest
+ * word it is tried on. Strict means the match must line up with whole words: plain word similarity let "sari" match "Kolhapuri
+ * sandals" (found on the live server, 1 Nov 2026). 0.5 is pg_trgm's own default for its `<<%` operator, which the search query
+ * uses so the trigram index can answer it; if the database setting `pg_trgm.strict_word_similarity_threshold` is ever changed,
+ * the query and this number must change together.
  */
-export const FUZZY_MIN_SIMILARITY = 0.6;
+export const FUZZY_MIN_SIMILARITY = 0.5;
 export const FUZZY_MIN_CHARS = 4;
 
 /** Relevance points are multiplied by this before the ranking score is added, so relevance always wins and ranking breaks ties. */

@@ -74,7 +74,7 @@ export function termScore(term: string): SQL {
   const arms: SQL[] = [];
   for (const f of FIELDS()) {
     arms.push(sql`(case when ${f.col} ILIKE ${pat(typed)} then ${full(f.weight)} when ${anyOf(f.col, variants)} then ${part(f.weight, RELEVANCE.SYNONYM_PERCENT)} else 0 end)`);
-    if (f.fuzzy && typed.length >= FUZZY_MIN_CHARS) arms.push(sql`(case when word_similarity(${typed}, ${f.col}) >= ${FUZZY_MIN_SIMILARITY} then ${part(f.weight, RELEVANCE.FUZZY_PERCENT)} else 0 end)`);
+    if (f.fuzzy && typed.length >= FUZZY_MIN_CHARS) arms.push(sql`(case when strict_word_similarity(${typed}, ${f.col}) >= ${FUZZY_MIN_SIMILARITY} then ${part(f.weight, RELEVANCE.FUZZY_PERCENT)} else 0 end)`);
   }
   return sql`greatest(${sql.join(arms, sql`, `)})`;
 }
@@ -88,7 +88,7 @@ export function termPrefilter(term: string): SQL {
   const variants = expandSearchTerm(term);
   const typed = variants[0]!;
   const exact = anyOf(sql`${listings.searchText}`, variants);
-  return typed.length >= FUZZY_MIN_CHARS ? sql`(${exact} OR ${typed} <% ${listings.searchText})` : exact;
+  return typed.length >= FUZZY_MIN_CHARS ? sql`(${exact} OR ${typed} <<% ${listings.searchText})` : exact;
 }
 
 /** Relevance points for the whole search: the sum over its words. Only meaningful with at least one term. */

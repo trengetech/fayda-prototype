@@ -24,6 +24,7 @@ const ids: Record<string, string> = {};
 
 /** A small catalogue of the kind of thing sellers write: spellings vary, tags are loose. */
 const CATALOGUE: { key: string; seller: 'anita' | 'ravi'; title: string; category: string; tags: string[]; description?: string; stock?: number }[] = [
+  { key: 'sandals', seller: 'ravi', title: 'Leather Kolhapuri sandals', category: 'Footwear', tags: ['sandals', 'leather'], description: 'Hand-stitched vegetable-tanned leather kolhapuris.' },
   { key: 'kurta', seller: 'anita', title: 'Cotton kurta', category: 'Ethnic wear', tags: ['cotton', 'summer wear'] },
   { key: 'saree', seller: 'anita', title: 'Banarasi saree', category: 'Ethnic wear', tags: ['silk', 'wedding'] },
   { key: 'lehenga', seller: 'anita', title: 'Bridal lehenga', category: 'Ethnic wear', tags: ['wedding', 'heavy work'] },
@@ -80,6 +81,8 @@ describe('search: spelling and synonyms', () => {
     expect(titles(await feed(asha, '?q=shirt'))).not.toContain('Pleated skirt');
     expect(titles(await feed(asha, '?q=skirt'))).not.toContain('Linen shirt');
     expect(titles(await feed(asha, '?q=milk'))).toEqual(['Milk silk blouse']);
+    // a four-letter word must not match across two words ("sari" inside "...puri sa...")
+    expect(titles(await feed(asha, '?q=sari'))).toEqual(['Banarasi saree']);
     expect(titles(await feed(asha, '?q=zebra'))).toEqual([]);
   });
   it('still needs every word to match something', async () => {
@@ -147,13 +150,16 @@ describe('For You ranking', () => {
     expect(o[o.length - 1]).toBe('Slim fit jeans');
   });
 
+  // Ravi's live listings that are still in stock (the jeans were made sold out above)
+  const raviTitles = CATALOGUE.filter((c) => c.seller === 'ravi' && c.key !== 'jeans').map((c) => c.title);
+
   it('boosts shops the buyer follows, only for that buyer', async () => {
     const before = await order(kiran);
-    const ravi1 = before.findIndex((t) => ['Canvas sneakers', 'Linen shirt', 'Pleated skirt', 'Milk silk blouse'].includes(t));
+    const ravi1 = before.findIndex((t) => raviTitles.includes(t));
     await call('PUT', `/v1/buyer/follows/sellers/${await sellerIdOf(app, '9876503002')}`, { token: kiran });
     const after = await order(kiran);
-    const top4 = after.slice(0, 4);
-    expect(top4.every((t) => ['Canvas sneakers', 'Linen shirt', 'Pleated skirt', 'Milk silk blouse'].includes(t))).toBe(true);
+    const top = after.slice(0, raviTitles.length);
+    expect(top.every((t) => raviTitles.includes(t))).toBe(true);
     expect(ravi1).toBeGreaterThanOrEqual(0);
     // another buyer is not affected
     expect(await order(meena)).toEqual(await order(asha));
@@ -245,7 +251,7 @@ describe('search text and index', () => {
     const db = dbOf(app).db;
     const plan = await db.transaction(async (tx) => {
       await tx.execute(sql`set local enable_seqscan = off`);
-      const rows = (await tx.execute(sql`explain select id from listings where search_text ilike any (array['%kurta%']::text[]) or 'kurtaa' <% search_text`)) as unknown as { 'QUERY PLAN': string }[];
+      const rows = (await tx.execute(sql`explain select id from listings where search_text ilike any (array['%kurta%']::text[]) or 'kurtaa' <<% search_text`)) as unknown as { 'QUERY PLAN': string }[];
       return rows.map((r) => r['QUERY PLAN']).join('\n');
     });
     expect(plan).toMatch(/listings_search_trgm_idx/);
