@@ -8,7 +8,7 @@ import ContactScreen from '../app/contact';
 import MessagesScreen from '../app/messages';
 import NegotiationScreen from '../app/negotiation/[id]';
 import OrderScreen from '../app/order/[id]';
-import OrdersScreen from '../app/orders';
+import OrdersScreen from '../app/(tabs)/orders';
 import NewRequestScreen from '../app/request/new';
 import RequestScreen from '../app/request/[id]';
 import RequestsScreen from '../app/requests';
@@ -137,7 +137,8 @@ describe('order screen (view only)', () => {
   it('shows the timeline up to what the seller has done, and a cancelled order with its reason', async () => {
     fakeApi(order(buyerOrder({ status: 'CANCELLED', statusLabel: 'Cancelled', payment: null, cancelText: 'Payment not received' })), fetchMock);
     await renderWith(signedIn(), <OrderScreen />);
-    expect(await screen.findByText(/Cancelled · Payment not received/)).toBeOnTheScreen();
+    expect(await screen.findByText('Cancelled by seller')).toBeOnTheScreen();
+    expect(screen.getByText('Payment not received')).toBeOnTheScreen();
   });
 
   it('shows the seller’s contact while the order is open: chat with unread badge, WhatsApp with the order number, Call', async () => {
@@ -238,7 +239,7 @@ describe('checkout', () => {
     mockParams = { listingId: LID };
     fakeApi(routes(), fetchMock);
     await renderWith(signedIn(), <CheckoutScreen />);
-    await screen.findByText('Checkout');
+    await screen.findByText('Cotton kurta');
     expect(screen.queryByLabelText('S')).not.toBeOnTheScreen();
     expect(screen.getByText(/no cash on delivery/i)).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Place order · ₹1,500' })).toBeDisabled();
@@ -254,7 +255,7 @@ describe('checkout', () => {
     let fail = true;
     fakeApi(routes({ 'POST /v1/buyer/orders': ({ body, headers }) => (sent.push({ body, headers }), fail ? problem(400, 'VALIDATION', undefined, 'Try again in a moment.') : json(buyerOrder(), 201)) }), fetchMock);
     await renderWith(signedIn(), <CheckoutScreen />);
-    await screen.findByText('Checkout');
+    await screen.findByText('Cotton kurta');
     await pressLabel('L');
     await pressLabel('UPI');
     await press('Place order · ₹1,500');
@@ -279,8 +280,9 @@ describe('checkout', () => {
       fetchMock,
     );
     await renderWith(signedIn(), <CheckoutScreen />);
-    await screen.findByText('Agreed price');
+    await screen.findByText(/Agreed price held for you/);
     expect(screen.getAllByText('₹1,400').length).toBeGreaterThan(0);
+    expect(screen.getByText('− ₹100')).toBeOnTheScreen(); // saved by bargaining
     await pressLabel('Bank transfer');
     await press('Place order · ₹1,400');
     await waitFor(() => expect(sent).toHaveLength(1));
@@ -304,8 +306,8 @@ describe('placing an agreed offer from the negotiation screen', () => {
     mockParams = { id: 'n1' };
     fakeApi({ 'GET /v1/buyer/negotiations/n1': () => json(agreed('DIRECT')) }, fetchMock);
     await renderWith(signedIn(), <NegotiationScreen />);
-    await screen.findByText('Place order at ₹1,400');
-    await press('Place order at ₹1,400');
+    await screen.findByText('Continue · ₹1,400');
+    await press('Continue · ₹1,400');
     expect(mockRouter.push).toHaveBeenCalledWith(`/checkout?negotiationId=n1&listingId=${LID}&variantId=v1`);
   });
 
@@ -422,8 +424,8 @@ describe('messages and chat', () => {
     const withCard = thread({ messages: [{ id: 'm3', from: 'OTHER', type: 'LISTING', text: null, media: null, listing: { id: LID, title: 'Green saree', price: 450000, coverUrl: null }, at: 4 }] });
     fakeApi({ 'GET /v1/buyer/threads/t1': () => json(withCard) }, fetchMock);
     await renderWith(signedIn(), <ChatScreen />);
-    await screen.findByText('View and buy');
-    await press('View and buy');
+    await screen.findByLabelText('Open Green saree');
+    await act(async () => void fireEvent.press(screen.getByLabelText('Open Green saree')));
     expect(mockRouter.push).toHaveBeenCalledWith(`/listing/${LID}`);
   });
 });
@@ -469,7 +471,8 @@ describe('asking sellers', () => {
     fakeApi({ 'GET /v1/buyer/requests': () => json({ items: [buyerRequest()] }) }, fetchMock);
     await renderWith(signedIn(), <RequestsScreen />);
     expect(await screen.findByText('Green silk saree')).toBeOnTheScreen();
-    expect(screen.getByText(/sent to 3 sellers · 1 reply/)).toBeOnTheScreen();
+    expect(screen.getByText(/sent to 3 sellers/)).toBeOnTheScreen();
+    expect(screen.getByText('1 response')).toBeOnTheScreen();
   });
 
   it('shows replies with the seller’s rating, price and message; I want this opens the chat', async () => {
@@ -481,13 +484,13 @@ describe('asking sellers', () => {
       'POST /v1/buyer/responses/resp1/want': ({ headers }) => (want.push(headers['idempotency-key'] as string), (state = buyerRequest({ responses: [{ ...buyerRequest().responses[0], status: 'WANTED', threadId: 't9' }] })), json(state)),
     }, fetchMock);
     await renderWith(signedIn(), <RequestScreen />);
-    expect(await screen.findByText(/★ 4.5 \(12\)/)).toBeOnTheScreen();
+    expect(await screen.findByLabelText('Rated 4.5 from 12 reviews')).toBeOnTheScreen();
     expect(screen.getByText('₹4,500')).toBeOnTheScreen();
     expect(screen.getByText('I have this')).toBeOnTheScreen();
     await press('I want this');
     await waitFor(() => expect(want).toHaveLength(1));
     expect(mockRouter.push).toHaveBeenCalledWith('/chat/t9');
-    expect(await screen.findByText('Open chat')).toBeOnTheScreen();
+    expect(await screen.findByText(/Open chat/)).toBeOnTheScreen();
   });
 
   it('says no to a reply, and closes the request', async () => {
@@ -511,7 +514,7 @@ describe('contact for orders and the agreement', () => {
     const saved: unknown[] = [];
     fakeApi({ 'GET /v1/buyer/profile': () => json(profile()), 'PATCH /v1/buyer/profile/contact': ({ body }) => (saved.push(body), json(profile())) }, fetchMock);
     await renderWith(signedIn(), <ContactScreen />);
-    await screen.findByText('Contact for orders');
+    await screen.findByLabelText('Phone');
     await type('WhatsApp', '9123456789');
     await press('Save');
     await waitFor(() => expect(saved).toHaveLength(1));
@@ -522,7 +525,7 @@ describe('contact for orders and the agreement', () => {
   it('shows the server’s message when the numbers are refused', async () => {
     fakeApi({ 'GET /v1/buyer/profile': () => json(profile()), 'PATCH /v1/buyer/profile/contact': () => problem(400, 'VALIDATION', { phone: 'Enter a 10-digit mobile number.' }, 'Check the highlighted fields.') }, fetchMock);
     await renderWith(signedIn(), <ContactScreen />);
-    await screen.findByText('Contact for orders');
+    await screen.findByLabelText('Phone');
     await press('Save');
     expect(await screen.findByText('Enter a 10-digit mobile number.')).toBeOnTheScreen();
   });

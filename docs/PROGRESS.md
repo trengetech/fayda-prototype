@@ -4,6 +4,31 @@
 
 **Developer tooling (1 Nov 2026): graphify, a local code graph (I-42, proposed).** `pnpm graph` builds it (about 10 s), `pnpm graph:update` refreshes it (about 7 s), both with `GRAPHIFY_BACKEND=none --code-only`, so nothing leaves the machine. Needs `pipx install "graphifyy==0.9.92"` once per developer. Checked on this repo: 375 code files, about 4,100 nodes and 12,800 edges; `graphify affected "rankScore"` found exactly the service, controller, module and two tests that use it. Weak spots: free-text `graphify query` matches keywords only (it answered a ranking question with unrelated nodes), SQL files are not indexed (needs the `sql` extra), 28 files with no symbols are skipped. The graph is git-ignored and the shared hook is not committed (see I-42). Not used by CI.
 
+## M3.10: prototype-parity UI (1 Nov 2026): built, tested, emulator-checked; API tests not completed here, phones not tested
+
+Why: the apps had only the prototype's colours, font and banner, not its layout. A button-list home, no icons, no tab bar. See decision I-43 (proposed).
+
+### What was built
+- **Icons and shared UI (`packages/ui`):** `react-native-svg` 15.16.0 (founder-approved); the prototype's 39 icons ported (plus a down arrow); `Icon`, `IconButton`, `AppBar`, `TabBar`, `Chip`, `Segmented`, `ListRow`, `ThumbRow`, `PersonRow`, `StatTile`, `EmptyState`, `Sheet`, `Confirm`, `Bubble`, `Composer`, `ChoiceCard`, `Steps`, `RatingChip` and more. A test fails if the prototype gains an icon the app lacks.
+- **Navigation:** both apps have the prototype's bottom tabs with count dots (buyer: Home, Search, Offers, Orders, Profile; seller: Home, Listings, Offers, Requests, Orders, Shop) and a title bar with a back arrow on every screen.
+- **Buyer:** Home is the full-screen reel feed (For you / Following, category pill, bell, icon rail, search icon); a Search tab as in the prototype (box, category and price chips, sizes, Ask sellers, two-column grid); offer sheet; negotiation thread; chat; product page with size chips, pinned Buy now / Make offer, and a swipe gallery with Video 1 / Photo 2 chips; checkout, order detail, requests, addresses, onboarding and the list screens in the prototype's style.
+- **Seller:** Home is the dashboard; offer thread, chat, listings list, listing editor, order detail, requests, comments, onboarding in the prototype's style.
+- **Confirm dialogs:** buyer withdraw and decline counter; seller decline offer and pause listing; delete address.
+- **Not ported on purpose:** public offers and the Private/Public switch (decision B-1: offers are always private), the demo-account list. The "Private negotiation" line is kept.
+- **Demo media:** `infra/seed/refresh-demo-media.mjs` gives each demo listing three flat-colour illustrated pictures, and five of them a 60-second reel (made on the Mac with `rsvg-convert` and a Swift/AVFoundation encoder, since the Homebrew `ffmpeg` here is broken). **They are illustrations, not photographs.** It was run against the dev server and changes only media. `seed-demo.mjs` still creates gradient pictures, so run the refresh after any re-seed.
+
+### Tests
+- Buyer 170, seller 126, UI 8, all passing; typecheck and lint clean. No change to `apps/api`, `packages/domain`, `packages/contracts` or `packages/api-client`, so `CONTRACT_LEVEL` and the snapshot are unchanged.
+- **API tests were not completed on this laptop:** a run against the remote test database was stopped at the 20-minute cap with four tests timing out at 30 s (slow database, not a code change). Run them in CI (local Postgres) before merging.
+
+### Checked on the emulator (arm64 build)
+Buyer Home reel (a real 60 s video plays), Search, Offers, negotiation, Orders, Shop, product page and gallery chips, Profile, addresses, requests; seller Home, Offers, Listings, Orders, Requests, Shop.
+
+### Known limits
+- Seller listing editor, seller order detail, buyer checkout, the sheets, and both onboardings were checked by tests only, not on a device. Nothing was run on a physical phone.
+- Pictures and reels are illustrated stand-ins (see above).
+- The product page does not show other buyers' offers (none exist: B-1).
+
 ## M3.9: search and ranking (1 Nov 2026): built, tested; emulator and phones not checked
 
 Branch `m3.9-search-ranking`. Decisions I-39 (detail rewritten) and I-41 (admin-managed categories, later) in `docs/DECISIONS.md`, both **proposed**. Founder approved the plan on 1 Nov 2026, including `pg_trgm`, and asked that weights be tuned on test data.

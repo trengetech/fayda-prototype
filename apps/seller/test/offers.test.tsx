@@ -1,5 +1,5 @@
 import { act, fireEvent, screen } from '@testing-library/react-native';
-import OffersScreen from '../app/offers';
+import OffersScreen from '../app/(tabs)/offers';
 import OfferScreen from '../app/offer/[id]';
 import { fakeApi, json, managerWith, problem, renderWith, sellerNegotiation } from './utils';
 
@@ -56,6 +56,8 @@ describe('offer inbox', () => {
   });
 });
 
+const pressAccept = () => act(async () => void fireEvent.press(screen.getByText(/^Accept ₹/)));
+
 describe('offer screen', () => {
   it('shows the timeline, marks replies sent by the seller’s own rules, and the counter range', async () => {
     const n = sellerNegotiation({
@@ -68,10 +70,12 @@ describe('offer screen', () => {
     });
     fakeApi({ 'GET /v1/seller/negotiations/n1': () => json(n) }, fetchMock);
     await renderWith(signedIn(), <OfferScreen />);
-    expect(await screen.findByText('Asha Buyer offered ₹1,000')).toBeOnTheScreen();
-    expect(screen.getByText('Your rule countered ₹1,350')).toBeOnTheScreen();
-    expect(screen.getByText('Asha Buyer offered ₹1,100')).toBeOnTheScreen();
-    expect(screen.getByText('Between ₹1,101 and ₹1,349')).toBeOnTheScreen();
+    expect(await screen.findByText('Buyer’s offer')).toBeOnTheScreen();
+    expect(screen.getByText('Automatic counter')).toBeOnTheScreen(); // the seller sees which reply their own rule sent
+    expect(screen.getByText('Buyer’s counter')).toBeOnTheScreen();
+    expect(screen.getByText(/Asha Buyer offered ₹1,100/)).toBeOnTheScreen();
+    await press('Counter');
+    expect(screen.getByText(/must be above ₹1,100 and below ₹1,350/)).toBeOnTheScreen();
   });
 
   it('accepts, and refreshes from the server’s answer', async () => {
@@ -85,11 +89,11 @@ describe('offer screen', () => {
       fetchMock,
     );
     await renderWith(signedIn(), <OfferScreen />);
-    await screen.findByText('Your reply');
-    await press('Accept');
+    await screen.findByText(/offered ₹/);
+    await pressAccept();
     expect(await screen.findByText('Agreed at ₹1,000')).toBeOnTheScreen();
     expect(posts).toEqual([{ dealAccess: null }]);
-    expect(screen.queryByText('Accept')).not.toBeOnTheScreen();
+    expect(screen.queryByText(/^Accept ₹/)).not.toBeOnTheScreen();
   });
 
   it('sends a counter in paise, and shows the server’s message when it is refused', async () => {
@@ -102,7 +106,8 @@ describe('offer screen', () => {
       fetchMock,
     );
     await renderWith(signedIn(), <OfferScreen />);
-    await screen.findByText('Your reply');
+    await screen.findByText(/offered ₹/);
+    await press('Counter');
     await type('Counter with', '1,400');
     await press('Send counter');
     expect(await screen.findByText('Your counter must be lower than your last counter (₹1,300).')).toBeOnTheScreen();
@@ -120,13 +125,14 @@ describe('offer screen', () => {
       fetchMock,
     );
     await renderWith(signedIn(), <OfferScreen />);
-    await screen.findByText('Your reply');
-    await press('Decline');
+    await screen.findByText(/offered ₹/);
+    await press('Decline offer');
     expect(declines).toHaveLength(0);
-    await press('Keep it');
-    expect(screen.queryByText('Decline this offer?')).not.toBeOnTheScreen();
-    await press('Decline');
-    await press('Yes, decline');
+    expect(screen.getByText('Decline this offer?')).toBeOnTheScreen();
+    await press('Cancel');
+    expect(declines).toHaveLength(0);
+    await press('Decline offer');
+    await act(async () => void fireEvent.press(screen.getAllByText('Decline').at(-1) as never)); // the dialog's button
     expect((await screen.findAllByText('Offer declined')).length).toBeGreaterThan(0);
     expect(declines).toHaveLength(1);
   });
@@ -147,11 +153,11 @@ describe('offer screen', () => {
     );
     await renderWith(signedIn(), <OfferScreen />);
     await screen.findByText('How does the buyer get the price?');
-    await press('Accept');
+    await pressAccept();
     expect(await screen.findByText('Add the coupon code or discount link.')).toBeOnTheScreen();
     await type('Coupon code', ' KURTA10 ');
-    await press('Accept');
-    expect(await screen.findByText('Coupon code: KURTA10')).toBeOnTheScreen();
+    await pressAccept();
+    expect(await screen.findByText('Sent to the buyer: code KURTA10')).toBeOnTheScreen();
     expect(posts[1]).toEqual({ dealAccess: { type: 'CODE', value: 'KURTA10' } });
   });
 

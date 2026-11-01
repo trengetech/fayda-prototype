@@ -31,7 +31,7 @@ export default function NotificationsScreen() {
     <FlatList
       testID="notifications-list"
       style={{ flex: 1, backgroundColor: colors.surface }}
-      contentContainerStyle={{ padding: 16, gap: 10 }}
+      contentContainerStyle={{ padding: 16, gap: 0 }}
       data={items}
       keyExtractor={(n) => n.id}
       refreshing={q.isRefetching && !q.isFetchingNextPage}
@@ -42,7 +42,6 @@ export default function NotificationsScreen() {
       }}
       ListHeaderComponent={
         <View style={{ gap: 8, marginBottom: 4 }}>
-          <AppText weight="extrabold" size={20}>Notifications</AppText>
           <AppText tone="muted" size={13}>{unread ? `${unread} unread` : 'You’re all caught up.'}</AppText>
           {unread ? <Button title="Mark all as read" variant="outline" size="sm" loading={readAll.isPending} onPress={() => readAll.mutate()} /> : null}
           {items.length ? <Button title="Clear all" variant="outline" size="sm" loading={clear.isPending} onPress={confirmClear} /> : null}
@@ -58,21 +57,18 @@ export default function NotificationsScreen() {
         ) : <AppText tone="muted">Nothing yet. Offers, orders and messages will show up here.</AppText>
       }
       renderItem={({ item: n }) => (
-        <Pressable accessibilityRole="button" accessibilityLabel={`${n.read ? '' : 'Unread. '}${n.title}. ${n.body}`} onPress={() => open(n)}>
-          <Card>
-            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
-              <View style={{ width: 10, height: 10, borderRadius: 5, marginTop: 6, backgroundColor: n.read ? 'transparent' : colors.accent }} />
-              <View style={{ flex: 1, gap: 2 }}>
-                <AppText weight={n.read ? 'regular' : 'bold'}>{n.title}</AppText>
-                <AppText tone="muted" size={13}>{n.body}</AppText>
-                <AppText tone="faint" size={12}>{formatAgo(n.at, Date.now())}</AppText>
-                <Pressable accessibilityRole="button" accessibilityLabel={`Delete notification: ${n.title}`} hitSlop={8} disabled={del.isPending} onPress={() => del.mutate(n.id)}>
-                  <AppText tone="muted" size={12} weight="bold">Delete</AppText>
-                </Pressable>
-              </View>
-            </View>
-          </Card>
-        </Pressable>
+        <View style={{ marginHorizontal: -16 }}>
+          <View style={{ backgroundColor: n.read ? colors.surface : colors.accentTint, borderBottomWidth: 1, borderBottomColor: colors.divider }}>
+            <Pressable accessibilityRole="button" accessibilityLabel={`${n.read ? '' : 'Unread. '}${n.title}. ${n.body}`} onPress={() => open(n)} style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6, gap: 2 }}>
+              <AppText weight={n.read ? 'medium' : 'extrabold'}>{n.title}</AppText>
+              <AppText tone="muted" size={13}>{n.body}</AppText>
+              <AppText tone="faint" size={11}>{formatAgo(n.at, Date.now())}</AppText>
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Delete notification: ${n.title}`} hitSlop={8} disabled={del.isPending} onPress={() => del.mutate(n.id)} style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
+              <AppText tone="muted" size={12} weight="bold">Delete</AppText>
+            </Pressable>
+          </View>
+        </View>
       )}
     />
   );

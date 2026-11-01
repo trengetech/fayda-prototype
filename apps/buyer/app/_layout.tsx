@@ -10,6 +10,7 @@ import { Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { APP_LABEL, VARIANT } from '../src/config';
 import { getPushToken, targetFromPush } from '../src/push';
+import { stackHeader } from '../src/header';
 import { sessionManager } from '../src/session';
 import { VersionGate } from '../src/version-gate';
 
@@ -46,7 +47,7 @@ function Routes() {
   const signedIn = status === 'signedIn';
   const complete = signedIn && !!profile?.complete;
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }}>
+    <Stack screenOptions={{ headerShown: false, header: stackHeader, contentStyle: { backgroundColor: colors.surface } }}>
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="sign-in" />
       </Stack.Protected>
@@ -54,30 +55,27 @@ function Routes() {
         <Stack.Screen name="onboarding" />
       </Stack.Protected>
       <Stack.Protected guard={complete}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="feed" />
-        <Stack.Screen name="search" />
-        <Stack.Screen name="shop/[handle]" />
-        <Stack.Screen name="follows" />
-        <Stack.Screen name="saved" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="status" />
+        <Stack.Screen name="shop/[handle]" options={{ headerShown: true, title: 'Shop' }} />
+        <Stack.Screen name="follows" options={{ headerShown: true, title: 'Shops you follow' }} />
+        <Stack.Screen name="saved" options={{ headerShown: true, title: 'Saved' }} />
         <Stack.Screen name="listing/[id]" />
-        <Stack.Screen name="offers" />
         <Stack.Screen name="negotiation/[id]" />
-        <Stack.Screen name="checkout" />
-        <Stack.Screen name="orders" />
-        <Stack.Screen name="order/[id]" />
-        <Stack.Screen name="messages" />
+        <Stack.Screen name="checkout" options={{ headerShown: true, title: 'Checkout' }} />
+        <Stack.Screen name="order/[id]" options={{ headerShown: true, title: 'Order' }} />
+        <Stack.Screen name="messages" options={{ headerShown: true, title: 'Messages' }} />
         <Stack.Screen name="chat/[id]" />
-        <Stack.Screen name="requests" />
-        <Stack.Screen name="request/new" />
-        <Stack.Screen name="request/[id]" />
-        <Stack.Screen name="addresses" />
-        <Stack.Screen name="contact" />
-        <Stack.Screen name="agreement" />
-        <Stack.Screen name="notifications" />
-        <Stack.Screen name="notification-settings" />
-        <Stack.Screen name="blocked" />
-        <Stack.Screen name="gallery" />
+        <Stack.Screen name="requests" options={{ headerShown: true, title: 'Your requests' }} />
+        <Stack.Screen name="request/new" options={{ headerShown: true, title: 'Ask sellers' }} />
+        <Stack.Screen name="request/[id]" options={{ headerShown: true, title: 'Request' }} />
+        <Stack.Screen name="addresses" options={{ headerShown: true, title: 'Delivery addresses' }} />
+        <Stack.Screen name="contact" options={{ headerShown: true, title: 'Contact for orders' }} />
+        <Stack.Screen name="agreement" options={{ headerShown: true, title: 'User agreement' }} />
+        <Stack.Screen name="notifications" options={{ headerShown: true, title: 'Notifications' }} />
+        <Stack.Screen name="notification-settings" options={{ headerShown: true, title: 'Notification settings' }} />
+        <Stack.Screen name="blocked" options={{ headerShown: true, title: 'Blocked people' }} />
+        <Stack.Screen name="gallery" options={{ headerShown: true, title: 'Design system' }} />
       </Stack.Protected>
     </Stack>
   );

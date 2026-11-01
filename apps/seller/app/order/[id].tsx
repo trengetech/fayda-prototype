@@ -1,7 +1,7 @@
-import { useSellerOrder, useSellerOrderAction } from '@fayda/api-client';
+import { useApiClient, useSellerOrder, useSellerOrderAction } from '@fayda/api-client';
 import type { SellerOrder } from '@fayda/contracts/schemas';
 import { formatRupees, timeLeft } from '@fayda/domain';
-import { AppText, Badge, Button, Card, ChipGroup, FieldError, Screen, TextField, describeError } from '@fayda/ui';
+import { AppText, Badge, Button, Card, ChipGroup, FieldError, Screen, SectionTitle, Steps, TextField, Thumb, describeError, type StepItem } from '@fayda/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -26,8 +26,24 @@ function ShipFields({ value, onChange, errors }: { value: ShipForm; onChange: (v
   );
 }
 
+const SEQ = ['PLACED', 'CONFIRMED', 'SHIPPED', 'DELIVERED'] as const;
+function orderSteps(o: SellerOrder): StepItem[] {
+  const web = o.channel === 'WEBSITE';
+  const at = SEQ.indexOf(o.status as (typeof SEQ)[number]);
+  const closed = o.status === 'CANCELLED' || o.status === 'EXPIRED';
+  const base: StepItem[] = [
+    { key: 'PLACED', title: web ? 'Order started on your website' : 'Order placed', note: web ? 'Buyer used the deal on the website' : 'Buyer pays you directly', done: !closed ? at >= 0 : true },
+    { key: 'CONFIRMED', title: web ? 'Confirmed by you' : 'Payment confirmed', note: web ? 'You found the order on your website' : 'You confirmed the payment arrived', done: at >= 1 },
+    { key: 'SHIPPED', title: 'Shipped', note: 'Optional: add courier or delivery details', done: at >= 2 },
+    { key: 'DELIVERED', title: 'Delivered to the buyer', note: 'You marked it delivered', done: at >= 3 },
+  ];
+  const shown = closed ? base.slice(0, 1) : base;
+  return closed ? [...shown, { key: 'closed', title: o.status === 'EXPIRED' ? 'Expired' : 'Cancelled', note: o.cancelText ?? 'Not confirmed in time', done: false, failed: true }] : shown;
+}
+
 export default function OrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const client = useApiClient();
   const router = useRouter();
   const query = useSellerOrder(id ?? null);
   const act = useSellerOrderAction();
@@ -100,12 +116,20 @@ export default function OrderScreen() {
 
   return (
     <Screen>
-      <View style={{ gap: 4 }}>
-        <AppText weight="extrabold" size={20}>{o.listing.title}</AppText>
-        <AppText tone="muted">{o.number} · Size {o.listing.variantLabel} · {o.buyerName}</AppText>
-        <Badge label={badge.label} tone={badge.tone} />
-        {o.status === 'PLACED' ? <AppText tone="faint" size={12}>Confirm within {timeLeft(o.confirmBy, Date.now())} or the order expires and the item goes back on sale.</AppText> : null}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Thumb size={72} source={o.listing.coverUrl ? { uri: client.resolveUrl(o.listing.coverUrl) } : null} label={o.listing.title} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <AppText weight="extrabold">{o.listing.title}</AppText>
+          <AppText tone="muted" size={12}>{o.number} · Size {o.listing.variantLabel} · {o.buyerName}</AppText>
+          <View style={{ flexDirection: 'row', marginTop: 2 }}><Badge label={badge.label} tone={badge.tone} /></View>
+        </View>
       </View>
+      {o.status === 'PLACED' ? <AppText tone="muted" size={12}>Confirm within {timeLeft(o.confirmBy, Date.now())} or the order expires and the item goes back on sale.</AppText> : null}
+
+      <Card>
+        <SectionTitle>Progress</SectionTitle>
+        <Steps steps={orderSteps(o)} />
+      </Card>
 
       <Card>
         <AppText weight="bold">{formatRupees(o.price)}</AppText>
@@ -158,8 +182,8 @@ export default function OrderScreen() {
       ) : null}
 
       {o.canConfirm || o.canShip || o.canDeliver || o.canCancel ? (
-        <Card>
-          <AppText weight="bold">Next step</AppText>
+        <Card tone="tint">
+          <AppText weight="extrabold">Next step</AppText>
           {shipOpen && (o.canConfirm || o.canShip) ? <ShipFields value={ship} onChange={setShip} errors={shipErrors} /> : null}
           {o.canConfirm ? <Button title={shipOpen ? `${confirmLabel(o)} and shipped` : confirmLabel(o)} loading={act.isPending} onPress={() => confirm(shipOpen)} /> : null}
           {o.canShip && shipOpen ? <Button title="Save shipment details" loading={act.isPending} onPress={sendShipment} /> : null}

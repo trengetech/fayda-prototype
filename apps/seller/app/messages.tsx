@@ -1,7 +1,7 @@
 import { useThreads } from '@fayda/api-client';
-import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
+import { AppText, Badge, Button, Card, PersonRow, useTheme } from '@fayda/ui';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
 
 /** Every chat with a buyer: one per order, and one per buyer request that led to a sale. */
 export default function MessagesScreen() {
@@ -15,7 +15,6 @@ export default function MessagesScreen() {
       contentContainerStyle={{ padding: 16, gap: 12 }}
       refreshControl={<RefreshControl refreshing={threads.isRefetching} onRefresh={() => void threads.refetch()} />}
     >
-      <AppText weight="extrabold" size={20}>Messages</AppText>
       {threads.isPending ? (
         <Card><View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><ActivityIndicator color={colors.accent} /><AppText>Loading messages…</AppText></View></Card>
       ) : threads.isError ? (
@@ -25,18 +24,11 @@ export default function MessagesScreen() {
           <Button title="Try again" onPress={() => void threads.refetch()} />
         </Card>
       ) : items.length ? (
-        items.map((t) => (
-          <Card key={t.id}>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Open chat ${t.title}`} onPress={() => router.push(`/chat/${t.id}` as never)} style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-              <View style={{ flex: 1, gap: 2 }}>
-                <AppText weight="bold" numberOfLines={1}>{t.title}</AppText>
-                <AppText tone="muted" size={12}>{t.otherName}</AppText>
-                {t.lastMessage ? <AppText tone="muted" size={13} numberOfLines={1}>{t.lastMessage}</AppText> : null}
-              </View>
-              {t.unread ? <Badge label={`${t.unread} new`} tone="accent" /> : null}
-            </Pressable>
-          </Card>
-        ))
+        <View style={{ marginHorizontal: -16, marginTop: -12 }}>
+          {items.map((t) => (
+            <PersonRow key={t.id} name={t.otherName} subtitle={t.title} preview={t.lastMessage} unread={t.unread > 0} accessibilityLabel={`Open chat ${t.title}`} onPress={() => router.push(`/chat/${t.id}` as never)} right={t.unread ? <Badge label={`${t.unread} new`} tone="accent" /> : undefined} />
+          ))}
+        </View>
       ) : (
         <Card>
           <AppText weight="bold">No messages yet</AppText>

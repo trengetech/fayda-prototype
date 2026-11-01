@@ -1,7 +1,7 @@
 import { useSession, useSessionManager } from '@fayda/api-client';
 import { BuyerProfileInputSchema, type BuyerProfileInput } from '@fayda/contracts/schemas';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AppText, Button, Card, Checkbox, FieldError, Screen, TextField, describeError } from '@fayda/ui';
+import { ActionBar, AppText, Button, Card, Checkbox, FieldError, Screen, SectionTitle, TextField, describeError, useTheme } from '@fayda/ui';
 import { useState } from 'react';
 import { Controller, useForm, type FieldPath } from 'react-hook-form';
 import { Modal, ScrollView, View } from 'react-native';
@@ -15,6 +15,7 @@ const FIELD_MAP: Record<string, FieldPath<BuyerProfileInput>> = { contactPhone: 
 
 /** Buyer sign-up: name, address, a contact number sellers can use on open orders, and the user agreement. */
 export default function BuyerOnboarding() {
+  const { colors } = useTheme();
   const manager = useSessionManager();
   const { user } = useSession();
   const [reading, setReading] = useState(false);
@@ -52,14 +53,16 @@ export default function BuyerOnboarding() {
   );
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.surface }}>
     <Screen>
       <View style={{ gap: 6 }}>
-        <AppText weight="extrabold" size={24}>Set up your profile</AppText>
+        <AppText tone="muted" weight="extrabold" size={12}>One last step</AppText>
+        <AppText weight="extrabold" size={24} style={{ letterSpacing: -0.4 }}>Set up your profile</AppText>
         <AppText tone="muted">So sellers know where to deliver and how to reach you about an order.</AppText>
       </View>
 
       {field('name', 'Your name', { autoCapitalize: 'words' })}
-      <AppText weight="bold" size={15}>Delivery address</AppText>
+      <SectionTitle>Delivery address</SectionTitle>
       {field('address.name', 'Name on the delivery', { autoCapitalize: 'words' })}
       {field('address.line1', 'Flat, house or building')}
       {field('address.line2', 'Area or street')}
@@ -67,7 +70,7 @@ export default function BuyerOnboarding() {
       {field('address.city', 'City')}
       {field('address.state', 'State')}
 
-      <AppText weight="bold" size={15}>Contact for your orders</AppText>
+      <SectionTitle>Contact for your orders</SectionTitle>
       <AppText tone="muted" size={13}>Add a phone or WhatsApp number (at least one). The seller sees it only while your order is open.</AppText>
       {field('contact.phone', 'Phone number', { keyboardType: 'number-pad', prefix: '+91', maxLength: 13, optional: true })}
       {field('contact.whatsapp', 'WhatsApp number', { keyboardType: 'number-pad', prefix: '+91', maxLength: 13, optional: true })}
@@ -80,7 +83,6 @@ export default function BuyerOnboarding() {
         <Controller control={control} name="agreementAccepted" render={({ field: f }) => <Checkbox checked={f.value} onChange={f.onChange} error={errors.agreementAccepted?.message}><AppText size={14}>I have read and agree to the user agreement</AppText></Checkbox>} />
       </Card>
 
-      <Button title="Agree and start shopping" size="lg" loading={isSubmitting} onPress={() => void submit()} />
 
       <Modal visible={reading} animationType="slide" onRequestClose={() => setReading(false)}>
         <ScrollView contentContainerStyle={{ padding: 20, gap: 14, paddingTop: 48 }}>
@@ -91,5 +93,10 @@ export default function BuyerOnboarding() {
         </ScrollView>
       </Modal>
     </Screen>
+    <ActionBar>
+      <Button title="Agree and start shopping" size="lg" loading={isSubmitting} onPress={() => void submit()} />
+      <Button title="Use a different number" variant="ghost" size="sm" onPress={() => void manager.signOut()} />
+    </ActionBar>
+    </View>
   );
 }

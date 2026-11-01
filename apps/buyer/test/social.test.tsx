@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Alert, Share } from 'react-native';
-import FeedScreen from '../app/feed';
+import FeedScreen from '../app/(tabs)/index';
 import ListingScreen from '../app/listing/[id]';
 import SavedScreen from '../app/saved';
 import { shareMessage } from '../src/social';
@@ -39,7 +39,7 @@ describe('like and save on a reel', () => {
     expect(screen.getByLabelText('Like Cotton kurta (4 likes)')).toBeOnTheScreen();
     await act(async () => void fireEvent.press(screen.getByLabelText('Like Cotton kurta (4 likes)')));
     expect(await screen.findByLabelText('Unlike Cotton kurta (5 likes)')).toBeOnTheScreen(); // before the reply
-    expect(screen.getByText('♥ 5')).toBeOnTheScreen();
+    expect(screen.getByText('5')).toBeOnTheScreen();
     await act(async () => answer(json({ liked: true, likeCount: 7 }))); // two other people liked it meanwhile
     expect(await screen.findByLabelText('Unlike Cotton kurta (7 likes)')).toBeOnTheScreen();
   });
@@ -101,7 +101,7 @@ describe('comments on the product page', () => {
     expect(screen.getByText('Comments (2)')).toBeOnTheScreen();
     expect(screen.getByText('Seller')).toBeOnTheScreen(); // the shop's reply is marked
     expect(screen.getByText('1 min ago')).toBeOnTheScreen();
-    expect(screen.getByText('♡ 12')).toBeOnTheScreen();
+    expect(screen.getByLabelText(/Like Cotton kurta \(12 likes\)/)).toBeOnTheScreen();
   });
 
   it('says so when there are no comments', async () => {

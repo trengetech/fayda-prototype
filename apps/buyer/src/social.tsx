@@ -2,7 +2,7 @@ import { useComments, usePostComment, useRemoveComment, useSetLike, useSetSave }
 import type { Comment } from '@fayda/contracts/schemas';
 import { CommentSafety } from './safety';
 import { COMMENT_MAX_CHARS, formatAgo, formatCount, formatRupees } from '@fayda/domain';
-import { AppText, Badge, Button, Card, TextField, describeError, useTheme } from '@fayda/ui';
+import { AppText, Badge, Button, Card, Icon, TextField, describeError, useTheme } from '@fayda/ui';
 import * as Linking from 'expo-linking';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, Share, View } from 'react-native';
@@ -28,11 +28,27 @@ const chipStyle = (on: boolean, colors: ReturnType<typeof useTheme>['colors']) =
 export interface SocialItem { id: string; title: string; price: number; liked: boolean; saved: boolean; likeCount: number; commentCount: number; ownShop?: boolean; ownListing?: boolean }
 
 /** Like, comments count, save and share in one row. Used on reels and on the product page. */
-export function ReactionRow({ item, onComments }: { item: SocialItem; onComments?: () => void }) {
+export function ReactionRow({ item, onComments, compact }: { item: SocialItem; onComments?: () => void; compact?: boolean }) {
   const { colors } = useTheme();
   const like = useSetLike();
   const save = useSetSave();
   const own = !!(item.ownShop || item.ownListing);
+  if (compact) {
+    const ico = (name: 'heart' | 'chat' | 'bookmark' | 'send', label: string, n: string | null, on: boolean, onPress: (() => void) | undefined, disabled: boolean) => (
+      <Pressable key={name} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: on, disabled }} disabled={disabled} onPress={onPress} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+        <Icon name={name} size={18} color={on ? colors.accent : colors.muted} fill={on && (name === 'heart' || name === 'bookmark') ? colors.accent : 'none'} />
+        {n ? <AppText size={11} tone="muted" weight="bold">{n}</AppText> : null}
+      </Pressable>
+    );
+    return (
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        {ico('heart', own ? `${item.likeCount} likes` : item.liked ? `Unlike ${item.title} (${item.likeCount} likes)` : `Like ${item.title} (${item.likeCount} likes)`, formatCount(item.likeCount), item.liked, () => like.mutate({ listingId: item.id, like: !item.liked }), own || like.isPending)}
+        {ico('chat', `Comments on ${item.title} (${item.commentCount})`, formatCount(item.commentCount), false, onComments, !onComments)}
+        {ico('bookmark', item.saved ? `Remove ${item.title} from saved` : `Save ${item.title}`, null, item.saved, () => save.mutate({ listingId: item.id, save: !item.saved }), save.isPending)}
+        {ico('send', `Share ${item.title}`, null, false, () => void shareListing(item), false)}
+      </View>
+    );
+  }
   return (
     <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
       <Pressable
@@ -61,6 +77,43 @@ export function ReactionRow({ item, onComments }: { item: SocialItem; onComments
       <Pressable accessibilityRole="button" accessibilityLabel={`Share ${item.title}`} onPress={() => void shareListing(item)} style={chipStyle(false, colors)}>
         <AppText weight="bold" size={13}>Share</AppText>
       </Pressable>
+    </View>
+  );
+}
+
+/** The reel's right-hand rail: like, comments, save and share as round icon buttons with a caption (same actions and labels as ReactionRow). */
+export function ReelRail({ item, onComments }: { item: SocialItem; onComments?: () => void }) {
+  const like = useSetLike();
+  const save = useSetSave();
+  const own = !!(item.ownShop || item.ownListing);
+  const Btn = ({ label, caption, onPress, disabled, selected, children }: { label: string; caption: string; onPress?: () => void; disabled?: boolean; selected?: boolean; children: React.ReactNode }) => (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: !!selected, disabled: !!disabled }} disabled={disabled} onPress={onPress} style={{ alignItems: 'center', gap: 2 }}>
+      <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center' }}>{children}</View>
+      <AppText weight="bold" size={12} style={{ color: '#fff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 1 } }}>{caption}</AppText>
+    </Pressable>
+  );
+  return (
+    <View style={{ gap: 16, alignItems: 'center' }}>
+      <Btn
+        label={own ? `${item.likeCount} likes` : item.liked ? `Unlike ${item.title} (${item.likeCount} likes)` : `Like ${item.title} (${item.likeCount} likes)`}
+        caption={formatCount(item.likeCount)} selected={item.liked} disabled={own || like.isPending}
+        onPress={() => like.mutate({ listingId: item.id, like: !item.liked })}
+      >
+        <Icon name="heart" size={24} color={item.liked ? '#F43F5E' : '#fff'} fill={item.liked ? '#F43F5E' : 'none'} />
+      </Btn>
+      <Btn label={`Comments on ${item.title} (${item.commentCount})`} caption={formatCount(item.commentCount)} onPress={onComments} disabled={!onComments}>
+        <Icon name="chat" size={24} color="#fff" />
+      </Btn>
+      <Btn
+        label={item.saved ? `Remove ${item.title} from saved` : `Save ${item.title}`}
+        caption={item.saved ? 'Saved' : 'Save'} selected={item.saved} disabled={save.isPending}
+        onPress={() => save.mutate({ listingId: item.id, save: !item.saved })}
+      >
+        <Icon name="bookmark" size={24} color="#fff" fill={item.saved ? '#fff' : 'none'} />
+      </Btn>
+      <Btn label={`Share ${item.title}`} caption="Share" onPress={() => void shareListing(item)}>
+        <Icon name="send" size={24} color="#fff" />
+      </Btn>
     </View>
   );
 }

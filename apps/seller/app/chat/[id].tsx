@@ -1,11 +1,11 @@
 import { useApiClient, useMarkThreadRead, useSellerListings, useSellerRequests, useSendMessage, useThread } from '@fayda/api-client';
 import type { SendMessage } from '@fayda/contracts/schemas';
 import { formatRupees } from '@fayda/domain';
-import { AppText, Badge, Button, Card, FieldError, TextField, describeError, useTheme } from '@fayda/ui';
+import { ActionBar, AppBar, AppText, Badge, Bubble, BubbleText, Button, Card, Composer, FieldError, IconButton, Sheet, SystemNote, Thumb, describeError, useTheme } from '@fayda/ui';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Image, ScrollView, View, type ScrollViewInstance } from 'react-native';
 import { forgetKey, keyFor, type KeyMemory } from '../../src/chat';
 import { BlockedNotice, MessageSafety } from '../../src/safety';
 import { sizeOf, uploadMedia } from '../../src/upload';
@@ -25,6 +25,7 @@ export default function ChatScreen() {
   const [error, setError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const scroller = useRef<ScrollViewInstance>(null);
   const mem = useRef<KeyMemory>({ sig: null, key: null });
   const messageCount = thread.data?.messages.length ?? 0;
 
@@ -83,69 +84,75 @@ export default function ChatScreen() {
   const live = (listings.data ?? []).filter((l) => l.status === 'ACTIVE');
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.surface }} contentContainerStyle={{ padding: 16, gap: 10 }}>
-      <View style={{ gap: 2 }}>
-        <AppText weight="extrabold" size={18}>{t.title}</AppText>
-        <AppText tone="muted" size={13}>{t.otherName}</AppText>
-        {t.orderId ? <Button title="View order" size="sm" variant="outline" onPress={() => router.push(`/order/${t.orderId}` as never)} /> : null}
-      </View>
-      {published ? <Badge label="Published and shared in the chat" tone="success" /> : null}
-      {request ? (
-        <Card>
-          <AppText weight="bold">Request: {request.title}</AppText>
-          {request.description ? <AppText tone="muted" size={13}>{request.description}</AppText> : null}
-          {request.size ? <AppText tone="muted" size={13}>Size {request.size}</AppText> : null}
-          {request.response?.status === 'WANTED' && !request.response.listingId ? (
-            <Button title="Create listing" onPress={() => router.push({ pathname: '/listing/[id]', params: { id: 'new', fromResponseId: request.response!.id } } as never)} />
-          ) : request.response?.listingId ? (
-            <AppText tone="success" size={13}>A listing was made for this request.</AppText>
-          ) : null}
-        </Card>
-      ) : null}
-
-      {t.messages.map((m) => (
-        <View key={m.id} style={{ alignItems: m.from === 'ME' ? 'flex-end' : m.from === 'SYSTEM' ? 'center' : 'flex-start' }}>
-          <View style={{ maxWidth: '85%', padding: 10, borderRadius: 14, gap: 6, backgroundColor: m.from === 'ME' ? colors.accent : m.from === 'SYSTEM' ? colors.border : colors.surface, borderWidth: m.from === 'OTHER' ? 1 : 0, borderColor: colors.border }}>
-            {m.media ? <Image source={client.getChatPhotoSource(m.media.url)} style={{ width: 200, height: 200, borderRadius: 10 }} accessibilityLabel="Photo in chat" accessibilityIgnoresInvertColors /> : null}
-            {m.listing ? (
-              <View style={{ gap: 2 }}>
-                <AppText weight="bold" tone={m.from === 'ME' ? 'ink' : 'ink'}>{m.listing.title}</AppText>
-                <AppText>{formatRupees(m.listing.price)}</AppText>
-              </View>
+    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+      <AppBar title={t.otherName} onBack={() => router.back()} right={t.orderId ? <Button title="View order" size="sm" variant="outline" block={false} onPress={() => router.push(`/order/${t.orderId}` as never)} /> : undefined} />
+      <ScrollView ref={scroller} onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: false })} contentContainerStyle={{ padding: 14, gap: 8 }} keyboardShouldPersistTaps="handled">
+        <AppText tone="muted" size={12}>{t.title}</AppText>
+        {published ? <Badge label="Published and shared in the chat" tone="success" /> : null}
+        {request ? (
+          <Card>
+            <AppText weight="bold">Request: {request.title}</AppText>
+            {request.description ? <AppText tone="muted" size={13}>{request.description}</AppText> : null}
+            {request.size ? <AppText tone="muted" size={13}>Size {request.size}</AppText> : null}
+            {request.response?.status === 'WANTED' && !request.response.listingId ? (
+              <Button title="Create listing" onPress={() => router.push({ pathname: '/listing/[id]', params: { id: 'new', fromResponseId: request.response!.id } } as never)} />
+            ) : request.response?.listingId ? (
+              <AppText tone="success" size={13}>A listing was made for this request.</AppText>
             ) : null}
-            {m.text ? <AppText tone={m.from === 'SYSTEM' ? 'muted' : 'ink'} size={m.from === 'SYSTEM' ? 12 : undefined}>{m.text}</AppText> : null}
-            {m.from === 'OTHER' ? <MessageSafety threadId={t.id} messageId={m.id} who={t.otherName} /> : null}
-          </View>
-        </View>
-      ))}
-
-      {sharing ? (
-        <Card>
-          <AppText weight="bold">Share a listing</AppText>
-          {live.length ? (
-            live.map((l) => (
-              <Button key={l.id} title={`${l.title} · ${formatRupees(l.price)}`} variant="outline" onPress={() => post({ listingId: l.id }, `listing:${l.id}`, () => setSharing(false))} />
-            ))
-          ) : (
-            <AppText tone="muted" size={13}>You have no live listings to share. Publish one first.</AppText>
-          )}
-          <Button title="Close" variant="ghost" onPress={() => setSharing(false)} />
-        </Card>
-      ) : null}
-
+          </Card>
+        ) : null}
+        {t.messages.map((m) => {
+          if (m.from === 'SYSTEM') return <SystemNote key={m.id}>{m.text}</SystemNote>;
+          const mine = m.from === 'ME';
+          if (m.listing)
+            return (
+              <View key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '85%', flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8, borderRadius: 14, borderWidth: 1, borderColor: colors.divider, backgroundColor: colors.surface }}>
+                <Thumb size={56} source={m.listing.coverUrl ? { uri: client.resolveUrl(m.listing.coverUrl) } : null} label={m.listing.title} />
+                <View style={{ flexShrink: 1 }}>
+                  <AppText weight="extrabold" size={12} numberOfLines={1}>{m.listing.title}</AppText>
+                  <AppText weight="extrabold" size={13}>{formatRupees(m.listing.price)}</AppText>
+                </View>
+              </View>
+            );
+          return (
+            <View key={m.id} style={{ gap: 4 }}>
+              {m.media ? <Image source={client.getChatPhotoSource(m.media.url)} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', width: 180, height: 220, borderRadius: 14 }} accessibilityLabel="Photo in chat" accessibilityIgnoresInvertColors /> : null}
+              {m.text ? <Bubble me={mine} maxWidth="80%"><BubbleText me={mine}>{m.text}</BubbleText></Bubble> : null}
+              {m.from === 'OTHER' ? <View style={{ alignSelf: 'flex-start' }}><MessageSafety threadId={t.id} messageId={m.id} who={t.otherName} /></View> : null}
+            </View>
+          );
+        })}
+      </ScrollView>
       {t.messagingDisabled ? (
-        <Card><BlockedNotice youBlocked={t.youBlocked} onOpenBlocked={() => router.push('/blocked' as never)} /></Card>
+        <ActionBar><BlockedNotice youBlocked={t.youBlocked} onOpenBlocked={() => router.push('/blocked' as never)} /></ActionBar>
       ) : (
         <>
-      <TextField label="Message" value={text} onChangeText={setText} multiline maxLength={1000} />
-      <Button title="Send" loading={send.isPending} onPress={sendText} />
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <View style={{ flex: 1 }}><Button title="Add a photo" variant="outline" loading={busy} onPress={() => void attach()} /></View>
-        <View style={{ flex: 1 }}><Button title="Share a listing" variant="outline" onPress={() => setSharing((s) => !s)} /></View>
-      </View>
+          {busy ? <View style={{ paddingHorizontal: 14, paddingTop: 6, backgroundColor: colors.surface }}><AppText tone="muted" size={12}>Uploading photo…</AppText></View> : null}
+          {error ? <View style={{ paddingHorizontal: 14, backgroundColor: colors.surface }}><FieldError>{error}</FieldError></View> : null}
+          <Composer
+            value={text}
+            onChangeText={setText}
+            canSend={!!text.trim() && !send.isPending}
+            sending={send.isPending}
+            onSend={sendText}
+            left={
+              <>
+                <IconButton plain icon="clip" label="Add a photo" onPress={() => void attach()} />
+                <IconButton plain icon="tag" label="Share a listing" onPress={() => setSharing((x) => !x)} />
+              </>
+            }
+          />
         </>
       )}
-      <FieldError>{error ?? undefined}</FieldError>
-    </ScrollView>
+      <Sheet visible={sharing} title="Share a listing" onClose={() => setSharing(false)}>
+        {live.length ? (
+          live.map((l) => (
+            <Button key={l.id} title={`${l.title} · ${formatRupees(l.price)}`} variant="outline" onPress={() => post({ listingId: l.id }, `listing:${l.id}`, () => setSharing(false))} />
+          ))
+        ) : (
+          <AppText tone="muted" size={13}>You have no live listings to share. Publish one first.</AppText>
+        )}
+      </Sheet>
+    </View>
   );
 }

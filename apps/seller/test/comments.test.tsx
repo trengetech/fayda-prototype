@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import CommentsScreen from '../app/comments/[id]';
-import ListingsScreen from '../app/listings';
+import ListingsScreen from '../app/(tabs)/listings';
 import { fakeApi, json, managerWith, problem, renderWith, sellerListing, type Route } from './utils';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() };

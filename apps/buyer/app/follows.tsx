@@ -1,5 +1,5 @@
 import { useFollowedShops, useSetFollow } from '@fayda/api-client';
-import { AppText, Button, Card, useTheme } from '@fayda/ui';
+import { AppText, Button, Card, PersonRow, useTheme } from '@fayda/ui';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, FlatList, View } from 'react-native';
 
@@ -25,18 +25,11 @@ export default function FollowsScreen() {
       onEndReached={() => {
         if (q.hasNextPage && !q.isFetchingNextPage) void fetchNextPage();
       }}
-      ListHeaderComponent={<AppText weight="extrabold" size={20}>Shops you follow</AppText>}
       renderItem={({ item }) => (
-        <Card>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <AppText weight="bold" numberOfLines={1}>{item.name}</AppText>
-              <AppText tone="muted" size={12}>@{item.handle} · {item.area}</AppText>
-            </View>
-            <Button title="Open" size="sm" variant="outline" accessibilityLabel={`Open shop ${item.name}`} onPress={() => router.push(`/shop/${item.handle}` as never)} />
-            <Button title="Unfollow" size="sm" variant="ghost" accessibilityLabel={`Unfollow ${item.name}`} disabled={set.isPending} onPress={() => set.mutate({ sellerId: item.id, follow: false })} />
-          </View>
-        </Card>
+        <View style={{ marginHorizontal: -16 }}>
+          <PersonRow name={item.name} subtitle={`@${item.handle} · ${item.area}`} accessibilityLabel={`Open shop ${item.name}`} onPress={() => router.push(`/shop/${item.handle}` as never)}
+            right={<Button title="Unfollow" size="sm" variant="outline" block={false} accessibilityLabel={`Unfollow ${item.name}`} disabled={set.isPending} onPress={() => set.mutate({ sellerId: item.id, follow: false })} />} />
+        </View>
       )}
       ListEmptyComponent={
         q.isPending ? (

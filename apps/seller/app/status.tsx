@@ -1,0 +1,70 @@
+import { NetworkError, useHealth, useMeta } from '@fayda/api-client';
+import { AppBar, AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
+import { useRouter } from 'expo-router';
+import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
+import { API_URL, APP_LABEL } from '../src/config';
+
+/** Environment status: connects to the API through the typed client and shows loading, error with retry, or success. */
+export default function StatusScreen() {
+  const { colors } = useTheme();
+  const router = useRouter();
+  const health = useHealth();
+  const meta = useMeta();
+  const refetch = () => void Promise.all([health.refetch(), meta.refetch()]);
+  const error = health.error ?? meta.error;
+  const loading = (health.isPending || meta.isPending) && !error;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <AppBar title="App status" onBack={() => router.back()} />
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ padding: 16, gap: 12 }}
+      refreshControl={<RefreshControl refreshing={health.isRefetching || meta.isRefetching} onRefresh={refetch} />}
+    >
+      <AppText tone="muted" size={12}>App: Fayda {APP_LABEL} · API: {API_URL}</AppText>
+
+      {loading ? (
+        <Card>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <ActivityIndicator color={colors.accent} />
+            <AppText>Connecting to the API…</AppText>
+          </View>
+        </Card>
+      ) : error ? (
+        <Card>
+          <Badge label="Can't connect" tone="danger" />
+          <AppText weight="bold">{error.message}</AppText>
+          <AppText tone="muted" size={12}>
+            {error instanceof NetworkError
+              ? 'Check your internet connection and try again. If it keeps failing, the server may be down.'
+              : 'The server answered, but not with what this app expects.'}
+          </AppText>
+          <Button title="Retry" onPress={refetch} />
+        </Card>
+      ) : (
+        <>
+          <Card>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <AppText weight="bold">API</AppText>
+              <Badge label={health.data?.status === 'ok' ? 'Online' : 'Database down'} tone={health.data?.status === 'ok' ? 'success' : 'danger'} />
+            </View>
+            <AppText tone="muted">Database: {health.data?.database.status}{health.data?.database.latencyMs != null ? ` · ${health.data.database.latencyMs} ms` : ''}</AppText>
+            {health.data?.status !== 'ok' && <Button title="Retry" variant="outline" onPress={refetch} />}
+          </Card>
+          <Card>
+            <AppText weight="bold">Environment: {meta.data?.environment} · v{meta.data?.version}</AppText>
+            {meta.data?.providers.map((p) => (
+              <View key={p.key} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <AppText>{p.key}: {p.name}</AppText>
+                <Badge label={p.simulated ? 'Simulated' : 'Real'} tone={p.simulated ? 'accent' : 'success'} />
+              </View>
+            ))}
+          </Card>
+        </>
+      )}
+
+    </ScrollView>
+    </View>
+  );
+}

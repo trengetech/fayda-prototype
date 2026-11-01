@@ -1,7 +1,7 @@
 import { act, fireEvent, screen } from '@testing-library/react-native';
 import { Linking } from 'react-native';
-import StatusScreen from '../app/index';
-import ShopScreen from '../app/shop';
+import HomeScreen from '../app/(tabs)/index';
+import ShopScreen from '../app/(tabs)/shop';
 import { fakeApi, json, managerWith, renderWith } from './utils';
 
 const mockRouter = { push: jest.fn() };
@@ -54,21 +54,20 @@ describe('shop screen', () => {
 
 describe('home screen', () => {
   it('shows what needs the seller: orders to confirm, unread messages, new requests', async () => {
+    const win = (days: number) => ({ days, views: 1, offersReceived: 0, offersAgreed: 0, ordersPlaced: 0, ordersConfirmed: 0, ordersDelivered: 0, likes: 0, saves: 0, comments: 0 });
     fakeApi({
-      'GET /v1/health': () => json({ status: 'ok', database: { status: 'up', latencyMs: 1 }, time: '2026-10-31T10:00:00.000Z' }),
-      'GET /v1/meta': () => json({ environment: 'development', version: '0.0.1', providers: [] }),
-      'GET /v1/seller/negotiations': () => json({ items: [], needsReply: 0 }),
-      'GET /v1/seller/orders': () => json({ items: [], needsConfirm: 3, unread: 0 }),
+      'GET /v1/seller/dashboard': () => json({ windows: [win(7), win(30)], record: { orders: 0, completed: 0, confirmed: 0, cancelled: 0, expired: 0, medianConfirmMs: null, rating: null, reviewCount: 0 }, needsReply: 0, needsConfirm: 3, listings: [] }),
       'GET /v1/seller/threads': () => json({ items: [], unread: 2 }),
       'GET /v1/seller/requests': () => json({ items: [], newCount: 1 }),
+      'GET /v1/seller/profile': () => json({ name: 'Indigo Threads' }),
     }, fetchMock);
-    await renderWith(signedIn(), <StatusScreen />);
-    expect(await screen.findByText('3 orders need confirming')).toBeOnTheScreen();
-    expect(screen.getByText('2 unread messages')).toBeOnTheScreen();
-    expect(screen.getByText('1 new buyer request')).toBeOnTheScreen();
-    expect(screen.getByText('Orders (3 to confirm)')).toBeOnTheScreen();
-    expect(screen.getByText('Messages (2)')).toBeOnTheScreen();
-    await press('Messages (2)');
+    await renderWith(signedIn(), <HomeScreen />);
+    expect(await screen.findByLabelText('3 orders to confirm')).toBeOnTheScreen();
+    expect(screen.getByLabelText('2 unread messages from buyers')).toBeOnTheScreen();
+    expect(screen.getByLabelText('1 new buyer request')).toBeOnTheScreen();
+    await act(async () => void fireEvent.press(screen.getByLabelText('2 unread messages from buyers')));
     expect(mockRouter.push).toHaveBeenCalledWith('/messages');
+    await press('New listing');
+    expect(mockRouter.push).toHaveBeenLastCalledWith('/listing/new');
   });
 });

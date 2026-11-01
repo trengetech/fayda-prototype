@@ -80,8 +80,7 @@ describe('chat screen', () => {
     fakeApi(threadRoutes(chatThread({ id: T() })), fetchMock);
     await renderWith(signedIn(), <ChatScreen />);
     await screen.findByText('Is it in cotton?');
-    await press('Send');
-    expect(screen.getByText('Write a message first.')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Send')).toBeDisabled(); // nothing to send yet
     expect(sends()).toHaveLength(0);
   });
 
@@ -92,7 +91,7 @@ describe('chat screen', () => {
     fakeApi(threadRoutes(chatThread({ id: T() }), { 'GET /v1/seller/listings': () => json({ items: [live, draft, paused] }), [`POST /v1/seller/threads/${T()}/messages`]: () => json(chatThread({ id: T() })) }), fetchMock);
     await renderWith(signedIn(), <ChatScreen />);
     await screen.findByText('Is it in cotton?');
-    await press('Share a listing');
+    await act(async () => void fireEvent.press(screen.getByLabelText('Share a listing')));
     expect(await screen.findByText(/Live kurta/)).toBeOnTheScreen();
     expect(screen.queryByText(/Draft kurta/)).not.toBeOnTheScreen();
     expect(screen.queryByText(/Paused kurta/)).not.toBeOnTheScreen();
@@ -112,7 +111,7 @@ describe('chat screen', () => {
     } as never), fetchMock);
     await renderWith(signedIn(), <ChatScreen />);
     await screen.findByText('Is it in cotton?');
-    await press('Add a photo');
+    await act(async () => void fireEvent.press(screen.getByLabelText('Add a photo')));
     await waitFor(() => expect(sends()).toHaveLength(1));
     expect(intent).toMatchObject({ purpose: 'CHAT', kind: 'image' });
     expect(JSON.parse(sends()[0]![1].body)).toMatchObject({ mediaId });

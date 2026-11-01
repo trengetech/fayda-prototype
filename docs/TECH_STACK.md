@@ -40,6 +40,7 @@ Checked against the npm registry on 31 Oct 2026. **Installed** means it is in th
 | Expo SDK | `expo` 58.0.21 | npm latest |
 | React Native / React | 0.88.1 / 19.3.0 | `bundledNativeModules.json` of expo 58.0.21 |
 | Expo Router | 58.0.28 | same file |
+| react-native-svg (icons; founder-approved 1 Nov 2026, D-proposed: prototype-parity UI) | 15.16.0 | Expo SDK 58 `bundledNativeModules.json` |
 | expo-video / expo-font / expo-constants / expo-secure-store | 58.0.13 / 58.0.11 / 58.0.14 / 58.0.2 | same file |
 | jest-expo / jest | 58.0.13 / 30.5.2 | installed in both apps (3.0b) |
 | `@testing-library/react-native` / `test-renderer` | 14.1.0 / 1.3.0 | **Outside the original stack table; approved by the founder 31 Oct 2026** ("add the automated screentests"). v14 renders with `test-renderer`, not `react-test-renderer`, and `render` is async. Also installed as jest-expo peers: `@react-native/jest-preset` 0.88.1, `react-server-dom-webpack` 19.3.0 |

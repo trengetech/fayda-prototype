@@ -38,7 +38,9 @@ export default function ShopScreen() {
     <FlatList
       testID="shop-list"
       style={{ flex: 1, backgroundColor: colors.surface }}
-      contentContainerStyle={{ padding: 16, gap: 12 }}
+      contentContainerStyle={{ padding: 16, gap: 14 }}
+      columnWrapperStyle={{ gap: 12 }}
+      numColumns={2}
       data={items}
       keyExtractor={(i) => i.id}
       renderItem={({ item }) => <FeedCard item={item} onOpen={() => router.push(`/listing/${item.id}` as never)} />}

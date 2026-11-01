@@ -1,13 +1,14 @@
 import { useApiClient } from '@fayda/api-client';
 import { formatRupees } from '@fayda/domain';
-import { AppText, Badge, Button, useTheme } from '@fayda/ui';
+import { AppText, Avatar, Badge, Button, Icon } from '@fayda/ui';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useFocusEffect } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, FlatList, Image, Pressable, StyleSheet, View } from 'react-native';
 import type { FeedItem } from './feed-card';
 import { FollowButton } from './follow-button';
-import { ReactionRow } from './social';
+import { ReelRail } from './social';
 
 /** True while this screen is the one in front (not covered by another screen). */
 export function useScreenFocused(): boolean {
@@ -52,8 +53,34 @@ function ReelVideo({ uri, playing, muted }: { uri: string; playing: boolean; mut
 
 const SCRIM = 'rgba(0,0,0,0.55)';
 
+/** The prototype's dark fade: light at the top, clear in the middle, dark at the bottom so white text is readable on any photo. */
+function Shade() {
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <LinearGradient id="shade" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor="#000" stopOpacity="0.45" />
+            <Stop offset="0.22" stopColor="#000" stopOpacity="0" />
+            <Stop offset="0.48" stopColor="#000" stopOpacity="0" />
+            <Stop offset="1" stopColor="#000" stopOpacity="0.78" />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#shade)" />
+      </Svg>
+    </View>
+  );
+}
+
+function GlassBadge({ label }: { label: string }) {
+  return (
+    <View style={{ height: 22, paddingHorizontal: 8, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.18)', justifyContent: 'center' }}>
+      <AppText weight="extrabold" size={11} style={{ color: '#fff' }}>{label}</AppText>
+    </View>
+  );
+}
+
 function ReelCard({ item, height, active, near, playing, muted, onTogglePlay, onOpen, onOpenShop }: { item: FeedItem; height: number; active: boolean; near: boolean; playing: boolean; muted: boolean; onTogglePlay: () => void; onOpen: (offer: boolean) => void; onOpenShop: () => void }) {
-  const { colors } = useTheme();
   const client = useApiClient();
   const cover = item.coverUrl ? client.resolveUrl(item.coverUrl) : null;
   return (
@@ -66,27 +93,34 @@ function ReelCard({ item, height, active, near, playing, muted, onTogglePlay, on
           <View style={{ backgroundColor: SCRIM, borderRadius: 99, paddingHorizontal: 16, paddingVertical: 8 }}><AppText weight="bold" style={{ color: '#fff' }}>Paused</AppText></View>
         </View>
       ) : null}
-      <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 }}>
-        <View style={{ backgroundColor: colors.surface, borderRadius: 18, padding: 14, gap: 8, opacity: 0.97 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Open shop ${item.seller.name}`} onPress={onOpenShop} style={{ flex: 1 }}>
-              <AppText weight="bold" numberOfLines={1}>{item.seller.name}</AppText>
-              <AppText tone="muted" size={12} numberOfLines={1}>{item.seller.area}{item.seller.rating != null ? ` · ★ ${item.seller.rating.toFixed(1)} (${item.seller.reviewCount})` : ''}</AppText>
-            </Pressable>
-            {item.ownShop ? <Badge label="Your shop" tone="info" /> : <FollowButton sellerId={item.seller.id} shopName={item.seller.name} following={item.following} />}
-          </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Open ${item.title}`} onPress={() => onOpen(false)} style={{ gap: 4 }}>
-            <AppText weight="extrabold" size={16} numberOfLines={2}>{item.title}</AppText>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <AppText weight="extrabold" size={18}>{formatRupees(item.price)}</AppText>
-              {item.soldOut ? <Badge label="Sold out" tone="danger" /> : item.acceptsOffers ? <Badge label="Open to offers" tone="accent" /> : <Badge label="Fixed price" tone="info" />}
+      <Shade />
+      <View pointerEvents="box-none" style={{ position: 'absolute', right: 10, bottom: 168 }}>
+        <ReelRail item={item} onComments={() => onOpen(false)} />
+      </View>
+      <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 14, gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Open shop ${item.seller.name}`} onPress={onOpenShop} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
+            <Avatar name={item.seller.name} size={34} light />
+            <View style={{ flexShrink: 1 }}>
+              <AppText weight="extrabold" numberOfLines={1} style={{ color: '#fff' }}>{item.seller.name}</AppText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                {item.seller.rating != null ? <><Icon name="star" size={13} color="#F59E0B" fill="#F59E0B" strokeWidth={1.5} /><AppText weight="extrabold" size={12} style={{ color: '#fff' }}>{item.seller.rating.toFixed(1)}</AppText><AppText size={12} style={{ color: 'rgba(255,255,255,0.8)' }}>({item.seller.reviewCount})</AppText></> : <AppText size={12} style={{ color: 'rgba(255,255,255,0.8)' }} numberOfLines={1}>{item.seller.area}</AppText>}
+              </View>
             </View>
           </Pressable>
-          <ReactionRow item={item} onComments={() => onOpen(false)} />
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1 }}><Button title="Buy" disabled={item.soldOut || item.ownShop} accessibilityLabel={`Buy ${item.title}`} onPress={() => onOpen(false)} /></View>
-            {item.acceptsOffers ? <View style={{ flex: 1 }}><Button title="Make offer" variant="outline" disabled={item.soldOut || item.ownShop} accessibilityLabel={`Make an offer on ${item.title}`} onPress={() => onOpen(true)} /></View> : null}
+          {item.ownShop ? <Badge label="Your shop" tone="info" /> : <FollowButton sellerId={item.seller.id} shopName={item.seller.name} following={item.following} onDark />}
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Open ${item.title}`} onPress={() => onOpen(false)} style={{ gap: 8 }}>
+          <AppText weight="extrabold" size={16} numberOfLines={2} style={{ color: '#fff', marginRight: 64 }}>{item.title}</AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <AppText weight="extrabold" size={24} style={{ color: '#fff', letterSpacing: -0.4 }}>{formatRupees(item.price)}</AppText>
+            {item.soldOut ? <Badge label="Sold out" tone="danger" /> : item.acceptsOffers ? <Badge label="Accepts offers" tone="accent" /> : <Badge label="Fixed price" tone="info" />}
+            <GlassBadge label={item.category} />
           </View>
+        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}><Button title="Buy now" variant="outline" size="lg" disabled={item.soldOut || item.ownShop} accessibilityLabel={`Buy ${item.title}`} onPress={() => onOpen(false)} /></View>
+          {item.acceptsOffers ? <View style={{ flex: 1 }}><Button title="Make offer" size="lg" disabled={item.soldOut || item.ownShop} accessibilityLabel={`Make an offer on ${item.title}`} onPress={() => onOpen(true)} /></View> : null}
         </View>
       </View>
     </View>

@@ -16,13 +16,15 @@ export default function SavedScreen() {
     <FlatList
       testID="saved-list"
       style={{ flex: 1, backgroundColor: colors.surface }}
-      contentContainerStyle={{ padding: 16, gap: 12 }}
+      contentContainerStyle={{ padding: 16, gap: 14 }}
+      columnWrapperStyle={{ gap: 12 }}
+      numColumns={2}
       data={items}
       keyExtractor={(i) => i.id}
       renderItem={({ item }) => (
-        <View style={{ gap: 8 }}>
+        <View style={{ flex: 1, gap: 8 }}>
           <FeedCard item={item} onOpen={() => router.push(`/listing/${item.id}` as never)} />
-          <ReactionRow item={item} onComments={() => router.push(`/listing/${item.id}` as never)} />
+          <ReactionRow compact item={item} onComments={() => router.push(`/listing/${item.id}` as never)} />
         </View>
       )}
       refreshing={q.isRefetching && !q.isFetchingNextPage}
@@ -31,7 +33,6 @@ export default function SavedScreen() {
       onEndReached={() => {
         if (q.hasNextPage && !q.isFetchingNextPage) void fetchNextPage();
       }}
-      ListHeaderComponent={<AppText weight="extrabold" size={20}>Saved</AppText>}
       ListEmptyComponent={
         q.isPending ? (
           <Card><View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><ActivityIndicator color={colors.accent} /><AppText>Loading…</AppText></View></Card>

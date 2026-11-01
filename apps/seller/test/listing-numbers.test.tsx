@@ -1,5 +1,5 @@
 import { act, fireEvent, screen } from '@testing-library/react-native';
-import DashboardScreen from '../app/dashboard';
+import DashboardScreen from '../app/(tabs)/index';
 import { fakeApi, json, managerWith, renderWith } from './utils';
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }), useLocalSearchParams: () => ({}) }));

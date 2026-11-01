@@ -3,7 +3,7 @@ import { Alert } from 'react-native';
 import BlockedScreen from '../app/blocked';
 import ChatScreen from '../app/chat/[id]';
 import CommentsScreen from '../app/comments/[id]';
-import DashboardScreen from '../app/dashboard';
+import DashboardScreen from '../app/(tabs)/index';
 import NotificationsScreen from '../app/notifications';
 import { chatThread, fakeApi, json, managerWith, renderWith, sellerListing } from './utils';
 
@@ -153,10 +153,10 @@ describe('dashboard', () => {
     await renderWith(signedIn(), <DashboardScreen />);
     expect(await screen.findByText('Last 7 days')).toBeOnTheScreen();
     expect(screen.getByText('Last 30 days')).toBeOnTheScreen();
-    expect(screen.getByText('1 order to confirm')).toBeOnTheScreen();
-    expect(screen.getByText('2 offers need a reply')).toBeOnTheScreen();
-    expect(screen.getByLabelText('Offers received: 20')).toBeOnTheScreen();
-    expect(screen.getByLabelText('Listing views: 200')).toBeOnTheScreen();
+    expect(screen.getByLabelText('1 order to confirm')).toBeOnTheScreen();
+    expect(screen.getByLabelText('2 offers need your reply')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Offers: 20')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Views: 200')).toBeOnTheScreen();
     expect(screen.getByLabelText('Listing views: 50')).toBeOnTheScreen();
     expect(screen.getByLabelText('Median time to confirm: 2 h 10 min')).toBeOnTheScreen();
     expect(screen.getByLabelText('Rating: 4.5 (3)')).toBeOnTheScreen();
@@ -165,10 +165,10 @@ describe('dashboard', () => {
     let fail = true;
     fakeApi({ 'GET /v1/seller/dashboard': () => (fail ? json({ title: 'x', status: 500, code: 'INTERNAL', detail: 'down' }, 500) : json({ windows: [win(7, 1), win(30, 1)], record: { orders: 0, completed: 0, confirmed: 0, cancelled: 0, expired: 0, medianConfirmMs: null, rating: null, reviewCount: 0 }, needsReply: 0, needsConfirm: 0, listings: [] })) }, fetchMock);
     await renderWith(signedIn(), <DashboardScreen />);
-    expect(await screen.findByText('Can’t load the dashboard')).toBeOnTheScreen();
+    expect(await screen.findByText('Can’t load your numbers')).toBeOnTheScreen();
     fail = false;
     await act(async () => void fireEvent.press(screen.getByText('Try again')));
     expect(await screen.findByLabelText('Median time to confirm: —')).toBeOnTheScreen();
-    expect(screen.getByText('No orders waiting')).toBeOnTheScreen();
+    expect(screen.getByText(/all caught up/)).toBeOnTheScreen();
   });
 });

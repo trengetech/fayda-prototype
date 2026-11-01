@@ -1,8 +1,8 @@
 import { useApiClient, useBuyerOrder } from '@fayda/api-client';
 import { formatRupees } from '@fayda/domain';
-import { AppText, Badge, Button, Card, Screen, useTheme } from '@fayda/ui';
+import { AppText, Badge, Button, Card, Screen, SectionTitle, Steps, Thumb, useTheme, type StepItem } from '@fayda/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Image, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { ContactCard } from '../../src/contact-card';
 import { STEPS, isClosed, reached, statusTone, stepLabel, openExternal } from '../../src/orders';
 import { PaymentCard } from '../../src/payment-card';
@@ -32,35 +32,30 @@ export default function OrderScreen() {
   const done = reached(o);
   const closed = isClosed(o);
   const ship = o.shipment;
+  const web = o.channel === 'WEBSITE';
+  const NOTES: Record<string, string> = { PLACED: web ? 'Buyer used the deal on the website' : 'Buyer pays the seller directly', CONFIRMED: web ? 'Seller found the order on their website' : 'Seller confirmed the payment arrived', SHIPPED: 'Optional: seller adds courier or delivery details', DELIVERED: 'Seller marked it delivered' };
+  const steps: StepItem[] = STEPS.map((st, i) => ({ key: st, title: stepLabel(st, o.channel), note: NOTES[st] ?? '', done: i < done }));
 
   return (
     <Screen>
-      <View style={{ gap: 4 }}>
-        <AppText tone="muted" size={12}>Order {o.number}</AppText>
-        <AppText weight="extrabold" size={20}>{o.listing.title}</AppText>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <Badge label={o.statusLabel} tone={statusTone(o.status)} />
-          <AppText weight="bold">{formatRupees(o.price)}</AppText>
-          {o.priceSource === 'NEGOTIATED' ? <AppText tone="muted" size={12}>agreed price (listed {formatRupees(o.listPrice)})</AppText> : null}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Thumb size={72} source={o.listing.coverUrl ? { uri: client.resolveUrl(o.listing.coverUrl) } : null} label={`Photo of ${o.listing.title}`} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <AppText tone="muted" size={12}>Order {o.number}</AppText>
+          <AppText weight="extrabold">{o.listing.title}</AppText>
+          <AppText tone="muted" size={12}>Size {o.listing.variantLabel} · {o.channel === 'WEBSITE' ? 'bought on the seller’s website' : 'paid to the seller directly'}</AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
+            <Badge label={o.statusLabel} tone={statusTone(o.status)} />
+            <AppText weight="extrabold" size={13}>{formatRupees(o.price)}</AppText>
+          </View>
+          {o.priceSource === 'NEGOTIATED' ? <AppText tone="muted" size={11}>agreed price (listed {formatRupees(o.listPrice)})</AppText> : null}
         </View>
-        <AppText tone="muted" size={13}>Size {o.listing.variantLabel} · {o.channel === 'WEBSITE' ? 'bought on the seller’s website' : 'paid to the seller directly'}</AppText>
       </View>
 
-      {o.listing.coverUrl ? <Image source={{ uri: client.resolveUrl(o.listing.coverUrl) }} style={{ width: '100%', height: 160, borderRadius: 12, backgroundColor: colors.border }} accessibilityIgnoresInvertColors accessibilityLabel={`Photo of ${o.listing.title}`} /> : null}
-
       <Card>
-        <AppText weight="bold">Progress</AppText>
-        {STEPS.map((s, i) => {
-          const on = i < done;
-          return (
-            <View key={s} style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }} accessibilityLabel={`${stepLabel(s, o.channel)}${on ? ', done' : ''}`}>
-              <AppText tone={on ? 'success' : 'faint'}>{on ? '●' : '○'}</AppText>
-              <AppText tone={on ? 'ink' : 'faint'} style={{ flex: 1 }}>{stepLabel(s, o.channel)}</AppText>
-            </View>
-          );
-        })}
-        {closed ? <AppText tone="danger" weight="bold">{o.status === 'EXPIRED' ? 'Expired: the seller did not confirm in time' : 'Cancelled'}{o.cancelText ? ` · ${o.cancelText}` : ''}</AppText> : null}
-        {o.status === 'PLACED' ? <AppText tone="muted" size={12}>The seller has until the confirm time to respond. If they don’t, the order expires.</AppText> : null}
+        <SectionTitle>Progress</SectionTitle>
+        <Steps steps={[...steps, ...(closed ? [{ key: 'closed', title: o.status === 'EXPIRED' ? 'Expired' : 'Cancelled by seller', note: o.status === 'EXPIRED' ? 'Expired: the seller did not confirm in time' : (o.cancelText ?? 'Cancelled'), done: false, failed: true }] : [])]} />
+        {o.status === 'PLACED' ? <AppText tone="muted" size={11}>The seller has until the confirm time to respond. If they don’t, the order expires.</AppText> : null}
       </Card>
 
       {ship ? (

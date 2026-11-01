@@ -1,9 +1,8 @@
-import { NetworkError, useBuyerNegotiations, useBuyerOrders, useHealth, useMeta, useThreads, useUnreadCount } from '@fayda/api-client';
-import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
-import { Link, useRouter } from 'expo-router';
+import { NetworkError, useHealth, useMeta } from '@fayda/api-client';
+import { AppBar, AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
+import { useRouter } from 'expo-router';
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
-import { AccountCard } from '../src/account-card';
-import { API_URL, APP_LABEL, SHOW_GALLERY } from '../src/config';
+import { API_URL, APP_LABEL } from '../src/config';
 
 /** Environment status: connects to the API through the typed client and shows loading, error with retry, or success. */
 export default function StatusScreen() {
@@ -11,36 +10,19 @@ export default function StatusScreen() {
   const router = useRouter();
   const health = useHealth();
   const meta = useMeta();
-  const replies = (useBuyerNegotiations().data?.items ?? []).filter((n) => n.canRespond).length;
-  const orderUnread = useBuyerOrders().data?.unread ?? 0;
-  const messageUnread = useThreads('buyer').data?.unread ?? 0;
-  const notifUnread = useUnreadCount('buyer').data?.unread ?? 0;
   const refetch = () => void Promise.all([health.refetch(), meta.refetch()]);
   const error = health.error ?? meta.error;
   const loading = (health.isPending || meta.isPending) && !error;
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <AppBar title="App status" onBack={() => router.back()} />
     <ScrollView
-      style={{ flex: 1, backgroundColor: colors.surface }}
+      style={{ flex: 1 }}
       contentContainerStyle={{ padding: 16, gap: 12 }}
       refreshControl={<RefreshControl refreshing={health.isRefetching || meta.isRefetching} onRefresh={refetch} />}
     >
-      <AppText weight="extrabold" size={20}>Fayda {APP_LABEL}</AppText>
-      <AppText tone="muted" size={12}>API: {API_URL}</AppText>
-      <AccountCard />
-      <Button title={notifUnread ? `Notifications (${notifUnread} new)` : 'Notifications'} variant={notifUnread ? 'primary' : 'outline'} onPress={() => router.push('/notifications' as never)} />
-      <Button title="Browse reels" onPress={() => router.push('/feed')} />
-      <Button title="Search" variant="outline" onPress={() => router.push('/search' as never)} />
-      <Button title="Saved" variant="outline" onPress={() => router.push('/saved' as never)} />
-      <Button title="Shops you follow" variant="outline" onPress={() => router.push('/follows' as never)} />
-      <Button title={replies ? `My offers (${replies} to answer)` : 'My offers'} variant="outline" onPress={() => router.push('/offers' as never)} />
-      <Button title={orderUnread ? `My orders (${orderUnread} new ${orderUnread === 1 ? 'message' : 'messages'})` : 'My orders'} variant="outline" onPress={() => router.push('/orders' as never)} />
-      <Button title={messageUnread ? `Messages (${messageUnread} new)` : 'Messages'} variant="outline" onPress={() => router.push('/messages' as never)} />
-      <Button title="Your requests" variant="outline" onPress={() => router.push('/requests' as never)} />
-      <Button title="Delivery addresses" variant="ghost" onPress={() => router.push('/addresses' as never)} />
-      <Button title="Contact for orders" variant="ghost" onPress={() => router.push('/contact' as never)} />
-      <Button title="Blocked people" variant="ghost" onPress={() => router.push('/blocked' as never)} />
-      <Button title="User agreement" variant="ghost" onPress={() => router.push('/agreement' as never)} />
+      <AppText tone="muted" size={12}>App: Fayda {APP_LABEL} · API: {API_URL}</AppText>
 
       {loading ? (
         <Card>
@@ -82,11 +64,7 @@ export default function StatusScreen() {
         </>
       )}
 
-      {SHOW_GALLERY && (
-        <Link href="/gallery" asChild>
-          <Button title="Design-system gallery (dev)" variant="outline" />
-        </Link>
-      )}
     </ScrollView>
+    </View>
   );
 }

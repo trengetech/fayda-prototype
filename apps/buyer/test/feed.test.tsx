@@ -1,6 +1,6 @@
 import { act, fireEvent, screen } from '@testing-library/react-native';
 import { AppState } from 'react-native';
-import FeedScreen from '../app/feed';
+import FeedScreen from '../app/(tabs)/index';
 import { feedItem, fakeApi, json, managerWith, problem, renderWith } from './utils';
 
 const mockRouter = { push: jest.fn(), back: jest.fn() };
@@ -99,7 +99,7 @@ describe('buyer reels: the card', () => {
     expect(await screen.findByText('Cotton kurta')).toBeOnTheScreen();
     expect(screen.getByText('₹4,500')).toBeOnTheScreen();
     expect(screen.getAllByText(/Kiran Studio/).length).toBeGreaterThan(0);
-    expect(screen.getByText('Open to offers')).toBeOnTheScreen();
+    expect(screen.getByText('Accepts offers')).toBeOnTheScreen();
     expect(screen.getByText('Fixed price')).toBeOnTheScreen();
     expect(await screen.findByText('Sold out')).toBeOnTheScreen(); // the third card renders a moment later
     expect(screen.getByLabelText('Photo of Cotton kurta').props.source).toEqual({ uri: 'http://api.test/v1/media/m1' });
@@ -127,15 +127,13 @@ describe('buyer reels: the card', () => {
     expect(screen.getAllByLabelText(/^Follow /)).toHaveLength(1); // only the dupatta's seller can be followed
   });
 
-  it('tapping the seller opens their shop; Home goes back; Search opens search', async () => {
+  it('tapping the seller opens their shop; the bell opens notifications', async () => {
     await show([kurta]);
     await screen.findByText('Cotton kurta');
     await act(async () => void fireEvent.press(screen.getByLabelText('Open shop Kiran Studio')));
     expect(mockRouter.push).toHaveBeenLastCalledWith('/shop/kiranstudio');
-    await act(async () => void fireEvent.press(screen.getByLabelText('Search')));
-    expect(mockRouter.push).toHaveBeenLastCalledWith('/search');
-    await act(async () => void fireEvent.press(screen.getByLabelText('Back to home')));
-    expect(mockRouter.back).toHaveBeenCalled();
+    await act(async () => void fireEvent.press(screen.getByLabelText(/^Notifications/)));
+    expect(mockRouter.push).toHaveBeenLastCalledWith('/notifications');
   });
 });
 

@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, within } from '@testing-library/react-native';
 import { Linking, StyleSheet } from 'react-native';
-import OrdersScreen from '../app/orders';
+import OrdersScreen from '../app/(tabs)/orders';
 import OrderScreen from '../app/order/[id]';
 import { fakeApi, json, managerWith, renderWith, sellerOrder } from './utils';
 
@@ -53,10 +53,9 @@ describe('orders list', () => {
     expect(screen.getByText(/FD-100002/)).toBeOnTheScreen();
     await act(async () => void fireEvent.press(screen.getByLabelText('Closed (1)')));
     expect(screen.getByText(/FD-100004/)).toBeOnTheScreen();
-    expect(screen.getByText('Messages (2)')).toBeOnTheScreen();
   });
 
-  it('keeps the status and unread labels in the text column, under the title (not in a squeezed side column)', async () => {
+  it('keeps the long status in the text column, under the title, and a short badge at the side', async () => {
     fakeApi({ 'GET /v1/seller/orders': () => list([placed]) }, fetchMock);
     await renderWith(signedIn(), <OrdersScreen />);
     const title = await screen.findByText(placed.listing.title);
@@ -64,6 +63,7 @@ describe('orders list', () => {
     expect(column.getByText(/FD-100001/)).toBeOnTheScreen();
     expect(column.getByText(/Confirm within/)).toBeOnTheScreen();
     expect(column.getByText(placed.statusLabel)).toBeOnTheScreen();
+    expect(screen.getByText('To confirm')).toBeOnTheScreen();
   });
 
   it('opens an order and shows a friendly message when a tab is empty', async () => {

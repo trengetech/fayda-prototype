@@ -1,7 +1,7 @@
 import { useComments, usePostComment, useRemoveComment, useSellerListing } from '@fayda/api-client';
 import type { Comment } from '@fayda/contracts/schemas';
 import { COMMENT_MAX_CHARS, formatAgo } from '@fayda/domain';
-import { AppText, Badge, Button, Card, TextField, describeError, useTheme } from '@fayda/ui';
+import { AppText, Avatar, Badge, Button, Card, TextField, describeError, useTheme } from '@fayda/ui';
 import { useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, View } from 'react-native';
@@ -53,7 +53,7 @@ export default function CommentsScreen() {
     <FlatList
       testID="comments-list"
       style={{ flex: 1, backgroundColor: colors.surface }}
-      contentContainerStyle={{ padding: 16, gap: 12 }}
+      contentContainerStyle={{ padding: 16, gap: 4 }}
       data={items}
       keyExtractor={(c) => c.id}
       refreshing={q.isRefetching && !q.isFetchingNextPage}
@@ -63,8 +63,7 @@ export default function CommentsScreen() {
         if (q.hasNextPage && !q.isFetchingNextPage) void fetchNextPage();
       }}
       ListHeaderComponent={
-        <View style={{ gap: 12 }}>
-          <AppText weight="extrabold" size={20}>Comments</AppText>
+        <View style={{ gap: 12, marginBottom: 8 }}>
           <AppText tone="muted" size={13}>{listing.data?.title ?? ''}{total ? ` · ${total} ${total === 1 ? 'comment' : 'comments'}` : ''}</AppText>
           <Card>
             <TextField label="Reply as your shop" value={text} onChangeText={change} multiline maxLength={COMMENT_MAX_CHARS * 2} error={error ?? undefined} hint={`Public. Up to ${COMMENT_MAX_CHARS} characters.`} />
@@ -73,20 +72,23 @@ export default function CommentsScreen() {
         </View>
       }
       renderItem={({ item: c }) => (
-        <Card>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <AppText weight="bold" size={13}>{c.author.name}</AppText>
-            {c.author.shop ? <Badge label="Your shop" tone="info" /> : null}
-            <AppText tone="faint" size={12}>{formatAgo(c.at, Date.now())}</AppText>
+        <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.divider }}>
+          <Avatar name={c.author.name} size={34} />
+          <View style={{ flex: 1, gap: 3 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <AppText weight="extrabold" size={13}>{c.author.name}</AppText>
+              {c.author.shop ? <Badge label="Your shop" tone="info" /> : null}
+              <AppText tone="faint" size={11}>{formatAgo(c.at, Date.now())}</AppText>
+            </View>
+            <AppText selectable>{c.text}</AppText>
+            {c.canRemove ? (
+              <Pressable accessibilityRole="button" accessibilityLabel={`Remove comment by ${c.author.name}`} disabled={remove.isPending} onPress={() => confirmRemove(c)} hitSlop={8}>
+                <AppText tone="danger" size={12} weight="bold">Remove</AppText>
+              </Pressable>
+            ) : null}
+            <CommentSafety c={c} />
           </View>
-          <AppText selectable>{c.text}</AppText>
-          {c.canRemove ? (
-            <Pressable accessibilityRole="button" accessibilityLabel={`Remove comment by ${c.author.name}`} disabled={remove.isPending} onPress={() => confirmRemove(c)} hitSlop={8}>
-              <AppText tone="danger" size={12}>Remove</AppText>
-            </Pressable>
-          ) : null}
-          <CommentSafety c={c} />
-        </Card>
+        </View>
       )}
       ListEmptyComponent={
         q.isPending ? (

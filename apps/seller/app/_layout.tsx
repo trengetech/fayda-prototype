@@ -10,6 +10,7 @@ import { Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { APP_LABEL, VARIANT } from '../src/config';
 import { getPushToken, targetFromPush } from '../src/push';
+import { stackHeader } from '../src/header';
 import { sessionManager } from '../src/session';
 import { VersionGate } from '../src/version-gate';
 
@@ -46,7 +47,7 @@ function Routes() {
   const signedIn = status === 'signedIn';
   const complete = signedIn && !!profile?.complete;
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }}>
+    <Stack screenOptions={{ headerShown: false, header: stackHeader, contentStyle: { backgroundColor: colors.surface } }}>
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="sign-in" />
       </Stack.Protected>
@@ -54,23 +55,18 @@ function Routes() {
         <Stack.Screen name="onboarding" />
       </Stack.Protected>
       <Stack.Protected guard={complete}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="listings" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="status" />
         <Stack.Screen name="listing/[id]" />
-        <Stack.Screen name="comments/[id]" />
-        <Stack.Screen name="offers" />
+        <Stack.Screen name="comments/[id]" options={{ headerShown: true, title: 'Comments' }} />
         <Stack.Screen name="offer/[id]" />
-        <Stack.Screen name="orders" />
-        <Stack.Screen name="order/[id]" />
-        <Stack.Screen name="messages" />
+        <Stack.Screen name="order/[id]" options={{ headerShown: true, title: 'Order' }} />
+        <Stack.Screen name="messages" options={{ headerShown: true, title: 'Messages' }} />
         <Stack.Screen name="chat/[id]" />
-        <Stack.Screen name="requests" />
-        <Stack.Screen name="shop" />
-        <Stack.Screen name="notifications" />
-        <Stack.Screen name="notification-settings" />
-        <Stack.Screen name="blocked" />
-        <Stack.Screen name="dashboard" />
-        <Stack.Screen name="gallery" />
+        <Stack.Screen name="notifications" options={{ headerShown: true, title: 'Notifications' }} />
+        <Stack.Screen name="notification-settings" options={{ headerShown: true, title: 'Notification settings' }} />
+        <Stack.Screen name="blocked" options={{ headerShown: true, title: 'Blocked people' }} />
+        <Stack.Screen name="gallery" options={{ headerShown: true, title: 'Design system' }} />
       </Stack.Protected>
     </Stack>
   );

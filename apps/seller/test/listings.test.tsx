@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
-import ListingsScreen from '../app/listings';
+import ListingsScreen from '../app/(tabs)/listings';
 import { fakeApi, json, managerWith, problem, renderWith, sellerListing } from './utils';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() };
@@ -38,7 +38,7 @@ describe('listings screen', () => {
     fakeApi({ 'GET /v1/seller/listings': () => json({ items: [live, paused, draft] }) }, fetchMock);
     await renderWith(signedIn(), <ListingsScreen />);
     expect(await screen.findByText('Live kurta')).toBeOnTheScreen();
-    expect(screen.getAllByText('₹1,500')).toHaveLength(3);
+    expect(screen.getAllByText(/^₹1,500/)).toHaveLength(3);
     expect(screen.getAllByText('3 in stock')).toHaveLength(2); // the live listing and the draft
     expect(screen.getByText('0 in stock')).toBeOnTheScreen();
     expect(screen.getAllByText('Live')).toHaveLength(2); // the filter chip and the badge
@@ -78,6 +78,9 @@ describe('listings screen', () => {
     await act(async () => void fireEvent.press(screen.getByLabelText('Open Live kurta')));
     expect(mockRouter.push).toHaveBeenCalledWith('/listing/l-live');
     await press('Pause');
+    expect(await screen.findByText('Pause this listing?')).toBeOnTheScreen(); // it asks first
+    expect(calls).toEqual([]);
+    await press('Pause listing');
     await waitFor(() => expect(calls).toEqual([{ status: 'PAUSED' }]));
   });
 

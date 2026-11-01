@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Linking } from 'react-native';
 import FollowsScreen from '../app/follows';
-import SearchScreen from '../app/search';
+import SearchScreen from '../app/(tabs)/search';
 import ShopScreen from '../app/shop/[handle]';
 import { activeFilterCount, filtersToParams, NO_FILTERS } from '../src/feed-filters';
 import { feedItem, fakeApi, json, managerWith, record, renderWith } from './utils';
@@ -56,28 +56,29 @@ describe('buyer search', () => {
     const urls = serve((u) => (u.includes('q=') ? page([saree]) : page([kurta, saree])));
     await renderWith(signedIn(), <SearchScreen />);
     expect(await screen.findByText('Cotton kurta')).toBeOnTheScreen();
-    await act(async () => void fireEvent.changeText(screen.getByLabelText('What are you looking for?'), 'Silk  saree'));
+    await act(async () => void fireEvent.changeText(screen.getByLabelText('Search'), 'Silk  saree'));
     expect(await screen.findByText('Silk saree')).toBeOnTheScreen();
     await waitFor(() => expect(screen.queryByText('Cotton kurta')).not.toBeOnTheScreen()); // the search has replaced the list
-    expect(urls).toEqual(['/v1/buyer/feed?scope=FOR_YOU&sort=BEST', '/v1/buyer/feed?scope=FOR_YOU&q=Silk+saree&sort=BEST']); // one request, not one per key
+    expect(urls.filter((u) => u.includes('/feed'))).toEqual(['/v1/buyer/feed?scope=FOR_YOU&sort=BEST', '/v1/buyer/feed?scope=FOR_YOU&q=Silk+saree&sort=BEST']); // one request, not one per key
   });
 
   it('applies category, size, offers, price and sort, and Clear filters undoes them', async () => {
     const urls = serve(() => page([kurta]));
     await renderWith(signedIn(), <SearchScreen />);
     await screen.findByText('Cotton kurta');
-    await act(async () => void fireEvent.press(screen.getByLabelText('Show filters')));
     await act(async () => void fireEvent.press(await screen.findByLabelText('Ethnic wear')));
     await act(async () => void fireEvent.press(screen.getByLabelText('M')));
-    await act(async () => void fireEvent.press(screen.getByLabelText('Open to offers')));
-    await act(async () => void fireEvent.press(screen.getByLabelText('Price: low to high')));
+    await act(async () => void fireEvent.press(screen.getByLabelText('Accepts offers')));
+    await act(async () => void fireEvent.press(screen.getByLabelText('Sort: Best match'))); // Best match, then Newest
+    await act(async () => void fireEvent.press(screen.getByLabelText('Sort: Newest'))); // then Price: low to high
+    await act(async () => void fireEvent.press(screen.getByLabelText('Price…')));
     await act(async () => void fireEvent.changeText(screen.getByLabelText('Lowest price'), '500'));
     await act(async () => void fireEvent.changeText(screen.getByLabelText('Highest price'), '2000'));
-    await screen.findByText('Filters (6)');
     await act(async () => void (await new Promise((r) => setTimeout(r, 50))));
     expect(urls.at(-1)).toBe('/v1/buyer/feed?scope=FOR_YOU&category=Ethnic+wear&minPrice=50000&maxPrice=200000&size=m&acceptsOffers=true&sort=PRICE_LOW');
     await act(async () => void fireEvent.press(screen.getByText('Clear filters')));
-    await screen.findByText('Filters'); // the count is gone from the button
+    await act(async () => void (await new Promise((r) => setTimeout(r, 50))));
+    expect(screen.getByLabelText('Sort: Best match')).toBeOnTheScreen(); // back to the default order (the plain list is cached, so no new request)
     expect(screen.queryByText('Clear filters')).not.toBeOnTheScreen();
   });
 
@@ -85,7 +86,7 @@ describe('buyer search', () => {
     const urls = serve(() => page([kurta]));
     await renderWith(signedIn(), <SearchScreen />);
     await screen.findByText('Cotton kurta');
-    await act(async () => void fireEvent.press(screen.getByLabelText('Show filters')));
+    await act(async () => void fireEvent.press(screen.getByLabelText('Price…')));
     await act(async () => void fireEvent.changeText(await screen.findByLabelText('Lowest price'), 'cheap'));
     expect(await screen.findByText('Enter a whole number of rupees.')).toBeOnTheScreen();
     expect(urls.every((u) => !u.includes('cheap'))).toBe(true);
@@ -95,9 +96,9 @@ describe('buyer search', () => {
     serve((u) => (u.includes('q=') ? page([]) : page([kurta])));
     await renderWith(signedIn(), <SearchScreen />);
     await screen.findByText('Cotton kurta');
-    await act(async () => void fireEvent.changeText(screen.getByLabelText('What are you looking for?'), 'zzzz'));
-    expect(await screen.findByText('No listings match')).toBeOnTheScreen();
-    await act(async () => void fireEvent.press(screen.getByText('Ask sellers for it')));
+    await act(async () => void fireEvent.changeText(screen.getByLabelText('Search'), 'zzzz'));
+    expect(await screen.findByText('No matches')).toBeOnTheScreen();
+    await act(async () => void fireEvent.press(screen.getByLabelText('Can’t find it? Ask sellers')));
     expect(mockRouter.push).toHaveBeenCalledWith('/request/new');
   });
 
@@ -131,7 +132,7 @@ describe('buyer shop page', () => {
   it('shows the public profile, the order record and the listings', async () => {
     serveShop(shop());
     await renderWith(signedIn(), <ShopScreen />);
-    expect(await screen.findByText('Kiran Studio')).toBeOnTheScreen();
+    expect((await screen.findAllByText('Kiran Studio')).length).toBeGreaterThan(0);
     expect(screen.getByText('@kiranstudio · Madhapur, Hyderabad')).toBeOnTheScreen();
     expect(screen.getByText('12 followers · 2 listings')).toBeOnTheScreen();
     expect(screen.getByText('Block prints from Hyderabad.')).toBeOnTheScreen();
