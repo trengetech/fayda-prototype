@@ -13,3 +13,8 @@ apps/*/.expo/
 apps/*/expo-env.d.ts
 apks/
 apps/api/uploads/
+
+# Firebase / Google credentials: never commit
+google-services*.json
+*firebase-adminsdk*.json
+*-adminsdk-*.json
