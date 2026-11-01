@@ -35,7 +35,7 @@ const config: ExpoConfig = {
     ['expo-build-properties', { android: { usesCleartextTraffic: variant !== 'prod' } }],
   ],
   experiments: { typedRoutes: true },
-  extra: { variant, appLabel: 'Buyer' },
+  extra: { variant, appLabel: 'Buyer', eas: { projectId: '88bbc327-72fb-4de0-a4e6-52f73fc1233a' } },
 };
 
 export default config;
