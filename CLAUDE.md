@@ -133,6 +133,11 @@ docs/            DECISIONS, TECH_STACK, ARCHITECTURE, PROGRESS
 - No secrets in the repo. Keep `.env.example` complete.
 - Update `docs/PROGRESS.md` at the end of every milestone: what's built, what's tested, known limits.
 - Record any new decision in `docs/DECISIONS.md` as **proposed** until the founder approves it.
+- **Contract changes and `CONTRACT_LEVEL` (I-40).** The apps and the server are released separately, so every change to `packages/contracts` must keep older apps working or say so. `contracts.snapshot.json` holds the shape of every contract schema and route as of the last agreed change, and a test (`test/contract-guard.test.ts`, part of `pnpm test` and CI) compares against it:
+  - A change that would break an **older app** (a removed or renamed field, a changed type, a removed route or enum value, a newly required request field) fails until you **raise `CONTRACT_LEVEL` by one** in `packages/contracts/src/system.ts`. Raise it even if you think no released app is hurt: an old app then shows "please update" instead of errors.
+  - Any other change fails until the snapshot is refreshed with `pnpm --filter @fayda/contracts snapshot`. Commit the refreshed `contracts.snapshot.json` in the same PR, and say in the PR what changed.
+  - Prefer additive changes (a new optional response field, a new route). Never edit the snapshot by hand to make the test pass.
+  - After raising the level, set `MIN_CLIENT_LEVEL_BUYER` and `MIN_CLIENT_LEVEL_SELLER` on the server only when an old app truly cannot work any more; deploy the server before installing new APKs.
 
 ## Milestones (Android)
 
