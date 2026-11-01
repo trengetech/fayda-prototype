@@ -88,7 +88,7 @@ pnpm workspaces plus Turborepo; TypeScript strict. Exact library versions are in
 | Other optional settings | `apps/api/.env.example` | `PORT`, `HOST`, `CORS_ORIGINS`, `SWEEP_ENABLED`, token lifetimes, rate limit. |
 | `apps/api/.env.test` | laptop only | Test database (`fayda-test`). |
 | `EXPO_PUBLIC_API_URL` | build time, baked into the app | Which API the app talks to. Default is the emulator address; the build script defaults to the deployed address. |
-| `GOOGLE_SERVICES_JSON` | build time, path to the app's Firebase file | `~/fayda-secrets/google-services-{buyer,seller}-dev.json` on the founder's laptop (outside git, mode 600). |
+| `GOOGLE_SERVICES_JSON` | build time, path to the app's Firebase file | `~/personal/fayda-secrets/google-services-{buyer,seller}-dev.json` on the founder's laptop (outside git, mode 600). |
 | Firebase service-account key | uploaded to both Expo projects; **a copy still sits in the founder's OneDrive Downloads and should be moved or deleted** | Lets Expo send push through FCM. Can be regenerated. |
 | SSH key `~/.ssh/fayda_oracle` | laptop | Access to the VM. |
 
@@ -115,7 +115,7 @@ pnpm workspaces plus Turborepo; TypeScript strict. Exact library versions are in
 ## 8. State of things on 1 Nov 2026 (read this before relying on it)
 
 - **The deployed server is current** (release `20261101072946`, dev at PR #14) and has `PUSH_PROVIDER=expo`. Deployed with `infra/deploy-api.sh` (health check passed); the setting was appended to `/etc/fayda/api.env` and the service restarted. It was verified through `/v1/health` (200) and `/v1/meta`.
-- Push is proven end to end only on the **Android emulator with the API running on the laptop** (both apps, app backgrounded and process killed, tap opens the right screen, sign-out stops it). **Not yet proven through the deployed server** (that needs APKs built with `EXPO_PUBLIC_API_URL` set to the deployed address, which `infra/build-apk.sh` does by default) **and not on a physical phone.**
+- Push is proven end to end on the **Android emulator**, both with the API on the laptop and **through the deployed server** (APKs built with `EXPO_PUBLIC_API_URL` set to the deployed address): the app's process killed, push arrives, tap opens the right screen; sign-out stops it. **Not proven on a physical phone.** Known gap: tokens of apps that were uninstalled (not signed out) are not cleaned up, because Expo reports that only in receipts, which the server does not read yet.
 - **iOS is not built or tested** (decision I-32: later; keep every library cross-platform).
 - **No admin console** (DECISIONS L1): reports can only be read in the database.
 - A deploy needs a Bash permission rule for `infra/deploy-api.sh` in Claude Code; the founder added it on 1 Nov 2026.
@@ -151,7 +151,7 @@ pnpm workspaces plus Turborepo; TypeScript strict. Exact library versions are in
 | `DATABASE_URL` | Connection string the running API uses (Supabase transaction pooler, port 6543). Contains the database password. | The password is set in the Supabase dashboard (project settings, database). Copy the pooler connection string from there. | `/etc/fayda/api.env` (server), `apps/api/.env` (laptop). | Resetting the database password in Supabase breaks every service using the old string until each file is updated and the service restarted. |
 | `DATABASE_URL_DIRECT` | Session pooler (port 5432), for migrations. | Same Supabase page. | **Laptop only** (`apps/api/.env`); never on the server. | Same as above. |
 | `EXPO_ACCESS_TOKEN` (optional) | Only if the Expo project requires an access token to send push. | expo.dev, account settings, access tokens. | `/etc/fayda/api.env`. | Revoke at expo.dev and create a new one. |
-| Firebase `google-services.json` (per app) | Identifies the app to Firebase. Not very sensitive, but not for git. | Firebase console, project settings, the Android app, download. | Laptop, `~/fayda-secrets/`; passed at build time with `GOOGLE_SERVICES_JSON`. | Re-download; rebuild the app. |
+| Firebase `google-services.json` (per app) | Identifies the app to Firebase. Not very sensitive, but not for git. | Firebase console, project settings, the Android app, download. | Laptop, `~/personal/fayda-secrets/`; passed at build time with `GOOGLE_SERVICES_JSON`. | Re-download; rebuild the app. |
 | Firebase service-account key | Lets Expo send push through Google's FCM. Sensitive. | Firebase console, project settings, service accounts, generate new private key. | Uploaded to each Expo project with `eas credentials`; **do not keep a copy in a synced folder**. | Generate a new key, upload it to both Expo projects, delete the old key in Firebase. |
 | SSH key `fayda_oracle` | Access to the server. | `ssh-keygen`; the public half is on the VM. | Laptop `~/.ssh/`. | Remove the public key from the VM, create a new pair. |
 
