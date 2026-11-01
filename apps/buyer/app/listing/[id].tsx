@@ -1,4 +1,4 @@
-import { useBuyerListing } from '@fayda/api-client';
+import { useBuyerListing, useRecordView } from '@fayda/api-client';
 import { formatRupees } from '@fayda/domain';
 import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -18,6 +18,7 @@ export default function ListingScreen() {
   const scroller = useRef<ScrollViewInstance>(null);
   const { id, offer } = useLocalSearchParams<{ id: string; offer?: string }>();
   const q = useBuyerListing(id ?? null);
+  useRecordView(id ?? null);
   const l = q.data;
   const router = useRouter();
   const [offering, setOffering] = useState(offer === '1'); // a reel's Make offer opens the sheet straight away

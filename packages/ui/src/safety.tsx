@@ -79,7 +79,7 @@ export function SafetyActions({ what, who, onReport, onBlock }: { what: string; 
       { text: 'Block', style: 'destructive', onPress: () => void onBlock().then(() => setBlocked(`${who} is blocked.`), (e: unknown) => setBlocked(e instanceof Error ? e.message : 'Could not block.')) },
     ]);
   return (
-    <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, rowGap: 4, alignItems: 'center' }}>
       {reported ? (
         <AppText tone="muted" size={12} accessibilityRole="alert">Reported. Thank you.</AppText>
       ) : (

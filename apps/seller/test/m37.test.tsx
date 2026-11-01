@@ -147,7 +147,7 @@ describe('blocked people', () => {
 });
 
 describe('dashboard', () => {
-  const win = (days: number, n: number) => ({ days, offersReceived: n, offersAgreed: n - 1, ordersPlaced: 2, ordersConfirmed: 1, ordersDelivered: 0, likes: 12, saves: 3, comments: 4 });
+  const win = (days: number, n: number) => ({ days, views: n * 10, offersReceived: n, offersAgreed: n - 1, ordersPlaced: 2, ordersConfirmed: 1, ordersDelivered: 0, likes: 12, saves: 3, comments: 4 });
   it('shows what needs me, both windows and the public record', async () => {
     fakeApi({ 'GET /v1/seller/dashboard': () => json({ windows: [win(7, 5), win(30, 20)], record: { orders: 9, completed: 6, confirmed: 8, cancelled: 1, expired: 0, medianConfirmMs: 7_800_000, rating: 4.5, reviewCount: 3 }, needsReply: 2, needsConfirm: 1 }) }, fetchMock);
     await renderWith(signedIn(), <DashboardScreen />);
@@ -156,6 +156,8 @@ describe('dashboard', () => {
     expect(screen.getByText('1 order to confirm')).toBeOnTheScreen();
     expect(screen.getByText('2 offers need a reply')).toBeOnTheScreen();
     expect(screen.getByLabelText('Offers received: 20')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Listing views: 200')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Listing views: 50')).toBeOnTheScreen();
     expect(screen.getByLabelText('Median time to confirm: 2 h 10 min')).toBeOnTheScreen();
     expect(screen.getByLabelText('Rating: 4.5 (3)')).toBeOnTheScreen();
   });

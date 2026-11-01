@@ -188,6 +188,8 @@ export interface ApiClient {
   /** Like, save and comment. Like and save are safe to repeat; a comment post takes the same `clientKey` and idempotency key when retried. */
   likeListing(id: string): Promise<LikeState>;
   unlikeListing(id: string): Promise<LikeState>;
+  /** Counts one view of a product page. Fire and forget: it never fails the page. */
+  recordListingView(id: string): Promise<void>;
   saveListing(id: string): Promise<SaveState>;
   unsaveListing(id: string): Promise<SaveState>;
   listSaved(cursor?: string | null, limit?: number): Promise<BuyerFeed>;
@@ -404,6 +406,7 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     getBuyerListing: (id) => call(`/v1/buyer/listings/${id}`, BuyerListingSchema, { auth: true }),
     likeListing: (id) => call(`/v1/buyer/listings/${id}/like`, LikeStateSchema, { method: 'PUT', auth: true }),
     unlikeListing: (id) => call(`/v1/buyer/listings/${id}/like`, LikeStateSchema, { method: 'DELETE', auth: true }),
+    recordListingView: (id) => call(`/v1/buyer/listings/${id}/view`, NoBody, { method: 'POST', auth: true }),
     saveListing: (id) => call(`/v1/buyer/listings/${id}/save`, SaveStateSchema, { method: 'PUT', auth: true }),
     unsaveListing: (id) => call(`/v1/buyer/listings/${id}/save`, SaveStateSchema, { method: 'DELETE', auth: true }),
     listSaved: (cursor, limit) => {

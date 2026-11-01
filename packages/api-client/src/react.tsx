@@ -534,6 +534,14 @@ export function useRemoveComment(side: 'buyer' | 'seller') {
 }
 
 // ---------- notifications, push, report and block, dashboard (M3.7) ----------
+/** Counts one view when the product page opens for this listing. A failure is ignored: a view is never worth an error. */
+export function useRecordView(listingId: string | null): void {
+  const client = useApiClient();
+  useEffect(() => {
+    if (listingId) void client.recordListingView(listingId).catch(() => undefined);
+  }, [client, listingId]);
+}
+
 /** The unread number for the bell. Refreshed by the `notification.created` event and on reconnect. */
 export function useUnreadCount(side: 'buyer' | 'seller') {
   const client = useApiClient();

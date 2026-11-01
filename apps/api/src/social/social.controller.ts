@@ -45,6 +45,13 @@ export class BuyerSocialController extends IdempotentController {
     super(idempotency, clock);
   }
 
+  /** The product page was opened. Never fails the page: unknown, paused and own listings are quietly not counted. */
+  @Post('listings/:id/view')
+  @HttpCode(204)
+  async view(@Auth() who: AccessClaims, @Param('id', IdParam) id: string): Promise<void> {
+    await this.social.recordView(who.userId, id);
+  }
+
   @Put('listings/:id/like')
   async like(@Auth() who: AccessClaims, @Param('id', IdParam) id: string): Promise<LikeState> {
     return LikeStateSchema.parse(await this.social.like(who.userId, id));
