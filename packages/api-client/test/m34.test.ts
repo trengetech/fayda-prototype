@@ -19,7 +19,7 @@ const order = {
   seller: { id, name: 'Kiran', area: 'Banjara Hills', slaConfirmHours: 6, slaShipDays: 2, record, contact: null },
   payment: null, review: null, canReview: false, buyAgain: null, threadId: null, unread: 0,
 };
-const thread = { id, kind: 'ORDER', title: 'FD-100001', otherName: 'Kiran', orderId: id, requestId: null, unread: 0, lastMessage: null, lastAt: 1, messages: [] };
+const thread = { id, kind: 'ORDER', title: 'FD-100001', otherName: 'Kiran', orderId: id, requestId: null, unread: 0, lastMessage: null, lastAt: 1, messagingDisabled: false, youBlocked: false, messages: [] };
 
 describe('orders', () => {
   it('places an order with the idempotency key, and the same key twice sends the same header', async () => {

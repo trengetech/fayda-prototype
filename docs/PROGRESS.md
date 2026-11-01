@@ -1,6 +1,42 @@
 # Progress
 
-**Where we are (1 Nov 2026): M3.6 (social) is built, tested and emulator-checked; its PR into `dev` follows this note. M3.7 and M3.8 are next, built one after the other with the same checks (the founder asked for them to run without waiting for approval).** M3.3, M3.4 and M3.5 are merged. The physical-phone test of M3.3 to M3.6 is deferred by the founder.
+**Where we are (1 Nov 2026): M3.7 (notifications, push, report and block, seller dashboard) is built, tested and emulator-checked on its own branch `m3.7-notifications-safety`. M3.6 is merged. M3.8 is next.** The physical-phone test of M3.3 to M3.7 is deferred by the founder. **Push is built but cannot reach a phone until the founder sets up Firebase and EAS (I-33).**
+
+
+## M3.7: notifications, push, report and block, seller dashboard (1 Nov 2026): built, tested, emulator-checked; push needs founder setup
+
+Decisions: I-31 (report and block), I-32 (iOS follows Android), I-33 (notification centre and push), I-34 (dashboard). All **proposed**. The founder asked for push to work, the default dashboard contents, and for this to be built, tested, merged without waiting.
+
+### Built
+- **Database (migration 0009, applied to dev and test):** `push_tokens`, `user_blocks`, `reports` (reason, note, a snapshot of the words, the photo id, status OPEN/REVIEWED/ACTIONED), and `notifications.pushed_at` (existing rows are marked as already told, so no old history is pushed).
+- **Domain (`safety.ts`, 7 tests):** report reasons and note limit, 10 reports an hour, no self-report, no self-block, a shop's block stops commenting on its listings only, a block either way ends new chat messages.
+- **API:**
+  - Notification centre per app: list (cursor), unread count, mark one read, mark all read. Text is written by the server per app. Seller-only codes (automatic counter, decline, accept) never render in the buyer app.
+  - Push tokens: PUT and DELETE `/v1/{app}/push-token`. A token moves to whoever signed in last; at most 5 per person per app.
+  - Sweep task (every second): claims unsent notifications (`FOR UPDATE SKIP LOCKED`), emits `notification.created` (ids only), sends push through a `PushProvider`. `PUSH_PROVIDER=off` (default) sends nothing and `/v1/meta` says push is simulated; `expo` sends through the Expo push service in chunks of 100. A gone phone loses its token; a temporary failure is retried for 2 minutes; at most once otherwise.
+  - Report: comments and chat messages or photos (`reports` keeps the snapshot). Block: by comment or by thread, by person across both apps; list and unblock. Comments hide the blocker's blocked people (page and total); a shop's block returns 403 `BLOCKED` on that shop's listings; chat send returns 403 `BLOCKED` both ways; threads carry `messagingDisabled` and `youBlocked` (the blocked side is not told who blocked).
+  - `GET /v1/seller/dashboard`: last 7 and 30 days plus the public record and what needs the seller.
+- **Apps (both):** notifications screen with an unread badge button on home, tap opens the order, chat, offer, request or comments; report sheet and Report/Block links on others' comments and chat messages; chat composer replaced by a notice when blocked; Blocked people screen; push registration after sign-in (asks permission, sends the token if the build has an Expo project id), token removed on sign-out, tapping a push opens its target. Seller app: Dashboard screen.
+- **Shared:** `ReportSheet` and `SafetyActions` in `packages/ui`; client methods, hooks and `notificationHref` in `packages/api-client`; `expo-notifications` 58.1.7 in both apps (TECH_STACK).
+
+### Tested
+- **API (Vitest, real Postgres): 20 new tests, all passing** (notifications and push 11, safety 9): own-only reads and writes, wrong app, paging, read-all scoped to one app, wording privacy, token moves and cannot be removed by another person, sweep tells the right person once, gone and retry paths, Expo request shape and chunking, report limits (10 an hour, lifts after an hour), repeat reports, snapshot kept after removal, blocks in comments and chat both ways, order stays readable. Regression: system, chat, sweep, realtime and requests files pass (two `requests` tests hit the 30 s timeout while the APK build was using the machine and pass alone in about 90 s: slow database under load, not a rule change).
+- **Domain 7, api-client 57, buyer and seller mobile suites** (new tests for notifications, report and block flows, blocked chat, dashboard, push token and push-tap parsing). Lint and typecheck clean.
+- **Break-it check (domain rules, 7 breaks, all caught):** own report allowed; limit off by one; self-block allowed; shop's block list ignored; shop blocked on its own listing; block does not end messages; note limit removed. The API-level breaks (hide blocked comments, send guard) were not mutated; they are covered by the tests above.
+
+### Checked on the Android emulator (1 Nov 2026, local API on the dev database, new APKs)
+- Buyer: signed in as a new buyer; Android asked for notification permission (the registration path runs; no token is sent because the build has no Expo project id); a spam comment showed **Report** and **Block**; the sheet showed the four reasons with Send disabled until one is picked; reporting showed "Reported. Thank you." and the database row was SPAM, OPEN, with the comment text kept; blocking asked first and the person's comments disappeared; Blocked people listed them, and Unblock removed the row.
+- Seller: home showed "Notifications (2 new)"; the centre listed the two `NEW_COMMENT` rows as unread; **a comment posted through the API while the screen was open appeared in about 4 s with the unread count at 3**; tapping it opened that listing's comments and the count dropped; Dashboard showed Needs you, the 7 and 30 day windows (3 comments) and the record.
+- **The comment box with the keyboard open (M3.6 fix) is visible above the keyboard.**
+
+### Not done, or not seen
+- **Real push to a phone.** The server path is tested against the Expo request shape only. It needs: an Expo/EAS project id in `app.config.ts`; a Firebase project with each variant's `google-services.json` (`GOOGLE_SERVICES_JSON`) and the FCM key in EAS; `PUSH_PROVIDER=expo` on the server. For iOS later: an Apple Developer account and APNs key. Not run on a device, not on iOS.
+- Report and block **in chat** were checked by tests only, not on the emulator (no order chat was seeded). The chat Block link and the blocked notice are covered by mobile tests.
+- A report review screen does not exist: reports sit in the `reports` table (status OPEN). No moderation tooling, no email to a moderator.
+- The comment count on cards and the product page still counts comments from blocked people (counts are public); the list hides them.
+- After one tap on Report the link is replaced by "Reported. Thank you." (Block stays). This one-line fix (it first hid Block too) was made after the APK build and is covered by the mobile tests, not re-seen on the emulator.
+- Dashboard: no listing views (not tracked); "delivered" counts orders now delivered whose last change is in the window.
+- Notifications are never deleted or expired; no per-type mute settings; one row per chat message.
 
 ## M3.0a — Backend foundation (31 Oct 2026): built, awaiting your review
 

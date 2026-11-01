@@ -1,4 +1,4 @@
-import { NetworkError, useBuyerNegotiations, useBuyerOrders, useHealth, useMeta, useThreads } from '@fayda/api-client';
+import { NetworkError, useBuyerNegotiations, useBuyerOrders, useHealth, useMeta, useThreads, useUnreadCount } from '@fayda/api-client';
 import { AppText, Badge, Button, Card, useTheme } from '@fayda/ui';
 import { Link, useRouter } from 'expo-router';
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
@@ -14,6 +14,7 @@ export default function StatusScreen() {
   const replies = (useBuyerNegotiations().data?.items ?? []).filter((n) => n.canRespond).length;
   const orderUnread = useBuyerOrders().data?.unread ?? 0;
   const messageUnread = useThreads('buyer').data?.unread ?? 0;
+  const notifUnread = useUnreadCount('buyer').data?.unread ?? 0;
   const refetch = () => void Promise.all([health.refetch(), meta.refetch()]);
   const error = health.error ?? meta.error;
   const loading = (health.isPending || meta.isPending) && !error;
@@ -27,6 +28,7 @@ export default function StatusScreen() {
       <AppText weight="extrabold" size={20}>Fayda {APP_LABEL}</AppText>
       <AppText tone="muted" size={12}>API: {API_URL}</AppText>
       <AccountCard />
+      <Button title={notifUnread ? `Notifications (${notifUnread} new)` : 'Notifications'} variant={notifUnread ? 'primary' : 'outline'} onPress={() => router.push('/notifications' as never)} />
       <Button title="Browse reels" onPress={() => router.push('/feed')} />
       <Button title="Search" variant="outline" onPress={() => router.push('/search' as never)} />
       <Button title="Saved" variant="outline" onPress={() => router.push('/saved' as never)} />
@@ -37,6 +39,7 @@ export default function StatusScreen() {
       <Button title="Your requests" variant="outline" onPress={() => router.push('/requests' as never)} />
       <Button title="Delivery addresses" variant="ghost" onPress={() => router.push('/addresses' as never)} />
       <Button title="Contact for orders" variant="ghost" onPress={() => router.push('/contact' as never)} />
+      <Button title="Blocked people" variant="ghost" onPress={() => router.push('/blocked' as never)} />
       <Button title="User agreement" variant="ghost" onPress={() => router.push('/agreement' as never)} />
 
       {loading ? (

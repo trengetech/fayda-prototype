@@ -2,14 +2,15 @@ import { randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import { Inject, Injectable } from '@nestjs/common';
 import type { ChatMessageView, ChatThread, ChatThreadList, SendMessage } from '@fayda/contracts';
-import { formatOrderNumber, mayShareFromResponse, validateMessage, type Clock } from '@fayda/domain';
+import { formatOrderNumber, mayMessage, mayShareFromResponse, validateMessage, type Clock } from '@fayda/domain';
 import { and, count, desc, eq, gt, inArray, ne, sql } from 'drizzle-orm';
 import { AppError } from '../common/app-error.js';
 import { CLOCK } from '../common/clock.js';
 import { checkOwnedMedia, firstName, listingCovers, mediaRefs } from '../community/shared.js';
 import { DbService } from '../db/db.service.js';
 import { MediaService } from '../media/media.service.js';
-import { buyerRequests, chatMessages, chatThreads, listings, media, notifications, orders, requestResponses, sellers, users } from '../db/schema.js';
+import { blockState, blockedBy } from '../safety/blocks.js';
+import { buyerRequests, chatMessages, chatThreads, listings, media, notifications, orders, requestResponses, sellers, userBlocks, users } from '../db/schema.js';
 import { NegotiationEvents, type RealtimeEvent } from '../negotiations/negotiation-events.js';
 import { throwFail } from '../negotiations/negotiations.service.js';
 
@@ -172,7 +173,11 @@ export class ChatService {
       const [m] = await this.db.select({ type: chatMessages.type, text: chatMessages.text }).from(chatMessages).where(eq(chatMessages.threadId, t.id)).orderBy(desc(chatMessages.createdAt), NEWEST_FIRST_TIE, desc(chatMessages.id)).limit(1);
       last.set(t.id, m ? (m.type === 'LISTING' ? 'Shared a listing' : m.type === 'MEDIA' && !m.text ? 'Photo' : m.text) : null);
     }
+    const iBlocked = await blockedBy(this.db, userId);
+    const blockedMe = new Set((await this.db.select({ id: userBlocks.blockerUserId }).from(userBlocks).where(eq(userBlocks.blockedUserId, userId))).map((r) => r.id));
     const items = rows.map((t) => ({
+      messagingDisabled: iBlocked.has(side === 'BUYER' ? t.sellerUserId : t.buyerUserId) || blockedMe.has(side === 'BUYER' ? t.sellerUserId : t.buyerUserId),
+      youBlocked: iBlocked.has(side === 'BUYER' ? t.sellerUserId : t.buyerUserId),
       id: t.id,
       kind: t.kind,
       title: labels.get(t.id)!.title,
@@ -213,6 +218,7 @@ export class ChatService {
         at: m.createdAt.getTime(),
       };
     });
+    const blocks = await blockState(q, side === 'BUYER' ? t.buyerUserId : t.sellerUserId, side === 'BUYER' ? t.sellerUserId : t.buyerUserId);
     const lab = labels.get(t.id)!;
     const lastText = messages.length ? messages[messages.length - 1]! : null;
     return {
@@ -225,6 +231,8 @@ export class ChatService {
       unread: unread.get(t.id) ?? 0,
       lastMessage: lastText ? (lastText.type === 'LISTING' ? 'Shared a listing' : (lastText.text ?? 'Photo')) : null,
       lastAt: t.lastMessageAt.getTime(),
+      messagingDisabled: blocks.iBlocked || blocks.theyBlocked,
+      youBlocked: blocks.iBlocked,
       messages,
     };
   }
@@ -236,6 +244,10 @@ export class ChatService {
     await this.db.transaction(async (tx) => {
       // The thread row is locked, so two sends in the same chat are handled one after the other.
       const t = await this.mine(tx, userId, side, id, true);
+      // A block in either direction ends new messages in this chat (I-31). Orders and their records stay readable.
+      const b = await blockState(tx, userId, side === 'BUYER' ? t.sellerUserId : t.buyerUserId);
+      const open = mayMessage({ blockedEitherWay: b.iBlocked || b.theyBlocked });
+      if (!open.ok) throw new AppError(403, 'BLOCKED', open.message);
       if (input.clientKey) {
         const [dup] = await tx.select({ id: chatMessages.id }).from(chatMessages).where(and(eq(chatMessages.threadId, id), eq(chatMessages.clientKey, input.clientKey))).limit(1);
         if (dup) return;

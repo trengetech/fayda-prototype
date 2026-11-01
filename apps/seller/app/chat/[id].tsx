@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, View } from 'react-native';
 import { forgetKey, keyFor, type KeyMemory } from '../../src/chat';
+import { BlockedNotice, MessageSafety } from '../../src/safety';
 import { sizeOf, uploadMedia } from '../../src/upload';
 
 /** One chat: the timeline, a box to write in, a photo button, and a way to share one of your live listings. */
@@ -113,6 +114,7 @@ export default function ChatScreen() {
               </View>
             ) : null}
             {m.text ? <AppText tone={m.from === 'SYSTEM' ? 'muted' : 'ink'} size={m.from === 'SYSTEM' ? 12 : undefined}>{m.text}</AppText> : null}
+            {m.from === 'OTHER' ? <MessageSafety threadId={t.id} messageId={m.id} who={t.otherName} /> : null}
           </View>
         </View>
       ))}
@@ -131,12 +133,18 @@ export default function ChatScreen() {
         </Card>
       ) : null}
 
+      {t.messagingDisabled ? (
+        <Card><BlockedNotice youBlocked={t.youBlocked} onOpenBlocked={() => router.push('/blocked' as never)} /></Card>
+      ) : (
+        <>
       <TextField label="Message" value={text} onChangeText={setText} multiline maxLength={1000} />
       <Button title="Send" loading={send.isPending} onPress={sendText} />
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <View style={{ flex: 1 }}><Button title="Add a photo" variant="outline" loading={busy} onPress={() => void attach()} /></View>
         <View style={{ flex: 1 }}><Button title="Share a listing" variant="outline" onPress={() => setSharing((s) => !s)} /></View>
       </View>
+        </>
+      )}
       <FieldError>{error ?? undefined}</FieldError>
     </ScrollView>
   );

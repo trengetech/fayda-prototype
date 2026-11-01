@@ -11,4 +11,7 @@ export * from './orders.js';
 export * from './community.js';
 export * from './discovery.js';
 export * from './social.js';
+export * from './notifications.js';
+export * from './safety.js';
+export * from './dashboard.js';
 export * from './openapi.js';

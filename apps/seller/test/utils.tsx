@@ -69,7 +69,7 @@ export const sellerOrder = (over: Record<string, unknown> = {}) => ({
 });
 
 export const chatThread = (over: Record<string, unknown> = {}) => ({
-  id: 't1', kind: 'ORDER', title: 'FD-100001 · Cotton kurta', otherName: 'Asha Buyer', orderId: 'o1', requestId: null, unread: 0, lastMessage: null, lastAt: 1,
+  id: 't1', kind: 'ORDER', title: 'FD-100001 · Cotton kurta', otherName: 'Asha Buyer', orderId: 'o1', requestId: null, unread: 0, lastMessage: null, lastAt: 1, messagingDisabled: false, youBlocked: false,
   messages: [{ id: 'm1', from: 'SYSTEM', type: 'TEXT', text: 'Order FD-100001 placed.', media: null, listing: null, at: 1 }, { id: 'm2', from: 'OTHER', type: 'TEXT', text: 'Is it in cotton?', media: null, listing: null, at: 2 }],
   ...over,
 });

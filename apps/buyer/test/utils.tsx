@@ -87,7 +87,7 @@ export const buyerOrder = (over: Record<string, unknown> = {}) => ({
 export const confirmedOrder = (over: Record<string, unknown> = {}) =>
   buyerOrder({ status: 'CONFIRMED', statusLabel: 'Payment confirmed', confirmedAt: 5, payment: null, seller: { ...buyerOrder().seller }, canReview: true, ...over });
 export const thread = (over: Record<string, unknown> = {}) => ({
-  id: 't1', kind: 'ORDER', title: 'FD-100001 · Cotton kurta', otherName: 'Kiran Studio', orderId: 'o1', requestId: null, unread: 0, lastMessage: 'Hello', lastAt: 3,
+  id: 't1', kind: 'ORDER', title: 'FD-100001 · Cotton kurta', otherName: 'Kiran Studio', orderId: 'o1', requestId: null, unread: 0, lastMessage: 'Hello', lastAt: 3, messagingDisabled: false, youBlocked: false,
   messages: [
     { id: 'm1', from: 'SYSTEM', type: 'TEXT', text: 'Order FD-100001 placed. Chat here about this order.', media: null, listing: null, at: 1 },
     { id: 'm2', from: 'OTHER', type: 'TEXT', text: 'Hello, thanks for the order', media: null, listing: null, at: 2 },

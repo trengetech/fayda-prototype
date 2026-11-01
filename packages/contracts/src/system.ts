@@ -16,7 +16,7 @@ export type Health = z.infer<typeof HealthSchema>;
 
 export const ProviderSchema = z
   .object({
-    key: z.enum(['auth', 'media']),
+    key: z.enum(['auth', 'media', 'push']),
     name: z.string(),
     /** True when the provider fakes real behaviour. Apps must never present simulated behaviour as real. */
     simulated: z.boolean(),

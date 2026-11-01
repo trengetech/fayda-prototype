@@ -54,6 +54,12 @@ describe('OpenAPI', () => {
         '/v1/seller/orders/{id}/confirm', '/v1/seller/orders/{id}/deliver', '/v1/seller/orders/{id}/ship', '/v1/seller/payment',
         '/v1/seller/profile', '/v1/seller/record', '/v1/seller/requests', '/v1/seller/requests/{id}/responses', '/v1/seller/reviews',
         '/v1/seller/threads', '/v1/seller/threads/photos/{mediaId}', '/v1/seller/threads/{id}', '/v1/seller/threads/{id}/messages', '/v1/seller/threads/{id}/read',
+        // M3.7: notifications, push, report and block, dashboard
+        '/v1/buyer/blocks', '/v1/buyer/blocks/{id}', '/v1/buyer/comments/{id}/report', '/v1/buyer/notifications', '/v1/buyer/notifications/read-all',
+        '/v1/buyer/notifications/unread-count', '/v1/buyer/notifications/{id}/read', '/v1/buyer/push-token', '/v1/buyer/threads/{id}/messages/{messageId}/report',
+        '/v1/seller/blocks', '/v1/seller/blocks/{id}', '/v1/seller/comments/{id}/report', '/v1/seller/dashboard', '/v1/seller/notifications',
+        '/v1/seller/notifications/read-all', '/v1/seller/notifications/unread-count', '/v1/seller/notifications/{id}/read', '/v1/seller/push-token',
+        '/v1/seller/threads/{id}/messages/{messageId}/report',
         '/v1/shops/{id}/record', '/v1/shops/{id}/reviews',
       ].sort(),
     );

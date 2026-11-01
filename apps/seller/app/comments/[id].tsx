@@ -5,6 +5,7 @@ import { AppText, Badge, Button, Card, TextField, describeError, useTheme } from
 import { useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, View } from 'react-native';
+import { CommentSafety } from '../../src/safety';
 
 const newKey = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 
@@ -84,6 +85,7 @@ export default function CommentsScreen() {
               <AppText tone="danger" size={12}>Remove</AppText>
             </Pressable>
           ) : null}
+          <CommentSafety c={c} />
         </Card>
       )}
       ListEmptyComponent={

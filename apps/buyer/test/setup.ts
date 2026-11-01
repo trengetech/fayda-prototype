@@ -12,3 +12,15 @@ jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true) }
 
 // The share link is built from the app's own address scheme; tests read it from this mock.
 jest.mock('expo-linking', () => ({ createURL: (path: string) => `faydabuyer://${path}` }));
+
+// Push is native. Tests drive it through these mocks (`jest.requireMock('expo-notifications')`).
+jest.mock('expo-notifications', () => ({
+  setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn(async () => null),
+  getPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  requestPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  getExpoPushTokenAsync: jest.fn(async () => ({ data: 'ExponentPushToken[abcdefghijklmnopqrstuv]' })),
+  getLastNotificationResponseAsync: jest.fn(async () => null),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  AndroidImportance: { HIGH: 4 },
+}));

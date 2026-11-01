@@ -5,3 +5,4 @@ export * from './components';
 export * from './gallery';
 export * from './forms';
 export * from './sign-in';
+export * from './safety';

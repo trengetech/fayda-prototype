@@ -1,12 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { BuyerFeed, Comment, CommentList, LikeState, SaveState, PostComment } from '@fayda/contracts';
-import { mayComment, mayLike, maySave, removalBy, validateComment, type Clock } from '@fayda/domain';
+import { mayComment, mayCommentOn, mayLike, maySave, removalBy, validateComment, type Clock } from '@fayda/domain';
 import { and, count, desc, eq, gt, isNull, lt, or, sql } from 'drizzle-orm';
 import { AppError } from '../common/app-error.js';
 import { CLOCK } from '../common/clock.js';
 import { firstName } from '../community/shared.js';
 import { DbService } from '../db/db.service.js';
-import { comments, likes, listings, notifications, saves, sellers, users } from '../db/schema.js';
+import { comments, likes, listings, notifications, saves, sellers, userBlocks, users } from '../db/schema.js';
+import { blockedBy } from '../safety/blocks.js';
 import { ListingsService } from '../listings/listings.service.js';
 import { NegotiationEvents } from '../negotiations/negotiation-events.js';
 
@@ -125,7 +126,8 @@ export class SocialService {
     if (viewerIsOwner ? l.ownerUserId !== userId : l.status !== 'ACTIVE') throw new AppError(404, 'NOT_FOUND', 'Listing not found.');
     const take = Math.min(Math.max(limit, 1), MAX_PAGE);
     const after = cursor ? decode(cursor) : null;
-    const where = and(eq(comments.listingId, listingId), isNull(comments.removedAt));
+    // A person's blocked people never show up for them (I-31), in the page or in the total.
+    const where = and(eq(comments.listingId, listingId), isNull(comments.removedAt), sql`not exists (select 1 from ${userBlocks} where ${userBlocks.blockerUserId} = ${userId} and ${userBlocks.blockedUserId} = ${comments.authorUserId})`);
     const [rows, [total]] = await Promise.all([
       this.db
         .select({ id: comments.id, text: comments.text, at: comments.createdAt, authorUserId: comments.authorUserId, authorName: users.name })
@@ -170,6 +172,9 @@ export class SocialService {
   async post(userId: string, listingId: string, input: PostComment, asOwner: boolean): Promise<Comment> {
     const l = await this.listing(listingId);
     if (asOwner && l.ownerUserId !== userId) throw new AppError(404, 'NOT_FOUND', 'Listing not found.');
+    // A shop that blocked someone stops them commenting on its listings (I-31). Buyers' blocks never stop anyone posting.
+    const allowed = mayCommentOn({ commenterUserId: userId, listingOwnerUserId: l.ownerUserId, ownerBlocked: await blockedBy(this.db, l.ownerUserId) });
+    if (!allowed.ok) throw new AppError(403, 'BLOCKED', allowed.message);
     const checked = validateComment(input.text);
     if (!checked.ok) throw new AppError(400, 'VALIDATION', 'Check the comment.', { text: checked.message });
     const now = new Date(this.clock.now());

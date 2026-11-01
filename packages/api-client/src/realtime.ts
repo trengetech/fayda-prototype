@@ -1,5 +1,5 @@
 import { io } from 'socket.io-client';
-import type { ChatEventPayload, CommentEventPayload, NegotiationEventPayload, OrderEventPayload, RequestEventPayload } from '@fayda/contracts/schemas';
+import type { ChatEventPayload, CommentEventPayload, NotificationEventPayload, NegotiationEventPayload, OrderEventPayload, RequestEventPayload } from '@fayda/contracts/schemas';
 
 /** Everything the socket can say. Each carries ids only. */
 export type RealtimeEvent =
@@ -7,7 +7,8 @@ export type RealtimeEvent =
   | ({ name: 'order.updated' } & OrderEventPayload)
   | ({ name: 'chat.updated' } & ChatEventPayload)
   | ({ name: 'request.updated' } & RequestEventPayload)
-  | ({ name: 'comment.created' } & CommentEventPayload);
+  | ({ name: 'comment.created' } & CommentEventPayload)
+  | ({ name: 'notification.created' } & NotificationEventPayload);
 
 export interface RealtimeOptions {
   baseUrl: string;
@@ -48,6 +49,7 @@ export function startRealtime(opts: RealtimeOptions): { close(): void } {
   socket.on('chat.updated', (e: ChatEventPayload) => opts.onEvent?.({ name: 'chat.updated', ...e }));
   socket.on('request.updated', (e: RequestEventPayload) => opts.onEvent?.({ name: 'request.updated', ...e }));
   socket.on('comment.created', (e: CommentEventPayload) => opts.onEvent?.({ name: 'comment.created', ...e }));
+  socket.on('notification.created', (e: NotificationEventPayload) => opts.onEvent?.({ name: 'notification.created', ...e }));
   socket.on('connect_error', (err) => {
     // A refused token ends automatic retries (the server said no), so refresh once and connect again by hand.
     if (err.message !== 'UNAUTHENTICATED' || refusedOnce) return;
