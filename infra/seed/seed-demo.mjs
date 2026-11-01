@@ -162,4 +162,5 @@ if (dupatta && kurta) {
   must(await call('POST', `/v1/buyer/listings/${kurta.id}/comments`, { token: buyers.Priya, body: { text: 'Is the indigo colour-fast?', clientKey: key() }, headers: { 'idempotency-key': key() } }), 'comment');
   console.log('history: 1 delivered order, 1 order waiting for the seller, likes, 1 comment');
 }
+console.log('NEXT STEP: node infra/seed/refresh-demo-media.mjs ' + base + ' --yes   (this seed makes gradient pictures only; the refresh adds the illustrated pictures and the 60-second reels)');
 console.log('Seed done. Sign in with the dev code 123456. Sellers: 9000011111, 9000033333, 9000022222. Buyers: 9876543210, 9123456789.');

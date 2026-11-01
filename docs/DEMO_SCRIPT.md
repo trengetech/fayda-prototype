@@ -1,5 +1,7 @@
 # Demo script: two Android phones
 
+> **The current, step-by-step version of this script is the QE test plan** (https://trengetech.github.io/fayda-qe-testplan/, updated 1 Nov 2026 for the M3.10 look: bottom tabs, reel home, Search tab, offer sheet, confirm dialogs). The steps below keep the original wording and may name screens that have moved.
+
 **Status: part-run on one Android emulator on 1 Nov 2026 (live server, the final phone APKs); not yet run on two physical phones** (deferred by the founder). One emulator means the two apps were swapped, not run side by side.
 
 **Seen on the emulator:**
@@ -19,7 +21,7 @@ Time: about 15 minutes. Phone A runs the **Fayda Seller** app, phone B the **Fay
 ## Before you start
 
 - Install both internal APKs (build and host them as in `infra/README.md`, release runbook; built against `https://fayda.140-245-219-163.sslip.io`). Allow notifications on both.
-- Seed the demo data: **already done on the dev server (3 shops, 9 listings, 2 buyers, 4 orders), nothing to run** unless you are resetting it. To seed: `node infra/seed/seed-demo.mjs https://fayda.140-245-219-163.sslip.io --yes`. Undo: `cd apps/api && node --env-file=.env ../../infra/seed/unseed-demo.mjs --delete`.
+- Seed the demo data: **already done on the dev server (3 shops, 9 listings, 2 buyers, 4 orders), nothing to run** unless you are resetting it. To seed: `node infra/seed/seed-demo.mjs https://fayda.140-245-219-163.sslip.io --yes`, **then always** `node infra/seed/refresh-demo-media.mjs https://fayda.140-245-219-163.sslip.io --yes` (the seed makes gradient pictures; the refresh adds the illustrated pictures and the 60-second reels). Undo: `cd apps/api && node --env-file=.env ../../infra/seed/unseed-demo.mjs --delete`.
 - Sign-in code for every number is **123456** (simulated OTP; both apps show a "Prototype" banner).
 
 | Who | Phone number | App | Shop / name |
@@ -69,7 +71,7 @@ Sign in on phone B to the **Seller** app with **9876543210**: same person, a buy
 
 ## Reset
 
-Run the unseed command above, then the seed again, to get back to a clean demo. Do this before each run.
+Run the unseed command above, then the seed again, **then the media refresh** (`node infra/seed/refresh-demo-media.mjs <api-url> --yes`), to get back to a clean demo with pictures and reels. Do this before each run.
 
 ## If something fails
 
